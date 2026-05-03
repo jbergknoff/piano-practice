@@ -1,16 +1,20 @@
-IMAGE := oven/bun:1
-RUN := docker run --rm -v $(PWD):/app -w /app $(IMAGE)
+ifdef CI
+run = $(1)
+else
+run = docker-compose run --rm $(2) main $(1)
+endif
 
-.PHONY: format lint build
+bun = $(call run,bun)
+biome = $(call run,./node_modules/.bin/biome)
 
-format:
-	$(RUN) bun install
-	$(RUN) bun run format
+node_modules: package.json
+	$(bun) install
 
-lint:
-	$(RUN) bun install
-	$(RUN) bun run lint
+format: node_modules
+	$(biome) format --write .
 
-build:
-	$(RUN) bun install
-	$(RUN) bun run build
+lint: node_modules
+	$(biome) lint .
+
+build: node_modules
+	$(bun) build src/main.tsx --outdir dist --minify

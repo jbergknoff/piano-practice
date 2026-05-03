@@ -2,11 +2,6 @@
   "name": "piano-practice",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "bun build src/main.tsx --outdir dist --minify",
-    "format": "biome format --write .",
-    "lint": "biome lint ."
-  },
   "dependencies": {
     "preact": "^10.25.4"
   },
