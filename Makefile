@@ -1,7 +1,5 @@
-# Netlify (https://docs.netlify.com/build/configure-builds/environment-variables/)
-# sets CI=true in its build environment, where Docker isn't available but tools
-# like bun are installed directly.
-ifdef CI
+# Netlify sets NETLIFY=true; use tools directly there since Docker isn't available.
+ifdef NETLIFY
 run = $(1)
 else
 run = docker-compose run --rm $(2) main $(1)
