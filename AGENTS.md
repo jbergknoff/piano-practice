@@ -12,11 +12,17 @@ make typecheck  # run tsc --noEmit (type-checks without building)
 make pr-ready   # runs format, lint, typecheck, build
 ```
 
+Run `make pr-ready` before committing to ensure formatting, linting, type-checking, and build all pass.
+
 The first run of any target will install dependencies into `node_modules/` (which is mounted from the host, so subsequent runs skip reinstall).
 
 ## Build output
 
-`dist/` is gitignored. `make build` must be run before `index.html` will work — it produces `dist/main.js`, which the page loads.
+`dist/` is gitignored and excluded from Biome linting/formatting. `make build` must be run before `index.html` will work — it produces `dist/main.js`, which the page loads.
+
+## Dependencies
+
+`bun.lock` is committed. When adding or removing packages, commit the updated `bun.lock` alongside `package.json`.
 
 ## CI
 
