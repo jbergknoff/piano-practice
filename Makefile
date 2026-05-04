@@ -2,7 +2,7 @@
 ifdef NETLIFY
 run = $(1)
 else
-run = docker-compose run --rm $(2) main $(1)
+run = docker compose run --rm $(2) main $(1)
 endif
 
 bun = $(call run,bun)
