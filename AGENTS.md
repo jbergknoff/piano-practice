@@ -20,6 +20,20 @@ The first run of any target will install dependencies into `node_modules/` (whic
 
 `dist/` is gitignored and excluded from Biome linting/formatting. `make build` must be run before `index.html` will work — it produces `dist/main.js`, which the page loads.
 
+## Code style
+
+Always use braces around conditional and loop bodies, even for single-line statements:
+
+```ts
+// correct
+if (!value) {
+  return;
+}
+
+// wrong
+if (!value) return;
+```
+
 ## Dependencies
 
 `bun.lock` is committed. When adding or removing packages, commit the updated `bun.lock` alongside `package.json`.
