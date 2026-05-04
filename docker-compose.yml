@@ -1,6 +1,6 @@
 services:
   main:
-    image: oven/bun:1
+    image: oven/bun:${BUN_VERSION:-1}
     command: echo
     volumes:
       - ${PWD}:${PWD}

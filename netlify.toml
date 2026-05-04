@@ -3,4 +3,4 @@
   publish = "."
 
 [build.environment]
-  BUN_VERSION = "latest"
+  BUN_VERSION = "1"

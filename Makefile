@@ -1,3 +1,6 @@
+# Netlify (https://docs.netlify.com/build/configure-builds/environment-variables/)
+# sets CI=true in its build environment, where Docker isn't available but tools
+# like bun are installed directly.
 ifdef CI
 run = $(1)
 else
