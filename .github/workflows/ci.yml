@@ -8,11 +8,7 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    env:
-      BUN_VERSION: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - run: make format lint typecheck build
+      - run: make pr-ready
+      - run: git diff --exit-code

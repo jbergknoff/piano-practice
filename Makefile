@@ -16,7 +16,6 @@ node_modules: package.json
 
 format: node_modules
 	$(biome) format --write .
-	git diff --exit-code
 
 lint: node_modules
 	$(biome) lint .
@@ -26,3 +25,5 @@ typecheck: node_modules
 
 build: node_modules
 	$(bun) build src/main.tsx --outdir dist --minify
+
+pr-ready: format lint typecheck build

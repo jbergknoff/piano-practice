@@ -6,9 +6,10 @@ The only local requirements are `make` and `docker`. Bun, Node, and Biome are al
 
 ```sh
 make build      # compile src/ → dist/main.js
-make format     # auto-format all JS/TS files (errors if anything changed)
+make format     # auto-format all JS/TS files
 make lint       # run Biome linter
 make typecheck  # run tsc --noEmit (type-checks without building)
+make pr-ready   # runs format, lint, typecheck, build
 ```
 
 The first run of any target will install dependencies into `node_modules/` (which is mounted from the host, so subsequent runs skip reinstall).
@@ -19,7 +20,7 @@ The first run of any target will install dependencies into `node_modules/` (whic
 
 ## CI
 
-GitHub Actions runs `make format lint typecheck build` on every push and pull request (`.github/workflows/ci.yml`). `make format` writes any formatting changes and then runs `git diff --exit-code`, so CI fails (with a visible diff) if files weren't pre-formatted.
+GitHub Actions runs `make pr-ready` on every push and pull request (`.github/workflows/ci.yml`), followed by `git diff --exit-code` to fail with a visible diff if files weren't pre-formatted.
 
 ## Deployment
 
