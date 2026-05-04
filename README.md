@@ -1,5 +1,25 @@
 # piano-practice
 
+## MIDI File Inspector
+
+Upload any `.mid` / `.midi` file to render it as scrollable sheet music. Each
+track with notes gets its own staff; a checkbox row above the score lets you
+show or hide individual tracks. The score scrolls horizontally — one continuous
+line with no wrapping — so long pieces stay readable without layout reflow.
+
+Clef (treble or bass) is chosen automatically per track based on the average
+pitch of its notes. Notes are quantised to the nearest 16th note before
+rendering.
+
+### Library choice
+
+Sheet music rendering uses [VexFlow 5](https://github.com/0xfe/vexflow) (MIT).
+MIDI parsing uses [@tonejs/midi](https://github.com/Tonejs/Midi) (MIT) rather
+than the lower-level `midi-file` package because it resolves the note-on/off
+pairing, delta-time accumulation, and tempo-change arithmetic that `midi-file`
+leaves to the caller — delivering ready-to-use note objects with absolute tick
+positions and durations.
+
 ## Bluetooth Piano Input
 
 The app can receive live MIDI notes from a Bluetooth-connected electric piano using the

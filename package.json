@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "midi-file": "^1.2.4",
-    "preact": "^10.25.4"
+    "@tonejs/midi": "^2.0.28",
+    "preact": "^10.25.4",
+    "vexflow": "^5.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

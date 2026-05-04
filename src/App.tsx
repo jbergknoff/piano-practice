@@ -1,9 +1,10 @@
-import { parseMidi } from "midi-file";
+import { Midi } from "@tonejs/midi";
 import { useState } from "preact/hooks";
 import { LivePianoInput } from "./LivePianoInput";
+import { SheetMusic } from "./SheetMusic";
 
 export function App() {
-  const [midiJson, setMidiJson] = useState<object | null>(null);
+  const [midi, setMidi] = useState<Midi | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,12 +16,11 @@ export function App() {
 
     setFileName(file.name);
     setError(null);
-    setMidiJson(null);
+    setMidi(null);
 
     file.arrayBuffer().then((buffer) => {
       try {
-        const parsed = parseMidi(new Uint8Array(buffer));
-        setMidiJson(parsed);
+        setMidi(new Midi(buffer));
       } catch (err) {
         setError(String(err));
       }
@@ -33,11 +33,7 @@ export function App() {
       <input type="file" accept=".mid,.midi" onChange={handleFile} />
       {fileName && <p>File: {fileName}</p>}
       {error && <p style="color: red">{error}</p>}
-      {midiJson && (
-        <pre style="white-space: pre-wrap; word-break: break-all">
-          {JSON.stringify(midiJson, null, 2)}
-        </pre>
-      )}
+      {midi && <SheetMusic midi={midi} />}
 
       <LivePianoInput />
     </div>
