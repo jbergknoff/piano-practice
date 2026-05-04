@@ -12,6 +12,8 @@ make typecheck  # run tsc --noEmit (type-checks without building)
 make pr-ready   # runs format, lint, typecheck, build
 ```
 
+Run `make pr-ready` before committing to ensure formatting, linting, type-checking, and build all pass.
+
 The first run of any target will install dependencies into `node_modules/` (which is mounted from the host, so subsequent runs skip reinstall).
 
 ## Build output
