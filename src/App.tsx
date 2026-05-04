@@ -1,5 +1,6 @@
 import { parseMidi } from "midi-file";
 import { useState } from "preact/hooks";
+import { LivePianoInput } from "./LivePianoInput";
 
 export function App() {
   const [midiJson, setMidiJson] = useState<object | null>(null);
@@ -8,7 +9,9 @@ export function App() {
 
   function handleFile(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     setFileName(file.name);
     setError(null);
@@ -35,6 +38,8 @@ export function App() {
           {JSON.stringify(midiJson, null, 2)}
         </pre>
       )}
+
+      <LivePianoInput />
     </div>
   );
 }
