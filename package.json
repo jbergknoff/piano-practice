@@ -1,0 +1,11 @@
+{
+  "name": "piano-practice",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "preact": "^10.25.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  }
+}

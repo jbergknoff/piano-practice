@@ -1,0 +1,7 @@
+services:
+  main:
+    image: oven/bun:${BUN_VERSION:-1}
+    command: echo
+    volumes:
+      - ${PWD}:${PWD}
+    working_dir: ${PWD}
