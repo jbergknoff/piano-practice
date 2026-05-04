@@ -9,15 +9,20 @@ endif
 
 bun = $(call run,bun)
 biome = $(call run,./node_modules/.bin/biome)
+tsc = $(call run,./node_modules/.bin/tsc)
 
 node_modules: package.json
 	$(bun) install
 
 format: node_modules
 	$(biome) format --write .
+	git diff --exit-code
 
 lint: node_modules
 	$(biome) lint .
+
+typecheck: node_modules
+	$(tsc) --noEmit
 
 build: node_modules
 	$(bun) build src/main.tsx --outdir dist --minify
