@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "midi-file": "^1.2.4",
     "preact": "^10.25.4"
   },
   "devDependencies": {
