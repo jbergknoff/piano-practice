@@ -31,6 +31,33 @@ function midiToKey(midiNote: number): string {
   return `${NOTE_NAMES[midiNote % 12]}/${Math.floor(midiNote / 12) - 1}`;
 }
 
+const NOTE_NAMES_DISPLAY = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+];
+
+function midiToName(midiNote: number): string {
+  return `${NOTE_NAMES_DISPLAY[midiNote % 12]}${Math.floor(midiNote / 12) - 1}`;
+}
+
+const VEX_DUR_LABELS: Record<string, string> = {
+  w: "whole",
+  h: "half",
+  q: "quarter",
+  "8": "eighth",
+  "16": "sixteenth",
+};
+
 function getClef(notes: Array<{ midi: number }>): "treble" | "bass" {
   if (!notes.length) {
     return "treble";
@@ -174,6 +201,109 @@ function buildMeasureTickables(
   return result;
 }
 
+// --- Note table ---
+
+interface TrackTableEvent {
+  measure: number; // 1-indexed
+  beat: number; // 1-indexed decimal from measure start (e.g. 1, 1.5, 2.75)
+  noteNames: string[]; // ["C4", "D#4"] — empty for rests
+  duration: string; // human-readable
+  isRest: boolean;
+}
+
+/**
+ * Produce a human-readable sequence of note and rest events for one track,
+ * using the same 16th-note quantisation and measure grouping as
+ * buildMeasureTickables so the table matches what is drawn on the staff.
+ */
+function buildTrackTableEvents(
+  notes: TrackNote[],
+  beatsPerMeasure: number,
+  numMeasures: number,
+): TrackTableEvent[] {
+  const result: TrackTableEvent[] = [];
+
+  for (let m = 0; m < numMeasures; m++) {
+    const measureStart = m * beatsPerMeasure;
+
+    const byPos = new Map<number, { midis: number[]; durBeats: number }>();
+    for (const note of notes) {
+      const rel = Math.round((note.startBeats - measureStart) * 4) / 4;
+      if (rel < 0 || rel >= beatsPerMeasure) {
+        continue;
+      }
+      const clampedDur = Math.min(
+        Math.max(0.25, Math.round(note.durationBeats * 4) / 4),
+        beatsPerMeasure - rel,
+      );
+      const existing = byPos.get(rel);
+      if (existing) {
+        existing.midis.push(note.midi);
+        if (clampedDur > existing.durBeats) {
+          existing.durBeats = clampedDur;
+        }
+      } else {
+        byPos.set(rel, { midis: [note.midi], durBeats: clampedDur });
+      }
+    }
+
+    const positions = Array.from(byPos.keys()).sort((a, b) => a - b);
+    let cursor = 0;
+
+    for (const pos of positions) {
+      if (pos < cursor - 0.005) {
+        continue;
+      }
+      if (pos > cursor + 0.005) {
+        let restCursor = cursor;
+        for (const restDur of splitRests(pos - cursor)) {
+          const durKey = restDur.slice(0, -1);
+          result.push({
+            measure: m + 1,
+            beat: Number((restCursor + 1).toFixed(4)),
+            noteNames: [],
+            duration: VEX_DUR_LABELS[durKey] ?? durKey,
+            isRest: true,
+          });
+          restCursor += vexDurToBeats(restDur);
+        }
+      }
+
+      const slot = byPos.get(pos);
+      if (!slot) {
+        continue;
+      }
+      const { midis, durBeats } = slot;
+      const dur = nearestVexDur(durBeats);
+      result.push({
+        measure: m + 1,
+        beat: Number((pos + 1).toFixed(4)),
+        noteNames: midis.sort((a, b) => a - b).map(midiToName),
+        duration: VEX_DUR_LABELS[dur] ?? dur,
+        isRest: false,
+      });
+      cursor = pos + vexDurToBeats(dur);
+    }
+
+    if (cursor < beatsPerMeasure - 0.005) {
+      let restCursor = cursor;
+      for (const restDur of splitRests(beatsPerMeasure - cursor)) {
+        const durKey = restDur.slice(0, -1);
+        result.push({
+          measure: m + 1,
+          beat: Number((restCursor + 1).toFixed(4)),
+          noteNames: [],
+          duration: VEX_DUR_LABELS[durKey] ?? durKey,
+          isRest: true,
+        });
+        restCursor += vexDurToBeats(restDur);
+      }
+    }
+  }
+
+  return result;
+}
+
 // --- Layout constants ---
 
 const FIRST_MEASURE_W = 220; // wider to fit clef + time sig
@@ -194,6 +324,10 @@ export function SheetMusic({ midi }: { midi: Midi }) {
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(tracksWithNotes.map(({ index }) => index)),
   );
+
+  const [tableData, setTableData] = useState<
+    Array<{ trackName: string; events: TrackTableEvent[] }>
+  >([]);
 
   function toggle(index: number) {
     setSelected((prev) => {
@@ -231,6 +365,7 @@ export function SheetMusic({ midi }: { midi: Midi }) {
       .map(({ index }) => index);
 
     if (!activeIndices.length) {
+      setTableData([]);
       return;
     }
 
@@ -248,6 +383,10 @@ export function SheetMusic({ midi }: { midi: Midi }) {
     }
 
     const numMeasures = Math.ceil(maxTick / ticksPerMeasure);
+    const newTableData: Array<{
+      trackName: string;
+      events: TrackTableEvent[];
+    }> = [];
 
     const svgW =
       SVG_LEFT +
@@ -273,6 +412,11 @@ export function SheetMusic({ midi }: { midi: Midi }) {
           (Math.round(n.durationTicks / sixteenth) * sixteenth) / ppq,
         ),
       }));
+
+      newTableData.push({
+        trackName: track.name || `Track ${idx + 1}`,
+        events: buildTrackTableEvents(notes, beatsPerMeasure, numMeasures),
+      });
 
       const clef = getClef(notes);
       const staveY = SVG_TOP + row * ROW_H;
@@ -331,6 +475,7 @@ export function SheetMusic({ midi }: { midi: Midi }) {
         }
       }
     }
+    setTableData(newTableData);
   }, [midi, selected]);
 
   return (
@@ -370,6 +515,59 @@ export function SheetMusic({ midi }: { midi: Midi }) {
           borderRadius: "4px",
         }}
       />
+      {tableData.length > 0 && (
+        <details style={{ marginTop: "12px" }}>
+          <summary style={{ cursor: "pointer" }}>Note data</summary>
+          {tableData.map(({ trackName, events }) => (
+            <div key={trackName}>
+              <h4 style={{ margin: "8px 0 4px" }}>{trackName}</h4>
+              <table
+                style={{
+                  borderCollapse: "collapse",
+                  fontSize: "13px",
+                  marginBottom: "12px",
+                }}
+              >
+                <thead>
+                  <tr>
+                    {["Measure", "Beat", "Note(s)", "Duration"].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          textAlign: "left",
+                          padding: "2px 12px 2px 0",
+                          borderBottom: "1px solid #ccc",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((ev) => (
+                    <tr
+                      key={`${ev.measure}-${ev.beat}-${ev.isRest ? "r" : ev.noteNames.join("_")}`}
+                      style={{ opacity: ev.isRest ? 0.4 : 1 }}
+                    >
+                      <td style={{ padding: "1px 12px 1px 0" }}>
+                        {ev.measure}
+                      </td>
+                      <td style={{ padding: "1px 12px 1px 0" }}>{ev.beat}</td>
+                      <td style={{ padding: "1px 12px 1px 0" }}>
+                        {ev.isRest ? "rest" : ev.noteNames.join(", ")}
+                      </td>
+                      <td style={{ padding: "1px 12px 1px 0" }}>
+                        {ev.duration}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </details>
+      )}
     </div>
   );
 }
