@@ -518,56 +518,141 @@ export function SheetMusic({ midi }: { midi: Midi }) {
       {tableData.length > 0 && (
         <details style={{ marginTop: "12px" }}>
           <summary style={{ cursor: "pointer" }}>Note data</summary>
-          {tableData.map(({ trackName, events }) => (
-            <div key={trackName}>
-              <h4 style={{ margin: "8px 0 4px" }}>{trackName}</h4>
-              <table
-                style={{
-                  borderCollapse: "collapse",
-                  fontSize: "13px",
-                  marginBottom: "12px",
-                }}
-              >
-                <thead>
-                  <tr>
-                    {["Measure", "Beat", "Note(s)", "Duration"].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          textAlign: "left",
-                          padding: "2px 12px 2px 0",
-                          borderBottom: "1px solid #ccc",
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.map((ev) => (
-                    <tr
-                      key={`${ev.measure}-${ev.beat}-${ev.isRest ? "r" : ev.noteNames.join("_")}`}
-                      style={{ opacity: ev.isRest ? 0.4 : 1 }}
-                    >
-                      <td style={{ padding: "1px 12px 1px 0" }}>
-                        {ev.measure}
-                      </td>
-                      <td style={{ padding: "1px 12px 1px 0" }}>{ev.beat}</td>
-                      <td style={{ padding: "1px 12px 1px 0" }}>
-                        {ev.isRest ? "rest" : ev.noteNames.join(", ")}
-                      </td>
-                      <td style={{ padding: "1px 12px 1px 0" }}>
-                        {ev.duration}
-                      </td>
+          <div
+            style={{
+              display: "flex",
+              gap: "24px",
+              overflowX: "auto",
+              alignItems: "flex-start",
+              marginTop: "4px",
+            }}
+          >
+            {tableData.map(({ trackName, events }) => (
+              <div key={trackName} style={{ flexShrink: 0 }}>
+                <h4 style={{ margin: "8px 0 4px" }}>{trackName}</h4>
+                <table
+                  style={{
+                    borderCollapse: "collapse",
+                    fontSize: "13px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      {["Measure", "Beat", "Note(s)", "Duration"].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            textAlign: "left",
+                            padding: "2px 12px 2px 0",
+                            borderBottom: "1px solid #ccc",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
+                  </thead>
+                  <tbody>
+                    {events.map((ev) => (
+                      <tr
+                        key={`${ev.measure}-${ev.beat}-${ev.isRest ? "r" : ev.noteNames.join("_")}`}
+                        style={{ opacity: ev.isRest ? 0.4 : 1 }}
+                      >
+                        <td style={{ padding: "1px 12px 1px 0" }}>
+                          {ev.measure}
+                        </td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>{ev.beat}</td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>
+                          {ev.isRest ? "rest" : ev.noteNames.join(", ")}
+                        </td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>
+                          {ev.duration}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         </details>
       )}
+      <details style={{ marginTop: "8px" }}>
+        <summary style={{ cursor: "pointer" }}>Raw MIDI data</summary>
+        <p style={{ margin: "6px 0", fontSize: "13px" }}>
+          PPQ: {midi.header.ppq}
+          {midi.header.tempos[0]
+            ? ` · BPM: ${midi.header.tempos[0].bpm.toFixed(1)}`
+            : ""}
+          {midi.header.timeSignatures[0]
+            ? ` · Time: ${midi.header.timeSignatures[0].timeSignature.join("/")}`
+            : ""}
+          {midi.header.keySignatures[0]
+            ? ` · Key: ${midi.header.keySignatures[0].key} ${midi.header.keySignatures[0].scale}`
+            : ""}
+        </p>
+        <div
+          style={{
+            display: "flex",
+            gap: "24px",
+            overflowX: "auto",
+            alignItems: "flex-start",
+            marginTop: "4px",
+          }}
+        >
+          {midi.tracks
+            .map((track, index) => ({ track, index }))
+            .filter(({ track }) => track.notes.length > 0)
+            .map(({ track, index }) => (
+              <div key={index} style={{ flexShrink: 0 }}>
+                <h4 style={{ margin: "8px 0 4px" }}>
+                  {track.name || `Track ${index + 1}`} (ch.&nbsp;{track.channel}
+                  )
+                </h4>
+                <table style={{ borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr>
+                      {[
+                        "Note",
+                        "MIDI",
+                        "Start (ticks)",
+                        "Dur (ticks)",
+                        "Vel",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            textAlign: "left",
+                            padding: "2px 12px 2px 0",
+                            borderBottom: "1px solid #ccc",
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {track.notes.map((n) => (
+                      <tr key={`${n.ticks}-${n.midi}-${n.durationTicks}`}>
+                        <td style={{ padding: "1px 12px 1px 0" }}>{n.name}</td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>{n.midi}</td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>{n.ticks}</td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>
+                          {n.durationTicks}
+                        </td>
+                        <td style={{ padding: "1px 12px 1px 0" }}>
+                          {Math.round(n.velocity * 127)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+        </div>
+      </details>
     </div>
   );
 }
