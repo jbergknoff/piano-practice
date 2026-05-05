@@ -1,4 +1,5 @@
 import type { Midi } from "@tonejs/midi";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   Accidental,
   Formatter,
@@ -7,7 +8,6 @@ import {
   StaveNote,
   Voice,
 } from "vexflow";
-import { useEffect, useRef, useState } from "preact/hooks";
 
 // --- Music helpers ---
 
@@ -306,7 +306,6 @@ function buildTrackTableEvents(
 
 // --- Layout constants ---
 
-const FIRST_MEASURE_W = 220; // wider to fit clef + time sig
 const MEASURE_W = 180;
 const ROW_H = 120; // vertical space per track row
 const SVG_TOP = 20;
@@ -388,44 +387,70 @@ export function SheetMusic({ midi }: { midi: Midi }) {
       events: TrackTableEvent[];
     }> = [];
 
+    // Pre-compute quantized notes and clefs for all active tracks
+    const allTrackData: Array<{ notes: TrackNote[]; clef: "treble" | "bass" }> =
+      activeIndices.map((idx) => {
+        const track = midi.tracks[idx];
+        const notes: TrackNote[] = track.notes.map((n) => ({
+          midi: n.midi,
+          startBeats: (Math.round(n.ticks / sixteenth) * sixteenth) / ppq,
+          durationBeats: Math.max(
+            0.25,
+            (Math.round(n.durationTicks / sixteenth) * sixteenth) / ppq,
+          ),
+        }));
+        newTableData.push({
+          trackName: track.name || `Track ${idx + 1}`,
+          events: buildTrackTableEvents(notes, beatsPerMeasure, numMeasures),
+        });
+        return { notes, clef: getClef(notes) };
+      });
+
+    setTableData(newTableData);
+
+    // Measure the actual width consumed by the first-measure modifiers (clef +
+    // time signature) across all tracks, using a throw-away off-screen renderer.
+    // This ensures every track's first measure gives notes the same horizontal
+    // content space as all subsequent measures.
+    const tmpEl = document.createElement("div");
+    const tmpRenderer = new Renderer(tmpEl, Renderer.Backends.SVG);
+    tmpRenderer.resize(600, allTrackData.length * 100);
+    const tmpCtx = tmpRenderer.getContext();
+    let maxModifierW = 0;
+    for (const [i, { clef }] of allTrackData.entries()) {
+      const tmpStave = new Stave(0, i * 100, 400);
+      tmpStave.addClef(clef);
+      tmpStave.addTimeSignature(`${sigNum}/${sigDen}`);
+      tmpStave.setContext(tmpCtx).draw();
+      const w = tmpStave.getNoteStartX();
+      if (w > maxModifierW) {
+        maxModifierW = w;
+      }
+    }
+    const firstMeasureW = maxModifierW + MEASURE_W;
+
     const svgW =
-      SVG_LEFT +
-      FIRST_MEASURE_W +
-      Math.max(0, numMeasures - 1) * MEASURE_W +
-      20;
+      SVG_LEFT + firstMeasureW + Math.max(0, numMeasures - 1) * MEASURE_W + 20;
     const svgH = SVG_TOP + activeIndices.length * ROW_H + 20;
 
     const renderer = new Renderer(el, Renderer.Backends.SVG);
     renderer.resize(svgW, svgH);
     const ctx = renderer.getContext();
 
-    for (let row = 0; row < activeIndices.length; row++) {
-      const idx = activeIndices[row];
-      const track = midi.tracks[idx];
+    // Render one measure at a time across all tracks. Formatting all voices for
+    // the same measure together ensures beat positions align vertically.
+    for (let m = 0; m < numMeasures; m++) {
+      const measureStart = m * beatsPerMeasure;
+      const staveW = m === 0 ? firstMeasureW : MEASURE_W;
+      const staveX =
+        SVG_LEFT + (m === 0 ? 0 : firstMeasureW + (m - 1) * MEASURE_W);
 
-      // Quantize all notes to the 16th-note grid
-      const notes: TrackNote[] = track.notes.map((n) => ({
-        midi: n.midi,
-        startBeats: (Math.round(n.ticks / sixteenth) * sixteenth) / ppq,
-        durationBeats: Math.max(
-          0.25,
-          (Math.round(n.durationTicks / sixteenth) * sixteenth) / ppq,
-        ),
-      }));
+      const measureStaves: Stave[] = [];
+      const measureVoices: Array<Voice | null> = [];
 
-      newTableData.push({
-        trackName: track.name || `Track ${idx + 1}`,
-        events: buildTrackTableEvents(notes, beatsPerMeasure, numMeasures),
-      });
-
-      const clef = getClef(notes);
-      const staveY = SVG_TOP + row * ROW_H;
-
-      for (let m = 0; m < numMeasures; m++) {
-        const measureStart = m * beatsPerMeasure;
-        const staveX =
-          SVG_LEFT + (m === 0 ? 0 : FIRST_MEASURE_W + (m - 1) * MEASURE_W);
-        const staveW = m === 0 ? FIRST_MEASURE_W : MEASURE_W;
+      for (let row = 0; row < allTrackData.length; row++) {
+        const { notes, clef } = allTrackData[row];
+        const staveY = SVG_TOP + row * ROW_H;
 
         const stave = new Stave(staveX, staveY, staveW);
         if (m === 0) {
@@ -433,49 +458,63 @@ export function SheetMusic({ midi }: { midi: Midi }) {
           stave.addTimeSignature(`${sigNum}/${sigDen}`);
         }
         stave.setContext(ctx).draw();
+        measureStaves.push(stave);
 
         const measureNotes = notes.filter(
           (n) =>
             n.startBeats >= measureStart &&
             n.startBeats < measureStart + beatsPerMeasure,
         );
-
         const tickables = buildMeasureTickables(
           measureNotes,
           measureStart,
           beatsPerMeasure,
         );
+
         if (!tickables.length) {
+          measureVoices.push(null);
           continue;
         }
 
-        try {
-          const staveNotes = tickables.map(({ keys, duration, accs }) => {
-            const sn = new StaveNote({ keys, duration });
-            accs.forEach((acc, i) => {
-              if (acc) {
-                sn.addModifier(new Accidental(acc), i);
-              }
-            });
-            return sn;
+        const staveNotes = tickables.map(({ keys, duration, accs }) => {
+          const sn = new StaveNote({ keys, duration });
+          accs.forEach((acc, i) => {
+            if (acc) {
+              sn.addModifier(new Accidental(acc), i);
+            }
           });
+          return sn;
+        });
 
-          const voice = new Voice({
-            numBeats: sigNum,
-            beatValue: sigDen,
-          }).setStrict(false);
-          voice.addTickables(staveNotes);
-          new Formatter().joinVoices([voice]).format([voice], staveW - 30);
-          voice.draw(ctx, stave);
-        } catch (err) {
-          console.warn(
-            `SheetMusic: render error measure ${m} track ${idx}:`,
-            err,
-          );
+        const voice = new Voice({
+          numBeats: sigNum,
+          beatValue: sigDen,
+        }).setStrict(false);
+        voice.addTickables(staveNotes);
+        measureVoices.push(voice);
+      }
+
+      const voices = measureVoices.filter((v): v is Voice => v !== null);
+      if (!voices.length) {
+        continue;
+      }
+
+      try {
+        const formatter = new Formatter();
+        for (const voice of voices) {
+          formatter.joinVoices([voice]);
         }
+        formatter.format(voices, staveW - 30);
+        for (let row = 0; row < allTrackData.length; row++) {
+          const voice = measureVoices[row];
+          if (voice) {
+            voice.draw(ctx, measureStaves[row]);
+          }
+        }
+      } catch (err) {
+        console.warn(`SheetMusic: render error measure ${m}:`, err);
       }
     }
-    setTableData(newTableData);
   }, [midi, selected]);
 
   return (
