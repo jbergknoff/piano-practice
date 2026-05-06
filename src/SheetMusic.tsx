@@ -1,17 +1,94 @@
 import type { Midi } from "@tonejs/midi";
+import type { Note } from "@tonejs/midi/dist/Note";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   Accidental,
+  Beam,
   Formatter,
   Renderer,
   Stave,
   StaveNote,
+  StaveTie,
   Voice,
 } from "vexflow";
 
-// --- Music helpers ---
+// ─── Duration table ───────────────────────────────────────────────────────────
 
-const NOTE_NAMES = [
+interface MusicalDuration {
+  vex: string;
+  ticksFn: (ppq: number) => number;
+}
+
+// Ordered largest → smallest; drives both nearestMusicalDuration and greedyDecompose.
+const MUSICAL_DURATIONS: MusicalDuration[] = [
+  { vex: "w", ticksFn: (p) => p * 4 },
+  { vex: "hd", ticksFn: (p) => p * 3 },
+  { vex: "h", ticksFn: (p) => p * 2 },
+  { vex: "qd", ticksFn: (p) => Math.round((p * 3) / 2) },
+  { vex: "q", ticksFn: (p) => p },
+  { vex: "8d", ticksFn: (p) => Math.round((p * 3) / 4) },
+  { vex: "8", ticksFn: (p) => Math.round(p / 2) },
+  { vex: "16d", ticksFn: (p) => Math.round((p * 3) / 8) },
+  { vex: "16", ticksFn: (p) => Math.round(p / 4) },
+  { vex: "32", ticksFn: (p) => Math.round(p / 8) },
+];
+
+function nearestMusicalDuration(ticks: number, ppq: number): MusicalDuration {
+  let best = MUSICAL_DURATIONS[MUSICAL_DURATIONS.length - 1];
+  let bestDiff = Number.POSITIVE_INFINITY;
+  for (const d of MUSICAL_DURATIONS) {
+    const dt = d.ticksFn(ppq);
+    const diff = Math.abs(ticks - dt);
+    if (diff < bestDiff || (diff === bestDiff && dt < best.ticksFn(ppq))) {
+      bestDiff = diff;
+      best = d;
+    }
+  }
+  return best;
+}
+
+function musicalDurToTicks(vex: string, ppq: number): number {
+  const d = MUSICAL_DURATIONS.find((d) => d.vex === vex);
+  return d ? d.ticksFn(ppq) : ppq;
+}
+
+// Greedy largest-first decomposition of a tick count into vex duration strings.
+function greedyDecompose(ticks: number, ppq: number): string[] {
+  const result: string[] = [];
+  let rem = ticks;
+  for (const d of MUSICAL_DURATIONS) {
+    const dt = d.ticksFn(ppq);
+    while (rem >= dt) {
+      result.push(d.vex);
+      rem -= dt;
+    }
+    if (rem <= 0) {
+      break;
+    }
+  }
+  return result.length > 0 ? result : ["32"];
+}
+
+function splitRests(ticks: number, ppq: number): string[] {
+  return greedyDecompose(ticks, ppq);
+}
+
+function longestVex(vexList: string[], ppq: number): string {
+  let best = vexList[0];
+  let bestTicks = 0;
+  for (const vex of vexList) {
+    const t = musicalDurToTicks(vex, ppq);
+    if (t > bestTicks) {
+      bestTicks = t;
+      best = vex;
+    }
+  }
+  return best;
+}
+
+// ─── Pitch names ──────────────────────────────────────────────────────────────
+
+const SHARP_NAMES = [
   "c",
   "c#",
   "d",
@@ -25,13 +102,21 @@ const NOTE_NAMES = [
   "a#",
   "b",
 ];
-const SHARP_SEMITONES = new Set([1, 3, 6, 8, 10]);
-
-function midiToKey(midiNote: number): string {
-  return `${NOTE_NAMES[midiNote % 12]}/${Math.floor(midiNote / 12) - 1}`;
-}
-
-const NOTE_NAMES_DISPLAY = [
+const FLAT_NAMES = [
+  "c",
+  "db",
+  "d",
+  "eb",
+  "e",
+  "f",
+  "gb",
+  "g",
+  "ab",
+  "a",
+  "bb",
+  "b",
+];
+const SHARP_NAMES_DISPLAY = [
   "C",
   "C#",
   "D",
@@ -45,258 +130,199 @@ const NOTE_NAMES_DISPLAY = [
   "A#",
   "B",
 ];
+const FLAT_NAMES_DISPLAY = [
+  "C",
+  "Db",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "Gb",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+];
+const FLAT_KEYS = new Set(["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F"]);
 
-function midiToName(midiNote: number): string {
-  return `${NOTE_NAMES_DISPLAY[midiNote % 12]}${Math.floor(midiNote / 12) - 1}`;
+function midiToKey(midiNote: number, pitchNames: string[]): string {
+  return `${pitchNames[midiNote % 12]}/${Math.floor(midiNote / 12) - 1}`;
+}
+
+function midiToName(midiNote: number, displayNames: string[]): string {
+  return `${displayNames[midiNote % 12]}${Math.floor(midiNote / 12) - 1}`;
+}
+
+function getClef(midiValues: number[]): "treble" | "bass" {
+  if (!midiValues.length) {
+    return "treble";
+  }
+  const avg = midiValues.reduce((s, n) => s + n, 0) / midiValues.length;
+  return avg < 60 ? "bass" : "treble";
 }
 
 const VEX_DUR_LABELS: Record<string, string> = {
   w: "whole",
+  hd: "dotted half",
   h: "half",
+  qd: "dotted quarter",
   q: "quarter",
+  "8d": "dotted eighth",
   "8": "eighth",
+  "16d": "dotted sixteenth",
   "16": "sixteenth",
+  "32": "thirty-second",
 };
 
-function getClef(notes: Array<{ midi: number }>): "treble" | "bass" {
-  if (!notes.length) {
-    return "treble";
-  }
-  const avg = notes.reduce((s, n) => s + n.midi, 0) / notes.length;
-  return avg < 60 ? "bass" : "treble";
-}
+// ─── Note segments ────────────────────────────────────────────────────────────
 
-// VexFlow duration strings, ordered largest to smallest
-const VEX_DURS: Array<[number, string]> = [
-  [4, "w"],
-  [2, "h"],
-  [1, "q"],
-  [0.5, "8"],
-  [0.25, "16"],
-];
-
-function nearestVexDur(beats: number): string {
-  let best = "q";
-  let bestDiff = Number.POSITIVE_INFINITY;
-  for (const [b, d] of VEX_DURS) {
-    const diff = Math.abs(beats - b);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = d;
-    }
-  }
-  return best;
-}
-
-function vexDurToBeats(dur: string): number {
-  const base = dur.endsWith("r") ? dur.slice(0, -1) : dur;
-  for (const [b, d] of VEX_DURS) {
-    if (d === base) {
-      return b;
-    }
-  }
-  return 1;
-}
-
-// Decompose a beat count into a sequence of rest duration strings (largest-first greedy)
-function splitRests(beats: number): string[] {
-  const result: string[] = [];
-  let rem = beats;
-  for (const [b, d] of VEX_DURS) {
-    while (rem >= b - 0.005) {
-      result.push(`${d}r`);
-      rem -= b;
-    }
-  }
-  return result;
-}
-
-// --- Measure building ---
-
-interface TrackNote {
+interface NoteSegment {
   midi: number;
-  startBeats: number; // in quarter-note beats, absolute
-  durationBeats: number; // in quarter-note beats
+  measureIndex: number;
+  offsetTicks: number; // ticks from start of measure
+  vex: string; // single VexFlow base duration string
+  tieBackward: boolean;
+  tieForward: boolean;
 }
 
-interface Tickable {
-  keys: string[];
-  duration: string;
-  accs: Array<string | null>;
-}
+function buildNoteSegments(
+  rawNotes: Note[],
+  ppq: number,
+  ticksPerMeasure: number,
+  numMeasures: number,
+): NoteSegment[] {
+  const grid = Math.max(1, Math.round(ppq / 8)); // 32nd-note grid
+  const result: NoteSegment[] = [];
 
-/**
- * Convert a list of notes within a measure into a flat sequence of VexFlow
- * tickables (notes and rests) that fill exactly beatsPerMeasure quarter-note beats.
- *
- * Notes are snapped to a 16th-note grid. Notes starting at the same grid
- * position are combined into a chord; the longest duration wins. Gaps between
- * notes (and at the start/end of the measure) are filled with rests.
- */
-function buildMeasureTickables(
-  notes: TrackNote[],
-  measureStart: number,
-  beatsPerMeasure: number,
-): Tickable[] {
-  // Group by 16th-note-snapped position relative to measure start
-  const byPos = new Map<number, { midis: number[]; durBeats: number }>();
-  for (const note of notes) {
-    const rel = Math.round((note.startBeats - measureStart) * 4) / 4;
-    if (rel < 0 || rel >= beatsPerMeasure) {
-      continue;
-    }
-    const clampedDur = Math.min(
-      Math.max(0.25, Math.round(note.durationBeats * 4) / 4),
-      beatsPerMeasure - rel,
-    );
-    const existing = byPos.get(rel);
-    if (existing) {
-      existing.midis.push(note.midi);
-      if (clampedDur > existing.durBeats) {
-        existing.durBeats = clampedDur;
+  for (const note of rawNotes) {
+    const startTick = Math.round(note.ticks / grid) * grid;
+    const classifiedDur = nearestMusicalDuration(note.durationTicks, ppq);
+    const totalDurTicks = Math.max(grid, classifiedDur.ticksFn(ppq));
+
+    let currentTick = startTick;
+    let remainingTicks = totalDurTicks;
+    let isFirstSegment = true;
+
+    while (remainingTicks > 0) {
+      const measureIndex = Math.floor(currentTick / ticksPerMeasure);
+      if (measureIndex >= numMeasures) {
+        break;
       }
-    } else {
-      byPos.set(rel, { midis: [note.midi], durBeats: clampedDur });
-    }
-  }
 
-  const positions = Array.from(byPos.keys()).sort((a, b) => a - b);
-  const result: Tickable[] = [];
-  let cursor = 0; // quarter-note beats from measure start
-
-  for (const pos of positions) {
-    if (pos < cursor - 0.005) {
-      continue; // overlapped by previous note; skip
-    }
-    if (pos > cursor + 0.005) {
-      for (const d of splitRests(pos - cursor)) {
-        result.push({ keys: ["b/4"], duration: d, accs: [] });
+      const measureEndTick = (measureIndex + 1) * ticksPerMeasure;
+      const spaceInMeasure = measureEndTick - currentTick;
+      const segmentTicks = Math.min(remainingTicks, spaceInMeasure);
+      if (segmentTicks <= 0) {
+        break;
       }
-    }
 
-    const slot = byPos.get(pos);
-    if (!slot) {
-      continue;
-    }
-    const { midis, durBeats } = slot;
-    const sorted = midis.sort((a, b) => a - b);
-    const dur = nearestVexDur(durBeats);
+      const subDurations = greedyDecompose(segmentTicks, ppq);
+      let subCurrentTick = currentTick;
 
-    result.push({
-      keys: sorted.map(midiToKey),
-      duration: dur,
-      accs: sorted.map((m) => (SHARP_SEMITONES.has(m % 12) ? "#" : null)),
-    });
+      for (let i = 0; i < subDurations.length; i++) {
+        const vex = subDurations[i];
+        const subDurTicks = musicalDurToTicks(vex, ppq);
+        const isFirstSub = i === 0;
+        const isLastSub = i === subDurations.length - 1;
 
-    cursor = pos + vexDurToBeats(dur);
-  }
+        result.push({
+          midi: note.midi,
+          measureIndex,
+          offsetTicks: subCurrentTick - measureIndex * ticksPerMeasure,
+          vex,
+          tieBackward: !isFirstSegment || !isFirstSub,
+          tieForward: remainingTicks > segmentTicks || !isLastSub,
+        });
 
-  // Fill any remaining beats at the end of the measure with rests
-  if (cursor < beatsPerMeasure - 0.005) {
-    for (const d of splitRests(beatsPerMeasure - cursor)) {
-      result.push({ keys: ["b/4"], duration: d, accs: [] });
+        subCurrentTick += subDurTicks;
+      }
+
+      currentTick += segmentTicks;
+      remainingTicks -= segmentTicks;
+      isFirstSegment = false;
     }
   }
 
   return result;
 }
 
-// --- Note table ---
+// ─── Note table ───────────────────────────────────────────────────────────────
 
 interface TrackTableEvent {
-  measure: number; // 1-indexed
-  beat: number; // 1-indexed decimal from measure start (e.g. 1, 1.5, 2.75)
-  noteNames: string[]; // ["C4", "D#4"] — empty for rests
-  duration: string; // human-readable
+  measure: number;
+  beat: number;
+  noteNames: string[];
+  duration: string;
   isRest: boolean;
 }
 
-/**
- * Produce a human-readable sequence of note and rest events for one track,
- * using the same 16th-note quantisation and measure grouping as
- * buildMeasureTickables so the table matches what is drawn on the staff.
- */
 function buildTrackTableEvents(
-  notes: TrackNote[],
-  beatsPerMeasure: number,
+  segments: NoteSegment[],
+  ppq: number,
+  ticksPerMeasure: number,
   numMeasures: number,
+  displayNames: string[],
 ): TrackTableEvent[] {
   const result: TrackTableEvent[] = [];
 
   for (let m = 0; m < numMeasures; m++) {
-    const measureStart = m * beatsPerMeasure;
+    const measureSegs = segments.filter((s) => s.measureIndex === m);
 
-    const byPos = new Map<number, { midis: number[]; durBeats: number }>();
-    for (const note of notes) {
-      const rel = Math.round((note.startBeats - measureStart) * 4) / 4;
-      if (rel < 0 || rel >= beatsPerMeasure) {
-        continue;
-      }
-      const clampedDur = Math.min(
-        Math.max(0.25, Math.round(note.durationBeats * 4) / 4),
-        beatsPerMeasure - rel,
-      );
-      const existing = byPos.get(rel);
-      if (existing) {
-        existing.midis.push(note.midi);
-        if (clampedDur > existing.durBeats) {
-          existing.durBeats = clampedDur;
-        }
-      } else {
-        byPos.set(rel, { midis: [note.midi], durBeats: clampedDur });
-      }
+    const byOffset = new Map<number, NoteSegment[]>();
+    for (const seg of measureSegs) {
+      const list = byOffset.get(seg.offsetTicks) ?? [];
+      list.push(seg);
+      byOffset.set(seg.offsetTicks, list);
     }
 
-    const positions = Array.from(byPos.keys()).sort((a, b) => a - b);
+    const offsets = Array.from(byOffset.keys()).sort((a, b) => a - b);
     let cursor = 0;
 
-    for (const pos of positions) {
-      if (pos < cursor - 0.005) {
+    for (const offset of offsets) {
+      if (offset < cursor) {
         continue;
       }
-      if (pos > cursor + 0.005) {
-        let restCursor = cursor;
-        for (const restDur of splitRests(pos - cursor)) {
-          const durKey = restDur.slice(0, -1);
+      if (offset > cursor) {
+        for (const vex of splitRests(offset - cursor, ppq)) {
           result.push({
             measure: m + 1,
-            beat: Number((restCursor + 1).toFixed(4)),
+            beat: Number((cursor / ppq + 1).toFixed(4)),
             noteNames: [],
-            duration: VEX_DUR_LABELS[durKey] ?? durKey,
+            duration: VEX_DUR_LABELS[vex] ?? vex,
             isRest: true,
           });
-          restCursor += vexDurToBeats(restDur);
+          cursor += musicalDurToTicks(vex, ppq);
         }
       }
 
-      const slot = byPos.get(pos);
-      if (!slot) {
-        continue;
-      }
-      const { midis, durBeats } = slot;
-      const dur = nearestVexDur(durBeats);
+      const segs = byOffset.get(offset) ?? [];
+      const midis = [...new Set(segs.map((s) => s.midi))].sort((a, b) => a - b);
+      const vex = longestVex(
+        segs.map((s) => s.vex),
+        ppq,
+      );
+
       result.push({
         measure: m + 1,
-        beat: Number((pos + 1).toFixed(4)),
-        noteNames: midis.sort((a, b) => a - b).map(midiToName),
-        duration: VEX_DUR_LABELS[dur] ?? dur,
+        beat: Number((offset / ppq + 1).toFixed(4)),
+        noteNames: midis.map((midi) => midiToName(midi, displayNames)),
+        duration: VEX_DUR_LABELS[vex] ?? vex,
         isRest: false,
       });
-      cursor = pos + vexDurToBeats(dur);
+      cursor = offset + musicalDurToTicks(vex, ppq);
     }
 
-    if (cursor < beatsPerMeasure - 0.005) {
-      let restCursor = cursor;
-      for (const restDur of splitRests(beatsPerMeasure - cursor)) {
-        const durKey = restDur.slice(0, -1);
+    if (cursor < ticksPerMeasure) {
+      for (const vex of splitRests(ticksPerMeasure - cursor, ppq)) {
         result.push({
           measure: m + 1,
-          beat: Number((restCursor + 1).toFixed(4)),
+          beat: Number((cursor / ppq + 1).toFixed(4)),
           noteNames: [],
-          duration: VEX_DUR_LABELS[durKey] ?? durKey,
+          duration: VEX_DUR_LABELS[vex] ?? vex,
           isRest: true,
         });
-        restCursor += vexDurToBeats(restDur);
+        cursor += musicalDurToTicks(vex, ppq);
       }
     }
   }
@@ -304,14 +330,23 @@ function buildTrackTableEvents(
   return result;
 }
 
-// --- Layout constants ---
+// ─── StaveNote with tie metadata ──────────────────────────────────────────────
+
+interface StaveNoteInfo {
+  note: StaveNote;
+  tieBackward: boolean;
+  tieForward: boolean;
+  midis: number[];
+}
+
+// ─── Layout constants ─────────────────────────────────────────────────────────
 
 const MEASURE_W = 180;
-const ROW_H = 120; // vertical space per track row
+const ROW_H = 120;
 const SVG_TOP = 20;
 const SVG_LEFT = 10;
 
-// --- Component ---
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SheetMusic({ midi }: { midi: Midi }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -351,10 +386,12 @@ export function SheetMusic({ midi }: { midi: Midi }) {
     const [sigNum, sigDen] = midi.header.timeSignatures[0]?.timeSignature ?? [
       4, 4,
     ];
-    // Ticks per measure, generalised for any time signature (e.g. 6/8 → 3 quarter-note beats)
     const ticksPerMeasure = Math.round((sigNum / sigDen) * 4 * ppq);
-    const beatsPerMeasure = ticksPerMeasure / ppq; // in quarter-note beats
-    const sixteenth = ppq / 4;
+
+    const keySpec = midi.header.keySignatures[0]?.key ?? "C";
+    const useFlats = FLAT_KEYS.has(keySpec);
+    const pitchNames = useFlats ? FLAT_NAMES : SHARP_NAMES;
+    const displayNames = useFlats ? FLAT_NAMES_DISPLAY : SHARP_NAMES_DISPLAY;
 
     const activeIndices = midi.tracks
       .map((track, index) => ({ track, index }))
@@ -382,36 +419,33 @@ export function SheetMusic({ midi }: { midi: Midi }) {
     }
 
     const numMeasures = Math.ceil(maxTick / ticksPerMeasure);
-    const newTableData: Array<{
-      trackName: string;
-      events: TrackTableEvent[];
-    }> = [];
 
-    // Pre-compute quantized notes and clefs for all active tracks
-    const allTrackData: Array<{ notes: TrackNote[]; clef: "treble" | "bass" }> =
-      activeIndices.map((idx) => {
-        const track = midi.tracks[idx];
-        const notes: TrackNote[] = track.notes.map((n) => ({
-          midi: n.midi,
-          startBeats: (Math.round(n.ticks / sixteenth) * sixteenth) / ppq,
-          durationBeats: Math.max(
-            0.25,
-            (Math.round(n.durationTicks / sixteenth) * sixteenth) / ppq,
-          ),
-        }));
-        newTableData.push({
-          trackName: track.name || `Track ${idx + 1}`,
-          events: buildTrackTableEvents(notes, beatsPerMeasure, numMeasures),
-        });
-        return { notes, clef: getClef(notes) };
-      });
+    const allTrackData = activeIndices.map((idx) => {
+      const track = midi.tracks[idx];
+      const segments = buildNoteSegments(
+        track.notes,
+        ppq,
+        ticksPerMeasure,
+        numMeasures,
+      );
+      const clef = getClef(track.notes.map((n) => n.midi));
+      return { segments, clef, trackName: track.name || `Track ${idx + 1}` };
+    });
 
-    setTableData(newTableData);
+    setTableData(
+      allTrackData.map(({ segments, trackName }) => ({
+        trackName,
+        events: buildTrackTableEvents(
+          segments,
+          ppq,
+          ticksPerMeasure,
+          numMeasures,
+          displayNames,
+        ),
+      })),
+    );
 
-    // Measure the actual width consumed by the first-measure modifiers (clef +
-    // time signature) across all tracks, using a throw-away off-screen renderer.
-    // This ensures every track's first measure gives notes the same horizontal
-    // content space as all subsequent measures.
+    // Measure first-measure modifier width (clef + key sig + time sig).
     const tmpEl = document.createElement("div");
     const tmpRenderer = new Renderer(tmpEl, Renderer.Backends.SVG);
     tmpRenderer.resize(600, allTrackData.length * 100);
@@ -420,6 +454,9 @@ export function SheetMusic({ midi }: { midi: Midi }) {
     for (const [i, { clef }] of allTrackData.entries()) {
       const tmpStave = new Stave(0, i * 100, 400);
       tmpStave.addClef(clef);
+      if (keySpec !== "C") {
+        tmpStave.addKeySignature(keySpec);
+      }
       tmpStave.addTimeSignature(`${sigNum}/${sigDen}`);
       tmpStave.setContext(tmpCtx).draw();
       const w = tmpStave.getNoteStartX();
@@ -437,61 +474,162 @@ export function SheetMusic({ midi }: { midi: Midi }) {
     renderer.resize(svgW, svgH);
     const ctx = renderer.getContext();
 
-    // Render one measure at a time across all tracks. Formatting all voices for
-    // the same measure together ensures beat positions align vertically.
+    // One pending-tie map per track row; persists across the measure loop so
+    // cross-barline ties can be drawn in the measure after the one where the
+    // note starts.
+    const pendingTieMaps: Map<
+      number,
+      { note: StaveNote; noteIndex: number }
+    >[] = allTrackData.map(() => new Map());
+
     for (let m = 0; m < numMeasures; m++) {
-      const measureStart = m * beatsPerMeasure;
       const staveW = m === 0 ? firstMeasureW : MEASURE_W;
       const staveX =
         SVG_LEFT + (m === 0 ? 0 : firstMeasureW + (m - 1) * MEASURE_W);
 
       const measureStaves: Stave[] = [];
       const measureVoices: Array<Voice | null> = [];
+      const allBeams: Beam[] = [];
+      const allTies: StaveTie[] = [];
 
       for (let row = 0; row < allTrackData.length; row++) {
-        const { notes, clef } = allTrackData[row];
+        const { segments, clef } = allTrackData[row];
+        const pendingTies = pendingTieMaps[row];
         const staveY = SVG_TOP + row * ROW_H;
 
         const stave = new Stave(staveX, staveY, staveW);
         if (m === 0) {
           stave.addClef(clef);
+          if (keySpec !== "C") {
+            stave.addKeySignature(keySpec);
+          }
           stave.addTimeSignature(`${sigNum}/${sigDen}`);
         }
         stave.setContext(ctx).draw();
         measureStaves.push(stave);
 
-        const measureNotes = notes.filter(
-          (n) =>
-            n.startBeats >= measureStart &&
-            n.startBeats < measureStart + beatsPerMeasure,
-        );
-        const tickables = buildMeasureTickables(
-          measureNotes,
-          measureStart,
-          beatsPerMeasure,
-        );
+        const measureSegs = segments.filter((s) => s.measureIndex === m);
 
-        if (!tickables.length) {
+        const byOffset = new Map<number, NoteSegment[]>();
+        for (const seg of measureSegs) {
+          const list = byOffset.get(seg.offsetTicks) ?? [];
+          list.push(seg);
+          byOffset.set(seg.offsetTicks, list);
+        }
+
+        const offsets = Array.from(byOffset.keys()).sort((a, b) => a - b);
+        let cursor = 0;
+        const noteInfos: StaveNoteInfo[] = [];
+
+        for (const offset of offsets) {
+          if (offset < cursor) {
+            continue; // overlapped by a longer note
+          }
+          if (offset > cursor) {
+            for (const vex of splitRests(offset - cursor, ppq)) {
+              noteInfos.push({
+                note: new StaveNote({ keys: ["b/4"], duration: `${vex}r` }),
+                tieBackward: false,
+                tieForward: false,
+                midis: [],
+              });
+              cursor += musicalDurToTicks(vex, ppq);
+            }
+          }
+
+          const segs = byOffset.get(offset) ?? [];
+          const midis = [...new Set(segs.map((s) => s.midi))].sort(
+            (a, b) => a - b,
+          );
+          const tieBackward = segs.some((s) => s.tieBackward);
+          const vex = longestVex(
+            segs.map((s) => s.vex),
+            ppq,
+          );
+          const durTicks = musicalDurToTicks(vex, ppq);
+          const tieForward = segs.some((s) => s.tieForward && s.vex === vex);
+
+          const keys = midis.map((midi) => midiToKey(midi, pitchNames));
+          const sn = new StaveNote({ keys, duration: vex });
+          noteInfos.push({ note: sn, tieBackward, tieForward, midis });
+          cursor = offset + durTicks;
+        }
+
+        // Fill remaining measure space with rests.
+        if (cursor < ticksPerMeasure) {
+          for (const vex of splitRests(ticksPerMeasure - cursor, ppq)) {
+            noteInfos.push({
+              note: new StaveNote({ keys: ["b/4"], duration: `${vex}r` }),
+              tieBackward: false,
+              tieForward: false,
+              midis: [],
+            });
+            cursor += musicalDurToTicks(vex, ppq);
+          }
+        }
+
+        if (!noteInfos.length) {
           measureVoices.push(null);
           continue;
         }
 
-        const staveNotes = tickables.map(({ keys, duration, accs }) => {
-          const sn = new StaveNote({ keys, duration });
-          accs.forEach((acc, i) => {
-            if (acc) {
-              sn.addModifier(new Accidental(acc), i);
-            }
-          });
-          return sn;
-        });
-
+        const staveNotes = noteInfos.map((i) => i.note);
         const voice = new Voice({
           numBeats: sigNum,
           beatValue: sigDen,
         }).setStrict(false);
         voice.addTickables(staveNotes);
         measureVoices.push(voice);
+
+        // Build StaveTie objects and update the pending-tie map.
+        for (const info of noteInfos) {
+          if (!info.midis.length) {
+            continue;
+          }
+
+          if (info.tieBackward) {
+            // Group by source StaveNote so that notes from the same previous
+            // chord share one StaveTie object (which draws multiple curves).
+            const groups = new Map<
+              StaveNote,
+              { firstIndexes: number[]; lastIndexes: number[] }
+            >();
+            for (let i = 0; i < info.midis.length; i++) {
+              const pending = pendingTies.get(info.midis[i]);
+              if (pending) {
+                const g = groups.get(pending.note) ?? {
+                  firstIndexes: [],
+                  lastIndexes: [],
+                };
+                g.firstIndexes.push(pending.noteIndex);
+                g.lastIndexes.push(i);
+                groups.set(pending.note, g);
+              }
+            }
+            for (const [firstNote, { firstIndexes, lastIndexes }] of groups) {
+              allTies.push(
+                new StaveTie({
+                  firstNote,
+                  lastNote: info.note,
+                  firstIndexes,
+                  lastIndexes,
+                }),
+              );
+            }
+          }
+
+          for (let i = 0; i < info.midis.length; i++) {
+            const midi = info.midis[i];
+            if (info.tieForward) {
+              pendingTies.set(midi, { note: info.note, noteIndex: i });
+            } else {
+              pendingTies.delete(midi);
+            }
+          }
+        }
+
+        const beams = Beam.generateBeams(staveNotes);
+        allBeams.push(...beams);
       }
 
       const voices = measureVoices.filter((v): v is Voice => v !== null);
@@ -500,16 +638,27 @@ export function SheetMusic({ midi }: { midi: Midi }) {
       }
 
       try {
+        // applyAccidentals MUST come before formatter.format so the formatter
+        // can account for accidental glyph widths when spacing notes.
+        Accidental.applyAccidentals(voices, keySpec);
+
         const formatter = new Formatter();
-        for (const voice of voices) {
-          formatter.joinVoices([voice]);
+        for (const v of voices) {
+          formatter.joinVoices([v]);
         }
         formatter.format(voices, staveW - 30);
+
         for (let row = 0; row < allTrackData.length; row++) {
-          const voice = measureVoices[row];
-          if (voice) {
-            voice.draw(ctx, measureStaves[row]);
+          const v = measureVoices[row];
+          if (v) {
+            v.draw(ctx, measureStaves[row]);
           }
+        }
+        for (const beam of allBeams) {
+          beam.setContext(ctx).draw();
+        }
+        for (const tie of allTies) {
+          tie.setContext(ctx).draw();
         }
       } catch (err) {
         console.warn(`SheetMusic: render error measure ${m}:`, err);
