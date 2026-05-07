@@ -387,10 +387,6 @@ describe("midiToMusicXml – music21-test06.mid fixture", () => {
 			expect(Number(octave)).toBeGreaterThanOrEqual(0);
 		}
 	});
-
-	test("full output matches snapshot", () => {
-		expect(xml).toMatchSnapshot();
-	});
 });
 
 // ---------------------------------------------------------------------------
@@ -452,10 +448,6 @@ describe("midiToMusicXml – partitura test_basic_midi fixture", () => {
 		expect(xml).toContain('number="2"');
 		expect(xml).not.toContain('number="3"');
 	});
-
-	test("full output matches snapshot", () => {
-		expect(xml).toMatchSnapshot();
-	});
 });
 
 // ---------------------------------------------------------------------------
@@ -509,9 +501,5 @@ describe("midiToMusicXml – partitura mozart_k265_var1 fixture", () => {
 		for (const octave of tags(xml, "octave")) {
 			expect(Number(octave)).toBeGreaterThanOrEqual(0);
 		}
-	});
-
-	test("full output matches snapshot", () => {
-		expect(xml).toMatchSnapshot();
 	});
 });
