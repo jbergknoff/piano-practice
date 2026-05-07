@@ -1,0 +1,112 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`buildTrackTableEvents snapshots one measure of C-major scale (eight eighth notes) 1`] = `
+[
+  {
+    "beat": 1,
+    "duration": "quarter",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "C4",
+    ],
+  },
+  {
+    "beat": 2,
+    "duration": "quarter",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "D4",
+    ],
+  },
+  {
+    "beat": 3,
+    "duration": "quarter",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "E4",
+    ],
+  },
+  {
+    "beat": 4,
+    "duration": "quarter",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "F4",
+    ],
+  },
+]
+`;
+
+exports[`buildTrackTableEvents snapshots dotted quarter + eighth fills one measure 1`] = `
+[
+  {
+    "beat": 1,
+    "duration": "dotted quarter",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "C4",
+    ],
+  },
+  {
+    "beat": 2.5,
+    "duration": "eighth",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "D4",
+    ],
+  },
+  {
+    "beat": 3,
+    "duration": "half",
+    "isRest": true,
+    "measure": 1,
+    "noteNames": [],
+  },
+]
+`;
+
+exports[`buildTrackTableEvents snapshots note crossing a barline appears as tied pair across two measures 1`] = `
+[
+  {
+    "beat": 1,
+    "duration": "half",
+    "isRest": true,
+    "measure": 1,
+    "noteNames": [],
+  },
+  {
+    "beat": 3,
+    "duration": "half",
+    "isRest": false,
+    "measure": 1,
+    "noteNames": [
+      "C4",
+    ],
+  },
+  {
+    "beat": 1,
+    "duration": "whole",
+    "isRest": true,
+    "measure": 2,
+    "noteNames": [],
+  },
+]
+`;
+
+exports[`buildTrackTableEvents snapshots empty measure is filled with rests 1`] = `
+[
+  {
+    "beat": 1,
+    "duration": "whole",
+    "isRest": true,
+    "measure": 1,
+    "noteNames": [],
+  },
+]
+`;

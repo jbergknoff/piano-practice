@@ -2,6 +2,9 @@
   "name": "piano-practice",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "@tonejs/midi": "^2.0.28",
     "preact": "^10.25.4",
@@ -10,6 +13,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/web-bluetooth": "^0.0.21",
+    "bun-types": "^1.3.13",
     "typescript": "^5.8.3"
   }
 }

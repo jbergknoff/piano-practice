@@ -6,7 +6,8 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["bun-types", "@types/web-bluetooth"]
   },
   "include": ["src"]
 }
