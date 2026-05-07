@@ -643,10 +643,10 @@ export function SheetMusic({ midi }: { midi: Midi }) {
         Accidental.applyAccidentals(voices, keySpec);
 
         const formatter = new Formatter();
-        for (const v of voices) {
-          formatter.joinVoices([v]);
-        }
-        formatter.format(voices, staveW - 30);
+        formatter.joinVoices(voices);
+        const noteAreaW =
+          measureStaves[0].getNoteEndX() - measureStaves[0].getNoteStartX();
+        formatter.format(voices, noteAreaW - 10);
 
         for (let row = 0; row < allTrackData.length; row++) {
           const v = measureVoices[row];
