@@ -528,7 +528,11 @@ export function SheetMusic({ midi }: { midi: Midi }) {
           if (offset > cursor) {
             for (const vex of splitRests(offset - cursor, ppq)) {
               noteInfos.push({
-                note: new StaveNote({ keys: ["b/4"], duration: `${vex}r` }),
+                note: new StaveNote({
+                  keys: ["b/4"],
+                  duration: `${vex}r`,
+                  clef,
+                }),
                 tieBackward: false,
                 tieForward: false,
                 midis: [],
@@ -550,7 +554,7 @@ export function SheetMusic({ midi }: { midi: Midi }) {
           const tieForward = segs.some((s) => s.tieForward && s.vex === vex);
 
           const keys = midis.map((midi) => midiToKey(midi, pitchNames));
-          const sn = new StaveNote({ keys, duration: vex });
+          const sn = new StaveNote({ keys, duration: vex, clef });
           noteInfos.push({ note: sn, tieBackward, tieForward, midis });
           cursor = offset + durTicks;
         }
@@ -559,7 +563,7 @@ export function SheetMusic({ midi }: { midi: Midi }) {
         if (cursor < ticksPerMeasure) {
           for (const vex of splitRests(ticksPerMeasure - cursor, ppq)) {
             noteInfos.push({
-              note: new StaveNote({ keys: ["b/4"], duration: `${vex}r` }),
+              note: new StaveNote({ keys: ["b/4"], duration: `${vex}r`, clef }),
               tieBackward: false,
               tieForward: false,
               midis: [],
