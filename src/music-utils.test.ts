@@ -5,6 +5,7 @@ import {
   buildNoteSegments,
   buildTrackTableEvents,
   greedyDecompose,
+  inferNotatedDurations,
   midiToKey,
   nearestMusicalDuration,
 } from "./music-utils";
@@ -115,6 +116,53 @@ describe("midiToKey", () => {
 
   test("B3 (midi 59)", () => {
     expect(midiToKey(59, SHARP_NAMES)).toBe("b/3");
+  });
+});
+
+// ─── inferNotatedDurations ───────────────────────────────────────────────────
+
+describe("inferNotatedDurations", () => {
+  test("extends short note to fill gap to next onset", () => {
+    // Quarter-note gap, but note only held for 300 ticks (staccato piano)
+    const result = inferNotatedDurations([
+      note(60, 0, 300),
+      note(62, PPQ, 300),
+    ]);
+    expect(result[0].durationTicks).toBe(PPQ); // extended to 480
+    expect(result[1].durationTicks).toBe(300); // last onset — unchanged
+  });
+
+  test("does not shorten a note already longer than the gap", () => {
+    // Bass note held for 3 beats; melody onset every 1 beat
+    const result = inferNotatedDurations([
+      note(48, 0, PPQ * 3), // bass, 3-beat hold
+      note(60, 0, 300), // melody beat 1
+      note(62, PPQ, 300), // melody beat 2
+      note(64, PPQ * 2, 300), // melody beat 3
+    ]);
+    const bass = result.find((n) => n.midi === 48);
+    expect(bass?.durationTicks).toBe(PPQ * 3); // not truncated to PPQ
+  });
+
+  test("chord notes at same onset all get the same gap", () => {
+    const result = inferNotatedDurations([
+      note(60, 0, 200),
+      note(64, 0, 200),
+      note(67, 0, 200),
+      note(72, PPQ, 100),
+    ]);
+    expect(result[0].durationTicks).toBe(PPQ);
+    expect(result[1].durationTicks).toBe(PPQ);
+    expect(result[2].durationTicks).toBe(PPQ);
+  });
+
+  test("empty array returns empty array", () => {
+    expect(inferNotatedDurations([])).toEqual([]);
+  });
+
+  test("single note is unchanged", () => {
+    const result = inferNotatedDurations([note(60, 0, 300)]);
+    expect(result[0].durationTicks).toBe(300);
   });
 });
 

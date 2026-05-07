@@ -172,6 +172,30 @@ export const VEX_DUR_LABELS: Record<string, string> = {
 
 // ─── Note segments ────────────────────────────────────────────────────────────
 
+// Piano MIDI encodes how long a key was held, not the notated duration.
+// This pass extends each note's duration to fill the gap to the next onset,
+// so staccato notes get rendered as their full notated value rather than as a
+// short note followed by a rest.
+export function inferNotatedDurations(notes: RawNote[]): RawNote[] {
+  if (notes.length === 0) return [];
+
+  // Collect unique onsets in ascending order.
+  const onsets = [...new Set(notes.map((n) => n.ticks))].sort((a, b) => a - b);
+
+  // Gap from each onset to the next (undefined for the last onset).
+  const gapByOnset = new Map<number, number>();
+  for (let i = 0; i + 1 < onsets.length; i++) {
+    gapByOnset.set(onsets[i], onsets[i + 1] - onsets[i]);
+  }
+
+  return notes.map((note) => {
+    const gap = gapByOnset.get(note.ticks);
+    if (gap === undefined) return note; // last onset group — keep as-is
+    // Use whichever is longer: actual hold time or gap to next onset.
+    return { ...note, durationTicks: Math.max(note.durationTicks, gap) };
+  });
+}
+
 export interface NoteSegment {
   midi: number;
   measureIndex: number;

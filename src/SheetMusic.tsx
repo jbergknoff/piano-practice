@@ -21,6 +21,7 @@ import {
   buildNoteSegments,
   buildTrackTableEvents,
   getClef,
+  inferNotatedDurations,
   longestVex,
   midiToKey,
   musicalDurToTicks,
@@ -117,8 +118,9 @@ export function SheetMusic({ midi }: { midi: Midi }) {
 
     const allTrackData = activeIndices.map((idx) => {
       const track = midi.tracks[idx];
+      const notes = inferNotatedDurations(track.notes);
       const segments = buildNoteSegments(
-        track.notes,
+        notes,
         ppq,
         ticksPerMeasure,
         numMeasures,
