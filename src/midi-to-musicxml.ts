@@ -145,8 +145,8 @@ export function midiToMusicXml(midiData: MidiData): string {
 
 			if (ev.type === "timeSignature") {
 				timeSigNum = ev.numerator;
-				// MIDI stores denominator as a negative power of 2 (e.g. 2 → 2²=4)
-				timeSigDen = 2 ** ev.denominator;
+				// midi-file already converts the MIDI denominator byte to the actual value
+				timeSigDen = ev.denominator;
 			} else if (ev.type === "keySignature") {
 				keyFifths = ev.key;
 				keyMode = ev.scale === 0 ? "major" : "minor";
