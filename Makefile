@@ -21,7 +21,10 @@ lint: node_modules
 typecheck: node_modules
 	$(tsc) --noEmit
 
+test: node_modules
+	$(bun) test
+
 build: node_modules
 	$(bun) build src/main.tsx --outdir dist --minify
 
-pr-ready: format lint typecheck build
+pr-ready: format lint typecheck test build
