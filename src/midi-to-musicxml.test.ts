@@ -74,7 +74,13 @@ const hasChordElement = (xml: string) => xml.includes("<chord/>");
 /** Convert a MusicXML pitch to a MIDI note number, collapsing enharmonics. */
 function pitchToMidi(step: string, alter: number, octave: number): number {
   const semitones: Record<string, number> = {
-    C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
+    C: 0,
+    D: 2,
+    E: 4,
+    F: 5,
+    G: 7,
+    A: 9,
+    B: 11,
   };
   return (octave + 1) * 12 + semitones[step] + alter;
 }
@@ -712,7 +718,6 @@ describe("fixture comparison – c-major-melody.mid vs hand-written expected", (
     expect(ourXml).toEqual(expected);
   });
 });
-
 
 describe("fixture comparison – underwater theme midi from ninsheetmusic.org vs. Audiveris-generated MusicXML", () => {
   const ourXml = midiToMusicXml(
