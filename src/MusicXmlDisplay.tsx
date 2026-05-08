@@ -15,9 +15,10 @@ export function MusicXmlDisplay({ musicxml }: Props) {
 
 		if (!osmdRef.current) {
 			osmdRef.current = new OpenSheetMusicDisplay(container, {
-				autoResize: true,
+				autoResize: false,
 				backend: "svg",
 				drawTitle: false,
+				pageFormat: "Endless",
 			});
 		}
 
@@ -27,5 +28,9 @@ export function MusicXmlDisplay({ musicxml }: Props) {
 			.catch(console.error);
 	}, [musicxml]);
 
-	return <div ref={containerRef} />;
+	return (
+		<div style={{ overflowX: "auto" }}>
+			<div ref={containerRef} style={{ width: "max-content" }} />
+		</div>
+	);
 }
