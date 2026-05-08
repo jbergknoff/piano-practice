@@ -1,11 +1,18 @@
+import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
-import { useState } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import { LivePianoInput } from "./LivePianoInput";
 import { MusicXmlDisplay } from "./MusicXmlDisplay";
-import { midiToMusicXml } from "./midi-to-musicxml";
+import {
+  type TrackInfo,
+  getMidiTracks,
+  midiToMusicXmlWithTracks,
+} from "./midi-to-musicxml";
 
 export function App() {
-  const [musicxml, setMusicxml] = useState<string | null>(null);
+  const [midiData, setMidiData] = useState<MidiData | null>(null);
+  const [tracks, setTracks] = useState<TrackInfo[]>([]);
+  const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,17 +24,33 @@ export function App() {
 
     setFileName(file.name);
     setError(null);
-    setMusicxml(null);
+    setMidiData(null);
+    setTracks([]);
+    setSelectedTracks([]);
 
     file.arrayBuffer().then((buffer) => {
       try {
         const parsed = parseMidi(new Uint8Array(buffer));
-        setMusicxml(midiToMusicXml(parsed));
+        const trackList = getMidiTracks(parsed);
+        setMidiData(parsed);
+        setTracks(trackList);
+        setSelectedTracks(trackList.map((t) => t.index));
       } catch (err) {
         setError(String(err));
       }
     });
   }
+
+  function toggleTrack(index: number) {
+    setSelectedTracks((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index],
+    );
+  }
+
+  const musicxml = useMemo(() => {
+    if (!midiData || selectedTracks.length === 0) return null;
+    return midiToMusicXmlWithTracks(midiData, selectedTracks);
+  }, [midiData, selectedTracks]);
 
   return (
     <div>
@@ -35,6 +58,20 @@ export function App() {
       <input type="file" accept=".mid,.midi" onChange={handleFile} />
       {fileName && <p>File: {fileName}</p>}
       {error && <p style="color: red">{error}</p>}
+      {tracks.length > 0 && (
+        <div>
+          {tracks.map((t) => (
+            <label key={t.index} style={{ marginRight: "1em" }}>
+              <input
+                type="checkbox"
+                checked={selectedTracks.includes(t.index)}
+                onChange={() => toggleTrack(t.index)}
+              />{" "}
+              {t.name} ({t.noteCount} notes)
+            </label>
+          ))}
+        </div>
+      )}
       {musicxml && <MusicXmlDisplay musicxml={musicxml} />}
 
       <LivePianoInput />

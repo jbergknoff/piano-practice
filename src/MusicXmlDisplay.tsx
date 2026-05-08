@@ -22,9 +22,25 @@ export function MusicXmlDisplay({ musicxml }: Props) {
       });
     }
 
+    // Give OSMD a wide canvas so all measures fit on one row without wrapping.
+    container.style.width = "10000px";
+
     osmdRef.current
       .load(musicxml)
-      .then(() => osmdRef.current?.render())
+      .then(() => {
+        if (!osmdRef.current || !containerRef.current) return;
+        osmdRef.current.render();
+        // Trim the SVG and container to the actual rendered content width.
+        const svg = containerRef.current.querySelector<SVGSVGElement>("svg");
+        if (svg) {
+          const bbox = svg.getBBox();
+          const contentWidth = Math.ceil(bbox.x + bbox.width) + 20;
+          if (contentWidth > 0) {
+            svg.setAttribute("width", String(contentWidth));
+            containerRef.current.style.width = `${contentWidth}px`;
+          }
+        }
+      })
       .catch(console.error);
   }, [musicxml]);
 
