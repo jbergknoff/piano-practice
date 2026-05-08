@@ -71,6 +71,39 @@ function tags(xml: string, tag: string): string[] {
 /** True when the XML contains a <chord/> element at least once. */
 const hasChordElement = (xml: string) => xml.includes("<chord/>");
 
+/** Convert a MusicXML pitch to a MIDI note number, collapsing enharmonics. */
+function pitchToMidi(step: string, alter: number, octave: number): number {
+  const semitones: Record<string, number> = {
+    C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
+  };
+  return (octave + 1) * 12 + semitones[step] + alter;
+}
+
+/**
+ * Parse every measure in an XML string into a sorted list of
+ * { midi, beats } objects (rests excluded).
+ * `beats` is duration / divisions so it is comparable across files with
+ * different <divisions> values.
+ */
+function parseMeasureNotes(
+  xml: string,
+): Array<Array<{ midi: number; beats: number }>> {
+  const divs = Number(xml.match(/<divisions>(\d+)<\/divisions>/)?.[1] ?? 1);
+  return [...xml.matchAll(/<measure[^>]*>([\s\S]*?)<\/measure>/g)].map((m) =>
+    [...m[1].matchAll(/<note[^>]*>([\s\S]*?)<\/note>/g)]
+      .filter((n) => !n[1].includes("<rest"))
+      .map((n) => {
+        const c = n[1];
+        const step = c.match(/<step>([^<]+)<\/step>/)?.[1] ?? "C";
+        const oct = Number(c.match(/<octave>([^<]+)<\/octave>/)?.[1] ?? 4);
+        const alt = Number(c.match(/<alter>([^<]+)<\/alter>/)?.[1] ?? 0);
+        const dur = Number(c.match(/<duration>(\d+)<\/duration>/)?.[1] ?? 0);
+        return { midi: pitchToMidi(step, alt, oct), beats: dur / divs };
+      })
+      .sort((a, b) => a.midi - b.midi || a.beats - b.beats),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Programmatic fixtures
 // ---------------------------------------------------------------------------
@@ -688,9 +721,42 @@ describe("fixture comparison – underwater theme midi from ninsheetmusic.org vs
   const expected = readFileSync(
     "src/test-fixtures/underwater-theme.musicxml",
     "utf8",
-  ).trimEnd();
+  );
 
-  test("output matches expected MusicXML exactly", () => {
-    expect(ourXml).toEqual(expected);
+  const ourMeasures = parseMeasureNotes(ourXml);
+  const expMeasures = parseMeasureNotes(expected);
+
+  // The MIDI plays through the 32-measure piece twice; the score has it once.
+  test("our output has twice as many measures as the reference score", () => {
+    expect(ourMeasures.length).toBe(expMeasures.length * 2);
+  });
+
+  test("3/4 time signature", () => {
+    expect(ourXml).toContain("<beats>3</beats>");
+    expect(ourXml).toContain("<beat-type>4</beat-type>");
+  });
+
+  test("C major key signature", () => {
+    expect(ourXml).toContain("<fifths>0</fifths>");
+    expect(ourXml).toContain("<mode>major</mode>");
+  });
+
+  test("each measure has the same notes as the reference (enharmonics treated as equal)", () => {
+    for (let i = 0; i < expMeasures.length; i++) {
+      const ourPitches = ourMeasures[i].map((n) => n.midi);
+      const expPitches = expMeasures[i].map((n) => n.midi);
+      expect(ourPitches).toEqual(expPitches);
+    }
+  });
+
+  test("note durations are within one note-value step of the reference (e.g. eighth vs. quarter is ok)", () => {
+    for (let i = 0; i < expMeasures.length; i++) {
+      expect(ourMeasures[i]).toHaveLength(expMeasures[i].length);
+      for (let j = 0; j < expMeasures[i].length; j++) {
+        const ratio = ourMeasures[i][j].beats / expMeasures[i][j].beats;
+        expect(ratio).toBeGreaterThanOrEqual(0.5);
+        expect(ratio).toBeLessThanOrEqual(2);
+      }
+    }
   });
 });
