@@ -30,7 +30,7 @@ export function MusicXmlDisplay({ musicxml }: Props) {
 
 	return (
 		<div style={{ overflowX: "auto" }}>
-			<div ref={containerRef} style={{ width: "max-content" }} />
+			<div ref={containerRef} />
 		</div>
 	);
 }
