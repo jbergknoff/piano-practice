@@ -6,20 +6,20 @@
  *
  * 2. Real-world MIDI file fixtures from two open-source projects:
  *
- *    a) music21-test06.mid — from the music21 project
+ *    a) g-major-melody.mid — from the music21 project
  *       (https://github.com/cuthbertLab/music21, BSD licence).
  *       Encodes a G-major melody in 4/4 time with clean eighth-note
  *       spacing at 480 ticks-per-beat.
  *
- *    b) partitura-test_basic_midi.{mid,musicxml} — from the partitura project
+ *    b) c-major-melody.{mid,expected.musicxml} — MIDI from the partitura project
  *       (https://github.com/CPJKU/partitura, Apache 2.0 licence).
  *       A tiny 2-measure, 8-note C-major melody exported from notation software
- *       with near-perfect quarter-note timing; the paired MusicXML file gives
- *       us the reference key/time signature and note pitches to verify.
+ *       with near-perfect quarter-note timing; the paired expected MusicXML is
+ *       hand-written to verify exact converter output.
  *
- *    c) partitura-mozart_k265_var1.{mid,musicxml} — also from partitura
- *       (Apache 2.0). Mozart K.265 Variation 1 ("Ah vous dirai-je Maman"),
- *       24 measures, C major, 4/4, with live-performance timing (~219 notes).
+ *    c) mozart-k265-var1.mid — from the partitura project (Apache 2.0).
+ *       Mozart K.265 Variation 1 ("Ah vous dirai-je Maman"), 24 measures,
+ *       C major, 4/4, with live-performance timing (~219 notes).
  *       Used to verify the converter handles irregular timing and produces a
  *       structurally valid multi-measure score.
  */
@@ -326,7 +326,7 @@ describe("midiToMusicXml – programmatic fixtures", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Real-world MIDI fixture: music21-test06.mid
+// Real-world MIDI fixture: g-major-melody.mid
 //
 // Source: https://github.com/cuthbertLab/music21 (BSD licence)
 // Path in repo: music21/midi/testPrimitive/test06.mid
@@ -336,8 +336,8 @@ describe("midiToMusicXml – programmatic fixtures", () => {
 // First note is MIDI 78 = F#5.
 // ---------------------------------------------------------------------------
 
-describe("midiToMusicXml – music21-test06.mid fixture", () => {
-	const midiData = parseMidi(readFileSync("src/test-fixtures/music21-test06.mid"));
+describe("midiToMusicXml – g-major-melody.mid fixture", () => {
+	const midiData = parseMidi(readFileSync("src/test-fixtures/g-major-melody.mid"));
 	const xml = midiToMusicXml(midiData);
 
 	test("produces well-formed MusicXML wrapper", () => {
@@ -408,7 +408,7 @@ describe("midiToMusicXml – music21-test06.mid fixture", () => {
 // ---------------------------------------------------------------------------
 
 describe("midiToMusicXml – partitura test_basic_midi fixture", () => {
-	const midiData = parseMidi(readFileSync("src/test-fixtures/partitura-test_basic_midi.mid"));
+	const midiData = parseMidi(readFileSync("src/test-fixtures/c-major-melody.mid"));
 	const xml = midiToMusicXml(midiData);
 
 	test("produces well-formed MusicXML", () => {
@@ -465,7 +465,7 @@ describe("midiToMusicXml – partitura test_basic_midi fixture", () => {
 // ---------------------------------------------------------------------------
 
 describe("midiToMusicXml – partitura mozart_k265_var1 fixture", () => {
-	const midiData = parseMidi(readFileSync("src/test-fixtures/partitura-mozart_k265_var1.mid"));
+	const midiData = parseMidi(readFileSync("src/test-fixtures/mozart-k265-var1.mid"));
 	const xml = midiToMusicXml(midiData);
 
 	test("produces well-formed MusicXML", () => {
@@ -507,16 +507,16 @@ describe("midiToMusicXml – partitura mozart_k265_var1 fixture", () => {
 // ---------------------------------------------------------------------------
 // Fixture comparison: our converter output vs. hand-written expected MusicXML
 //
-// partitura-test_basic_midi.expected.musicxml was written by hand to capture
-// the correct output for partitura-test_basic_midi.mid: 8 quarter notes
+// c-major-melody.expected.musicxml was written by hand to capture
+// the correct output for c-major-melody.mid: 8 quarter notes
 // (E4 C5 E5 B4 | G4 C5 D5 F4) in C major, 4/4, across two measures.
 // The MIDI has near-perfect quarter-note timing (note-offs 25 ticks early),
 // so after 16th-note quantization every note rounds unambiguously to a quarter.
 // ---------------------------------------------------------------------------
 
 describe("fixture comparison – partitura test_basic_midi vs hand-written expected", () => {
-	const ourXml = midiToMusicXml(parseMidi(readFileSync("src/test-fixtures/partitura-test_basic_midi.mid")));
-	const expected = readFileSync("src/test-fixtures/partitura-test_basic_midi.expected.musicxml", "utf8").trimEnd();
+	const ourXml = midiToMusicXml(parseMidi(readFileSync("src/test-fixtures/c-major-melody.mid")));
+	const expected = readFileSync("src/test-fixtures/c-major-melody.expected.musicxml", "utf8").trimEnd();
 
 	test("output matches expected MusicXML exactly", () => {
 		expect(ourXml).toEqual(expected);
