@@ -505,62 +505,20 @@ describe("midiToMusicXml – partitura mozart_k265_var1 fixture", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Fixture comparison: our converter output vs. reference MusicXML files
+// Fixture comparison: our converter output vs. hand-written expected MusicXML
 //
-// These tests are EXPECTED TO FAIL. They exist to show the gap between what
-// our converter currently produces from a MIDI file and what the reference
-// MusicXML (created by notation software) says the score should look like.
+// partitura-test_basic_midi.expected.musicxml was written by hand to capture
+// the correct output for partitura-test_basic_midi.mid: 8 quarter notes
+// (E4 C5 E5 B4 | G4 C5 D5 F4) in C major, 4/4, across two measures.
+// The MIDI has near-perfect quarter-note timing (note-offs 25 ticks early),
+// so after 16th-note quantization every note rounds unambiguously to a quarter.
 // ---------------------------------------------------------------------------
 
-/** Parse every note from a MusicXML string into a structured list. */
-function parseNotes(xml: string): Array<{
-	rest: boolean;
-	chord: boolean;
-	step?: string;
-	alter?: number;
-	octave?: number;
-	type: string;
-	dot: boolean;
-	tieStart: boolean;
-	tieStop: boolean;
-}> {
-	const notes = [];
-	for (const block of [...xml.matchAll(/<note>([\s\S]*?)<\/note>/g)].map((m) => m[1])) {
-		const get = (tag: string) => block.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))?.[1];
-		const has = (s: string) => block.includes(s);
-		notes.push({
-			rest: has("<rest"),
-			chord: has("<chord/>"),
-			step: get("step"),
-			alter: get("alter") !== undefined ? Number(get("alter")) : undefined,
-			octave: get("octave") !== undefined ? Number(get("octave")) : undefined,
-			type: get("type") ?? "",
-			dot: has("<dot/>"),
-			tieStart: has('tie type="start"') || has('type="start"'),
-			tieStop: has('tie type="stop"') || has('type="stop"'),
-		});
-	}
-	return notes;
-}
-
-describe("fixture comparison – partitura test_basic_midi (expected to fail)", () => {
+describe("fixture comparison – partitura test_basic_midi vs hand-written expected", () => {
 	const ourXml = midiToMusicXml(parseMidi(readFileSync("src/test-fixtures/partitura-test_basic_midi.mid")));
-	const refXml = readFileSync("src/test-fixtures/partitura-test_basic_midi.musicxml", "utf8");
+	const expected = readFileSync("src/test-fixtures/partitura-test_basic_midi.expected.musicxml", "utf8").trimEnd();
 
-	test("note sequence matches reference", () => {
-		const ours = parseNotes(ourXml);
-		const ref = parseNotes(refXml);
-		expect(ours).toEqual(ref);
-	});
-});
-
-describe("fixture comparison – partitura mozart_k265_var1 (expected to fail)", () => {
-	const ourXml = midiToMusicXml(parseMidi(readFileSync("src/test-fixtures/partitura-mozart_k265_var1.mid")));
-	const refXml = readFileSync("src/test-fixtures/partitura-mozart_k265_var1.musicxml", "utf8");
-
-	test("note sequence matches reference", () => {
-		const ours = parseNotes(ourXml);
-		const ref = parseNotes(refXml);
-		expect(ours).toEqual(ref);
+	test("output matches expected MusicXML exactly", () => {
+		expect(ourXml).toEqual(expected);
 	});
 });
