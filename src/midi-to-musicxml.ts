@@ -1,4 +1,4 @@
-import type { MidiData } from "midi-file";
+import type { MidiData, MidiEvent } from "midi-file";
 
 // MusicXML divisions per quarter note (1 division = one 16th note)
 const DIVISIONS = 4;
@@ -139,6 +139,257 @@ function renderNote(
   lines.push(`${i}</note>`);
   return lines.join("\n");
 }
+
+// ── Multi-track API ──────────────────────────────────────────────────────────
+
+export interface TrackInfo {
+  index: number;
+  name: string;
+  noteCount: number;
+}
+
+export function getMidiTracks(midiData: MidiData): TrackInfo[] {
+  const result: TrackInfo[] = [];
+  for (let i = 0; i < midiData.tracks.length; i++) {
+    const track = midiData.tracks[i];
+    let name = `Track ${i + 1}`;
+    let noteCount = 0;
+    for (const ev of track) {
+      if (ev.type === "trackName") {
+        name = ev.text || name;
+      } else if (ev.type === "noteOn" && ev.velocity > 0) {
+        noteCount++;
+      }
+    }
+    if (noteCount > 0) {
+      result.push({ index: i, name, noteCount });
+    }
+  }
+  return result;
+}
+
+function extractTrackNotes(track: MidiEvent[], tpb: number): RawNote[] {
+  const rawNotes: RawNote[] = [];
+  let tick = 0;
+  const active = new Map<number, { startTick: number; velocity: number }>();
+  for (const ev of track) {
+    tick += ev.deltaTime;
+    if (ev.type === "noteOn" && ev.velocity > 0) {
+      active.set(ev.noteNumber, { startTick: tick, velocity: ev.velocity });
+    } else if (
+      ev.type === "noteOff" ||
+      (ev.type === "noteOn" && ev.velocity === 0)
+    ) {
+      const a = active.get(ev.noteNumber);
+      if (a) {
+        rawNotes.push({
+          noteNumber: ev.noteNumber,
+          startTick: a.startTick,
+          endTick: tick,
+          velocity: a.velocity,
+        });
+        active.delete(ev.noteNumber);
+      }
+    }
+  }
+  return rawNotes;
+}
+
+function detectClef(notes: RawNote[]): { sign: string; line: number } {
+  if (notes.length === 0) return { sign: "G", line: 2 };
+  const sorted = notes.map((n) => n.noteNumber).sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  return median < 60 ? { sign: "F", line: 4 } : { sign: "G", line: 2 };
+}
+
+function buildPartMeasuresXml(
+  rawNotes: RawNote[],
+  tpb: number,
+  timeSigNum: number,
+  timeSigDen: number,
+  keyFifths: number,
+  keyMode: string,
+  clef: { sign: string; line: number },
+  numMeasures: number,
+): string[] {
+  const grid = tpb / 4;
+  const snap = (t: number) => Math.round(t / grid) * grid;
+  const quantized: RawNote[] = rawNotes.map((n) => {
+    const s = snap(n.startTick);
+    const e = Math.max(s + grid, snap(n.endTick));
+    return { ...n, startTick: s, endTick: e };
+  });
+
+  const ticksPerMeasure = (tpb * timeSigNum * 4) / timeSigDen;
+
+  const parts: NotePart[] = quantized
+    .flatMap((n) => splitAtBarlines(n, ticksPerMeasure))
+    .sort((a, b) => a.startTick - b.startTick || a.noteNumber - b.noteNumber);
+
+  const measureXml: string[] = [];
+  const ind = "    ";
+
+  for (let m = 0; m < numMeasures; m++) {
+    const mStart = m * ticksPerMeasure;
+    const mEnd = mStart + ticksPerMeasure;
+    const mParts = parts.filter(
+      (p) => p.startTick >= mStart && p.startTick < mEnd,
+    );
+    const lines: string[] = [];
+
+    if (m === 0) {
+      lines.push(
+        `${ind}<attributes>`,
+        `${ind}  <divisions>${DIVISIONS}</divisions>`,
+        `${ind}  <key><fifths>${keyFifths}</fifths><mode>${keyMode}</mode></key>`,
+        `${ind}  <time><beats>${timeSigNum}</beats><beat-type>${timeSigDen}</beat-type></time>`,
+        `${ind}  <clef><sign>${clef.sign}</sign><line>${clef.line}</line></clef>`,
+        `${ind}</attributes>`,
+      );
+    }
+
+    let cursor = mStart;
+    let i = 0;
+
+    while (i < mParts.length) {
+      const startTick = mParts[i].startTick;
+      if (startTick > cursor) {
+        const restGrid = Math.round((startTick - cursor) / grid);
+        for (const d of decompose(restGrid)) {
+          lines.push(renderNote(null, d, false, false, false, ind));
+        }
+      }
+
+      let j = i;
+      while (j < mParts.length && mParts[j].startTick === startTick) j++;
+      const chord = mParts.slice(i, j);
+
+      for (let k = 0; k < chord.length; k++) {
+        const p = chord[k];
+        const durRaw = Math.round(p.durationTicks / grid);
+        const dur = DURATION_TYPE.has(durRaw) ? durRaw : snapToStandard(durRaw);
+        const pitch = noteNumberToPitch(p.noteNumber);
+        lines.push(renderNote(pitch, dur, p.tieStop, p.tieStart, k > 0, ind));
+      }
+
+      const firstDurRaw = Math.round(chord[0].durationTicks / grid);
+      const firstDur = DURATION_TYPE.has(firstDurRaw)
+        ? firstDurRaw
+        : snapToStandard(firstDurRaw);
+      cursor = startTick + firstDur * grid;
+      i = j;
+    }
+
+    if (cursor < mEnd) {
+      const restGrid = Math.round((mEnd - cursor) / grid);
+      for (const d of decompose(restGrid)) {
+        lines.push(renderNote(null, d, false, false, false, ind));
+      }
+    }
+
+    measureXml.push(
+      `  <measure number="${m + 1}">\n${lines.join("\n")}\n  </measure>`,
+    );
+  }
+
+  return measureXml;
+}
+
+export function midiToMusicXmlWithTracks(
+  midiData: MidiData,
+  trackIndices: number[],
+): string {
+  const tpb = midiData.header.ticksPerBeat ?? 480;
+
+  let timeSigNum = 4;
+  let timeSigDen = 4;
+  let keyFifths = 0;
+  let keyMode = "major";
+
+  for (const track of midiData.tracks) {
+    let tick = 0;
+    for (const ev of track) {
+      tick += ev.deltaTime;
+      if (ev.type === "timeSignature") {
+        timeSigNum = ev.numerator;
+        timeSigDen = ev.denominator;
+      } else if (ev.type === "keySignature") {
+        keyFifths = ev.key;
+        keyMode = ev.scale === 0 ? "major" : "minor";
+      }
+    }
+  }
+
+  const grid = tpb / 4;
+  const snap = (t: number) => Math.round(t / grid) * grid;
+  const ticksPerMeasure = (tpb * timeSigNum * 4) / timeSigDen;
+
+  const trackNotes = trackIndices.map((idx) => {
+    const raw = extractTrackNotes(midiData.tracks[idx], tpb);
+    const quantized = raw.map((n) => {
+      const s = snap(n.startTick);
+      const e = Math.max(s + grid, snap(n.endTick));
+      return { ...n, startTick: s, endTick: e };
+    });
+    return quantized;
+  });
+
+  const allNotes = trackNotes.flat();
+  if (allNotes.length === 0) {
+    return emptyScore(keyFifths, keyMode, timeSigNum, timeSigDen);
+  }
+
+  const totalTicks = Math.max(...allNotes.map((n) => n.endTick));
+  const numMeasures = Math.ceil(totalTicks / ticksPerMeasure);
+
+  const trackNames = getMidiTracks(midiData).reduce<Record<number, string>>(
+    (acc, t) => {
+      acc[t.index] = t.name;
+      return acc;
+    },
+    {},
+  );
+
+  const partEntries = trackIndices.map((idx, i) => {
+    const clef = detectClef(trackNotes[i]);
+    const measuresXml = buildPartMeasuresXml(
+      trackNotes[i],
+      tpb,
+      timeSigNum,
+      timeSigDen,
+      keyFifths,
+      keyMode,
+      clef,
+      numMeasures,
+    );
+    return {
+      id: `P${i + 1}`,
+      name: trackNames[idx] ?? `Track ${idx + 1}`,
+      measuresXml,
+    };
+  });
+
+  const partList = partEntries
+    .map(
+      (p) =>
+        `    <score-part id="${p.id}">\n      <part-name>${p.name}</part-name>\n    </score-part>`,
+    )
+    .join("\n");
+  const parts = partEntries
+    .map((p) => `  <part id="${p.id}">\n${p.measuresXml.join("\n")}\n  </part>`)
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <part-list>
+${partList}
+  </part-list>
+${parts}
+</score-partwise>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function midiToMusicXml(midiData: MidiData): string {
   const tpb = midiData.header.ticksPerBeat ?? 480;
