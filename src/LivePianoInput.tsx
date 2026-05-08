@@ -8,7 +8,11 @@ import {
 
 type BtStatus = "idle" | "connecting" | "connected" | "error";
 
-export function LivePianoInput() {
+interface Props {
+  onNoteOn?: (noteNumber: number, velocity: number) => void;
+}
+
+export function LivePianoInput({ onNoteOn }: Props) {
   const [btStatus, setBtStatus] = useState<BtStatus>("idle");
   const [btError, setBtError] = useState<string | null>(null);
   const [noteLog, setNoteLog] = useState<NoteEvent[]>([]);
@@ -39,6 +43,11 @@ export function LivePianoInput() {
         }
         const events = parseBLEMIDI(new Uint8Array(val.buffer));
         if (events.length > 0) {
+          for (const ev of events) {
+            if (ev.kind === "on") {
+              onNoteOn?.(ev.note, ev.velocity);
+            }
+          }
           setNoteLog((prev) => [...events.reverse(), ...prev].slice(0, 200));
         }
       });

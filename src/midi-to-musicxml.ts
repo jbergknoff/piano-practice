@@ -140,6 +140,17 @@ function renderNote(
   return lines.join("\n");
 }
 
+export function extractTempo(midiData: MidiData): number {
+  for (const track of midiData.tracks) {
+    for (const ev of track) {
+      if (ev.type === "setTempo") {
+        return Math.round(60_000_000 / ev.microsecondsPerBeat);
+      }
+    }
+  }
+  return 120;
+}
+
 // ── Multi-track API ──────────────────────────────────────────────────────────
 
 export interface TrackInfo {
