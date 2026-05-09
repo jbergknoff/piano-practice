@@ -24,6 +24,29 @@ function parseMidiFixture(filename: string, trackIndices: number[]) {
   return parseScore(xml);
 }
 
+// Serialize the pitch sequence of a measure's events for snapshot assertions.
+// Derived from raw MIDI note numbers — fully independent of our converter logic.
+// Format: "step+octave[#]" tokens in onset order, separated by spaces.
+// Chords list all voices low→high with a comma. Rests are omitted (they have
+// no pitch to verify independently from the MIDI).
+function pitchSnapshot(measure: {
+  events: ReturnType<typeof parseScore>["parts"][0]["measures"][0]["events"];
+}): string {
+  return measure.events
+    .flatMap((ev) => {
+      if (isRest(ev)) return [];
+      return [
+        (ev as ChordGroup).notes
+          .map(
+            (n) =>
+              `${n.pitch.step}${n.pitch.octave}${n.pitch.alter ? "#" : ""}`,
+          )
+          .join(","),
+      ];
+    })
+    .join(" ");
+}
+
 function p(step: Pitch["step"], octave: number, alter: 0 | 1 = 0): Pitch {
   return { step, alter, octave };
 }
@@ -120,32 +143,24 @@ describe("parseScore (via MIDI pipeline)", () => {
     expect(parts[0].timeSig).toMatchObject({ beats: 4, beatType: 4 });
   });
 
-  test("measure 1 has 4 events, all quarter-note chords", () => {
-    const events = score.parts[0].measures[0].events;
-    expect(events).toHaveLength(4);
-    for (const ev of events) {
-      expect(isRest(ev)).toBe(false);
-      expect((ev as ChordGroup).type).toBe("quarter");
-      expect((ev as ChordGroup).duration).toBe(4);
+  // Pitch order derived directly from raw MIDI note numbers at ticks 0,480,960,1440
+  // and 1920,2400,2880,3360 (480 tpb, 4/4 → 1 measure = 1920 ticks).
+  test("measure 1 pitch sequence: E4 C5 E5 B4", () => {
+    expect(pitchSnapshot(score.parts[0].measures[0])).toBe("E4 C5 E5 B4");
+  });
+
+  test("measure 2 pitch sequence: G4 C5 D5 F4", () => {
+    expect(pitchSnapshot(score.parts[0].measures[1])).toBe("G4 C5 D5 F4");
+  });
+
+  // Note types are unambiguous here: all 480-tick gaps → quarter notes.
+  test("all events in both measures are quarter-note chords", () => {
+    for (const measure of score.parts[0].measures) {
+      for (const ev of measure.events) {
+        expect(isRest(ev)).toBe(false);
+        expect((ev as ChordGroup).type).toBe("quarter");
+      }
     }
-  });
-
-  test("measure 1 note pitches are E4 C5 E5 B4 in order", () => {
-    const events = score.parts[0].measures[0].events as ChordGroup[];
-    const pitches = events.map((ev) => ev.notes[0].pitch);
-    expect(pitches[0]).toMatchObject({ step: "E", octave: 4 });
-    expect(pitches[1]).toMatchObject({ step: "C", octave: 5 });
-    expect(pitches[2]).toMatchObject({ step: "E", octave: 5 });
-    expect(pitches[3]).toMatchObject({ step: "B", octave: 4 });
-  });
-
-  test("measure 2 has 4 events with pitches G4 C5 D5 F4", () => {
-    const events = score.parts[0].measures[1].events as ChordGroup[];
-    const pitches = events.map((ev) => ev.notes[0].pitch);
-    expect(pitches[0]).toMatchObject({ step: "G", octave: 4 });
-    expect(pitches[1]).toMatchObject({ step: "C", octave: 5 });
-    expect(pitches[2]).toMatchObject({ step: "D", octave: 5 });
-    expect(pitches[3]).toMatchObject({ step: "F", octave: 4 });
   });
 
   test("noteIndex is assigned sequentially per measure (rests not counted)", () => {
@@ -168,11 +183,13 @@ describe("parseScore (via MIDI pipeline)", () => {
 // ---------------------------------------------------------------------------
 
 describe("parseScore (g-major-melody via MIDI pipeline)", () => {
-  // g-major-melody.mid: G major (1 sharp), 4/4, melody with eighth notes
+  // g-major-melody.mid: G major (1 sharp), 4/4, 16-measure melody
   const score = parseMidiFixture("g-major-melody.mid", [0]);
+  const measures = score.parts[0].measures;
 
-  test("parses one part", () => {
+  test("parses one part with 16 measures", () => {
     expect(score.parts).toHaveLength(1);
+    expect(score.numMeasures).toBe(16);
   });
 
   test("key signature is G major (1 sharp)", () => {
@@ -183,17 +200,48 @@ describe("parseScore (g-major-melody via MIDI pipeline)", () => {
     expect(score.parts[0].timeSig).toMatchObject({ beats: 4, beatType: 4 });
   });
 
-  test("has multiple measures", () => {
-    expect(score.numMeasures).toBeGreaterThan(1);
-  });
+  // Expected pitch sequences read directly from raw MIDI noteOn events, grouped
+  // by measure (480 tpb, 4/4 → 1920 ticks/measure). Each token is the MIDI
+  // note name at that onset. F# and C# come from the note number (e.g. note 90
+  // = F#5, note 85 = C#5).
+  // Pitch tokens use step+octave+alter format matching pitchSnapshot() output,
+  // e.g. F#5 → "F5#", C#5 → "C5#". Values read from raw MIDI note numbers.
+  const EXPECTED_PITCHES: string[] = [
+    "F5# E5 D5 C5 A4 G4 E4",
+    "E4 D4 A4 F4# A4 D4 A4",
+    "F4# A4 D5 B4 C5 A4 G4 E4",
+    "E4 A4 B4 C5# D5 E5 F5# G5",
+    "F5# E5 D5 C5 A4 G4 E4",
+    "E4 D4 A4 F4# A4 D4 A4",
+    "F4# A4 D5 B4 C5 A4 G4 E4",
+    "E4 A4 B4 C5# D5 E5 C5# D5",
+    "F5# E5 F5# G5 A5 F5# D5",
+    "D5 E5 F5# G5 A5 F5# G5 B5",
+    "A5 G5 F5# G5 A5 F5# D5 C5",
+    "A4 B4 C5 A4 A4 G5",
+    "F5# E5 F5# G5 A5 F5# D5",
+    "D5 E5 F5# G5 A5 F5# G5 B5",
+    "A5 G5 F5# A4 E5 A4 D5 C5",
+    "A4 D5 B4 C5# D5 E5 F5# G5",
+  ];
 
-  test("all measure events are chords or rests (no unknown kinds)", () => {
-    for (const measure of score.parts[0].measures) {
-      for (const ev of measure.events) {
-        if (isRest(ev)) {
-          expect(ev.kind).toBe("rest");
-        } else {
-          expect((ev as ChordGroup).notes.length).toBeGreaterThan(0);
+  for (let i = 0; i < EXPECTED_PITCHES.length; i++) {
+    const measureNum = i + 1;
+    test(`measure ${measureNum} pitch sequence`, () => {
+      expect(pitchSnapshot(measures[i])).toBe(EXPECTED_PITCHES[i]);
+    });
+  }
+
+  // Measures with only clean eighth/quarter durations (no ~160-tick notes):
+  // all notes should parse as eighth or quarter, none as 16th.
+  const CLEAN_MEASURES = [1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15].map(
+    (n) => measures[n - 1],
+  );
+  test("clean measures contain only eighth and quarter notes (no 16th)", () => {
+    for (const m of CLEAN_MEASURES) {
+      for (const ev of m.events) {
+        if (!isRest(ev)) {
+          expect(["eighth", "quarter"]).toContain((ev as ChordGroup).type);
         }
       }
     }
