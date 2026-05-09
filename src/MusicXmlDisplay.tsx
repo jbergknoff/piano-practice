@@ -11,6 +11,7 @@ interface Props {
 
 export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
@@ -123,11 +124,12 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
 
     // Collect beat timestamps for each cursor step
     const cursorBeats: number[] = [];
-    while (!cursor.iterator.endReached) {
-      cursorBeats.push(cursor.iterator.currentTimeStamp.realValue);
+    while (!cursor.iterator.EndReached) {
+      cursorBeats.push(cursor.iterator.currentTimeStamp.RealValue);
       cursor.next();
     }
     cursor.reset();
+    scrollToCursor();
 
     if (cursorBeats.length === 0) {
       cursor.hide();
@@ -147,6 +149,7 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
       timeouts.push(
         setTimeout(() => {
           cursor.next();
+          scrollToCursor();
         }, delay),
       );
     }
@@ -182,6 +185,17 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
     }
 
     setIsPlaying(true);
+  }
+
+  function scrollToCursor() {
+    const scrollEl = scrollContainerRef.current;
+    const cursorEl = osmdRef.current?.cursor.cursorElement;
+    if (!scrollEl || !cursorEl) return;
+    // Keep the cursor 30% from the left edge of the visible area.
+    scrollEl.scrollLeft = Math.max(
+      0,
+      cursorEl.offsetLeft - scrollEl.clientWidth * 0.3,
+    );
   }
 
   function handlePlayStop() {
@@ -229,7 +243,7 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
           </label>
         </div>
       )}
-      <div style={{ overflowX: "auto" }}>
+      <div ref={scrollContainerRef} style={{ overflowX: "auto" }}>
         <div ref={containerRef} />
       </div>
     </div>
