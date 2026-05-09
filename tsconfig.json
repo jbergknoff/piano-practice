@@ -6,7 +6,8 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "skipLibCheck": true
   },
   "include": ["src"]
 }
