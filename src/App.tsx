@@ -72,7 +72,13 @@ export function App() {
           ))}
         </div>
       )}
-      {musicxml && <MusicXmlDisplay musicxml={musicxml} />}
+      {musicxml && (
+        <MusicXmlDisplay
+          musicxml={musicxml}
+          midiData={midiData ?? undefined}
+          selectedTracks={selectedTracks}
+        />
+      )}
 
       <LivePianoInput />
     </div>
