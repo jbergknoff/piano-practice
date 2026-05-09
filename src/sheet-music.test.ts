@@ -20,8 +20,8 @@ import type { ChordGroup, ParsedRest, Pitch } from "./sheet-music-types";
 // Full pipeline: MIDI file → MusicXML string → ParsedScore
 function parseMidiFixture(filename: string, trackIndices: number[]) {
   const midiData = parseMidi(readFileSync(`src/test-fixtures/${filename}`));
-  const xml = midiToMusicXmlWithTracks(midiData, trackIndices);
-  return parseScore(xml);
+  const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
+  return parseScore(musicxml);
 }
 
 // Serialize the pitch sequence of a measure's events for snapshot assertions.

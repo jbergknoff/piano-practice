@@ -12,14 +12,14 @@ import type {
 } from "./sheet-music-types";
 
 // MusicXML divisions per quarter note (matches the generator constant)
-const DIVISIONS = 4;
+export const DIVISIONS = 4;
 
 // Minimum horizontal advance per event regardless of duration, so that
 // dense 16th-note runs don't collapse noteheads into each other.
-const MIN_EVENT_ADVANCE = 18;
+export const MIN_EVENT_ADVANCE = 18;
 
-const MEASURE_PADDING_LEFT = 14;
-const MEASURE_PADDING_RIGHT = 4;
+export const MEASURE_PADDING_LEFT = 14;
+export const MEASURE_PADDING_RIGHT = 4;
 
 export function resolveLayout(
   score: ParsedScore,

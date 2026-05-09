@@ -1,7 +1,10 @@
 import { useMemo } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
+  DIVISIONS,
   FLAT_POSITIONS,
+  MEASURE_PADDING_RIGHT,
+  MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
   eventXPositions,
   headerWidth,
@@ -23,6 +26,58 @@ import type {
   ResolvedLayout,
 } from "./sheet-music-types";
 
+// ── Cursor position helper ────────────────────────────────────────────────────
+
+function computeCursorX(
+  beat: number,
+  score: ParsedScore,
+  layout: ResolvedLayout,
+): number | null {
+  const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
+  // Convert beat (in quarter notes) to beat count in the time signature's unit
+  const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
+  const measureIndex = Math.floor(beat / beatsPerMeasure);
+  const beatInMeasure = beat % beatsPerMeasure;
+
+  if (measureIndex >= layout.measureXs.length) return null;
+
+  const measure = score.parts[0]?.measures[measureIndex];
+  if (!measure) return null;
+
+  const isFirst = measureIndex === 0;
+  const fifths = score.parts[0]?.keySig?.fifths ?? 0;
+  const eventXs = eventXPositions(
+    measure.events,
+    layout.measureXs[measureIndex],
+    isFirst,
+    fifths,
+    layout.noteUnitWidth,
+  );
+
+  // Walk through measure events to find the X position for the current beat.
+  // Duration in MusicXML divisions; 4 divisions = 1 quarter note.
+  const divisionsPerBeat = DIVISIONS * (4 / timeSig.beatType);
+  const targetDiv = beatInMeasure * divisionsPerBeat;
+
+  let acc = 0;
+  for (let i = 0; i < measure.events.length; i++) {
+    const event = measure.events[i];
+    const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
+    const eventWidth = Math.max((dur / DIVISIONS) * layout.noteUnitWidth, MIN_EVENT_ADVANCE);
+
+    if (acc + dur > targetDiv) {
+      const frac = (targetDiv - acc) / dur;
+      return eventXs[i] + frac * eventWidth;
+    }
+    acc += dur;
+  }
+
+  // Past all events — return end of measure content
+  const mX = layout.measureXs[measureIndex];
+  const mW = layout.measureWidths[measureIndex];
+  return mX + mW - MEASURE_PADDING_RIGHT;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 interface SheetMusicDisplayProps {
@@ -30,6 +85,7 @@ interface SheetMusicDisplayProps {
   layout?: LayoutConfig;
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
+  playbackBeat?: number;
 }
 
 export function SheetMusicDisplay({
@@ -37,6 +93,7 @@ export function SheetMusicDisplay({
   layout: layoutConfig,
   noteColors = {},
   visibleParts,
+  playbackBeat,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -59,6 +116,20 @@ export function SheetMusicDisplay({
     return <p>No music to display.</p>;
   }
 
+  const cursorX =
+    playbackBeat !== undefined
+      ? computeCursorX(playbackBeat, score, layout)
+      : null;
+
+  const cursorY1 =
+    layout.staffBottomYs.length > 0
+      ? layout.staffBottomYs[0] - 4 * layout.sls
+      : 0;
+  const cursorY2 =
+    layout.staffBottomYs.length > 0
+      ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
+      : layout.totalHeight;
+
   return (
     <div style={{ overflowX: "auto" }}>
       <svg
@@ -79,6 +150,17 @@ export function SheetMusicDisplay({
             visible={visibleParts ? visibleParts.has(part.id) : true}
           />
         ))}
+        {cursorX !== null && (
+          <line
+            x1={cursorX}
+            x2={cursorX}
+            y1={cursorY1 - 4}
+            y2={cursorY2 + 4}
+            stroke="#1976d2"
+            stroke-width="2"
+            stroke-opacity="0.75"
+          />
+        )}
       </svg>
     </div>
   );
