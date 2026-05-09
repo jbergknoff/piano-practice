@@ -43,7 +43,9 @@ export function App() {
 
   function toggleTrack(index: number) {
     setSelectedTracks((prev) =>
-      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index].sort((a, b) => a - b),
+      prev.includes(index)
+        ? prev.filter((i) => i !== index)
+        : [...prev, index].sort((a, b) => a - b),
     );
   }
 

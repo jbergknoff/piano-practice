@@ -30,7 +30,9 @@ export function parseScore(xml: string): ParsedScore {
     throw new Error("Invalid MusicXML");
   }
 
-  const scorePartEls = Array.from(doc.querySelectorAll("part-list > score-part"));
+  const scorePartEls = Array.from(
+    doc.querySelectorAll("part-list > score-part"),
+  );
   const partEls = Array.from(doc.querySelectorAll("score-partwise > part"));
 
   const parts: ParsedPart[] = scorePartEls.map((scorePartEl, i) => {
@@ -55,7 +57,7 @@ function parseMeasures(partEl: Element): ParsedMeasure[] {
 }
 
 function parseMeasure(el: Element): ParsedMeasure {
-  const number = parseInt(el.getAttribute("number") ?? "1", 10);
+  const number = Number.parseInt(el.getAttribute("number") ?? "1", 10);
 
   const attrEl = el.querySelector("attributes");
   const timeSig = attrEl ? parseTimeSig(attrEl) : undefined;
@@ -81,8 +83,11 @@ function parseTimeSig(
 ): { beats: number; beatType: number } | undefined {
   const timeEl = el.querySelector("time");
   if (!timeEl) return undefined;
-  const beats = parseInt(timeEl.querySelector("beats")?.textContent ?? "4", 10);
-  const beatType = parseInt(
+  const beats = Number.parseInt(
+    timeEl.querySelector("beats")?.textContent ?? "4",
+    10,
+  );
+  const beatType = Number.parseInt(
     timeEl.querySelector("beat-type")?.textContent ?? "4",
     10,
   );
@@ -94,18 +99,22 @@ function parseKeySig(
 ): { fifths: number; mode: string } | undefined {
   const keyEl = el.querySelector("key");
   if (!keyEl) return undefined;
-  const fifths = parseInt(keyEl.querySelector("fifths")?.textContent ?? "0", 10);
+  const fifths = Number.parseInt(
+    keyEl.querySelector("fifths")?.textContent ?? "0",
+    10,
+  );
   const mode = keyEl.querySelector("mode")?.textContent ?? "major";
   return { fifths, mode };
 }
 
-function parseClef(
-  el: Element,
-): { sign: "G" | "F"; line: number } | undefined {
+function parseClef(el: Element): { sign: "G" | "F"; line: number } | undefined {
   const clefEl = el.querySelector("clef");
   if (!clefEl) return undefined;
   const sign = (clefEl.querySelector("sign")?.textContent ?? "G") as "G" | "F";
-  const line = parseInt(clefEl.querySelector("line")?.textContent ?? "2", 10);
+  const line = Number.parseInt(
+    clefEl.querySelector("line")?.textContent ?? "2",
+    10,
+  );
   return { sign, line };
 }
 
@@ -115,13 +124,11 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const fullMeasure = restEl?.getAttribute("measure") === "yes";
 
   const durationText = el.querySelector("duration")?.textContent ?? "4";
-  const duration = parseInt(durationText, 10);
+  const duration = Number.parseInt(durationText, 10);
 
   const typeText = el.querySelector("type")?.textContent;
   const type: NoteType =
-    fullMeasure && !typeText
-      ? "whole"
-      : ((typeText ?? "quarter") as NoteType);
+    fullMeasure && !typeText ? "whole" : ((typeText ?? "quarter") as NoteType);
 
   const dot = el.querySelector("dot") !== null;
   const isChordMember = el.querySelector("chord") !== null;
@@ -131,10 +138,14 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   }
 
   const pitchEl = el.querySelector("pitch");
-  const step = (pitchEl?.querySelector("step")?.textContent ?? "C") as Pitch["step"];
+  const step = (pitchEl?.querySelector("step")?.textContent ??
+    "C") as Pitch["step"];
   const alterText = pitchEl?.querySelector("alter")?.textContent;
-  const alter = alterText ? (parseInt(alterText, 10) as 0 | 1) : 0;
-  const octave = parseInt(pitchEl?.querySelector("octave")?.textContent ?? "4", 10);
+  const alter = alterText ? (Number.parseInt(alterText, 10) as 0 | 1) : 0;
+  const octave = Number.parseInt(
+    pitchEl?.querySelector("octave")?.textContent ?? "4",
+    10,
+  );
 
   const ties = Array.from(el.querySelectorAll("tie"));
   const tieStart = ties.some((t) => t.getAttribute("type") === "start");
@@ -153,9 +164,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   };
 }
 
-function groupEvents(
-  items: Array<ParsedNote | ParsedRest>,
-): MeasureEvent[] {
+function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
   const events: MeasureEvent[] = [];
   let i = 0;
   while (i < items.length) {

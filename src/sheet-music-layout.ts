@@ -35,9 +35,10 @@ export function resolveLayout(
   const firstKeySig = firstPart?.keySig ?? { fifths: 0 };
 
   // Compute width of each measure (shared across all parts)
-  const measureWidths = firstPart?.measures.map((m, i) =>
-    measureWidth(m, i === 0, firstKeySig.fifths, sls, noteUnitWidth),
-  ) ?? [];
+  const measureWidths =
+    firstPart?.measures.map((m, i) =>
+      measureWidth(m, i === 0, firstKeySig.fifths, sls, noteUnitWidth),
+    ) ?? [];
 
   // Accumulate measure X positions
   const measureXs: number[] = [];
@@ -51,8 +52,7 @@ export function resolveLayout(
   const staffStride = 4 * sls + partGap;
 
   const staffBottomYs = score.parts.map(
-    (_, p) =>
-      canvasPadding + ledgerMargin + p * staffStride + 4 * sls,
+    (_, p) => canvasPadding + ledgerMargin + p * staffStride + 4 * sls,
   );
 
   const totalHeight =
@@ -101,11 +101,11 @@ export function headerWidth(fifths: number): number {
 
 // Line 1 (bottom) of each clef, as a diatonic index
 const TREBLE_BOTTOM = diatonicIndex({ step: "E", alter: 0, octave: 4 }); // E4
-const BASS_BOTTOM = diatonicIndex({ step: "G", alter: 0, octave: 2 });   // G2
+const BASS_BOTTOM = diatonicIndex({ step: "G", alter: 0, octave: 2 }); // G2
 
 // Middle line of each clef
 const TREBLE_MIDDLE = diatonicIndex({ step: "B", alter: 0, octave: 4 }); // B4
-const BASS_MIDDLE = diatonicIndex({ step: "D", alter: 0, octave: 3 });   // D3
+const BASS_MIDDLE = diatonicIndex({ step: "D", alter: 0, octave: 3 }); // D3
 
 export function noteY(
   pitch: Pitch,

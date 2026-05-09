@@ -65,6 +65,8 @@ export function SheetMusicDisplay({
         width={layout.totalWidth}
         height={layout.totalHeight}
         style={{ display: "block" }}
+        role="img"
+        aria-label="Sheet music"
       >
         {score.parts.map((part, p) => (
           <Staff
@@ -93,11 +95,22 @@ interface StaffProps {
   visible: boolean;
 }
 
-function Staff({ part, partIndex, layout, staffBottomY, noteColors, visible }: StaffProps) {
+function Staff({
+  part,
+  partIndex,
+  layout,
+  staffBottomY,
+  noteColors,
+  visible,
+}: StaffProps) {
   const { sls, totalWidth, measureXs, measureWidths } = layout;
   return (
     <g visibility={visible ? "visible" : "hidden"}>
-      <StaffLines totalWidth={totalWidth} staffBottomY={staffBottomY} sls={sls} />
+      <StaffLines
+        totalWidth={totalWidth}
+        staffBottomY={staffBottomY}
+        sls={sls}
+      />
       {part.measures.map((measure, m) => (
         <Measure
           key={measure.number}
@@ -116,7 +129,10 @@ function Staff({ part, partIndex, layout, staffBottomY, noteColors, visible }: S
       {/* Final barline at right edge of last measure */}
       {measureXs.length > 0 && (
         <Barline
-          x={measureXs[measureXs.length - 1] + measureWidths[measureWidths.length - 1]}
+          x={
+            measureXs[measureXs.length - 1] +
+            measureWidths[measureWidths.length - 1]
+          }
           staffBottomY={staffBottomY}
           sls={sls}
         />
@@ -127,7 +143,11 @@ function Staff({ part, partIndex, layout, staffBottomY, noteColors, visible }: S
 
 // ── Staff Lines ───────────────────────────────────────────────────────────────
 
-function StaffLines({ totalWidth, staffBottomY, sls }: { totalWidth: number; staffBottomY: number; sls: number }) {
+function StaffLines({
+  totalWidth,
+  staffBottomY,
+  sls,
+}: { totalWidth: number; staffBottomY: number; sls: number }) {
   return (
     <g>
       {[0, 1, 2, 3, 4].map((i) => {
@@ -150,7 +170,11 @@ function StaffLines({ totalWidth, staffBottomY, sls }: { totalWidth: number; sta
 
 // ── Barline ───────────────────────────────────────────────────────────────────
 
-function Barline({ x, staffBottomY, sls }: { x: number; staffBottomY: number; sls: number }) {
+function Barline({
+  x,
+  staffBottomY,
+  sls,
+}: { x: number; staffBottomY: number; sls: number }) {
   return (
     <line
       x1={x}
@@ -180,7 +204,7 @@ interface MeasureProps {
 
 function Measure({
   measure,
-  measureIndex,
+  measureIndex: _measureIndex,
   partIndex,
   clef,
   keySig,
@@ -200,9 +224,9 @@ function Measure({
   );
 
   const hdrWidth = isFirstMeasure ? headerWidth(keySig.fifths) : 0;
-  let clefX = x + 2;
-  let keySigX = clefX + 32;
-  let timeSigX = keySigX + Math.abs(keySig.fifths) * 10;
+  const clefX = x + 2;
+  const keySigX = clefX + 32;
+  const timeSigX = keySigX + Math.abs(keySig.fifths) * 10;
 
   return (
     <g>
@@ -210,7 +234,13 @@ function Measure({
       {isFirstMeasure && (
         <>
           <Clef clef={clef} x={clefX} staffBottomY={staffBottomY} sls={sls} />
-          <KeySig keySig={keySig} clef={clef} x={keySigX} staffBottomY={staffBottomY} sls={sls} />
+          <KeySig
+            keySig={keySig}
+            clef={clef}
+            x={keySigX}
+            staffBottomY={staffBottomY}
+            sls={sls}
+          />
           <TimeSig
             timeSig={measure.timeSig ?? { beats: 4, beatType: 4 }}
             x={timeSigX}
@@ -219,34 +249,42 @@ function Measure({
           />
         </>
       )}
-      {measure.events.map((event, ei) => {
-        const ex = eventXs[ei];
-        if (isRest(event)) {
+      {(() => {
+        let beatOffset = 0;
+        return measure.events.map((event, ei) => {
+          const key = `o${beatOffset}`;
+          const dur = isRest(event)
+            ? event.duration
+            : (event as ChordGroup).duration;
+          beatOffset += dur;
+          const ex = eventXs[ei];
+          if (isRest(event)) {
+            return (
+              <RestEl
+                key={key}
+                rest={event}
+                x={ex}
+                staffBottomY={staffBottomY}
+                sls={sls}
+              />
+            );
+          }
+          const group = event as ChordGroup;
           return (
-            <RestEl
-              key={ei}
-              rest={event}
+            <ChordGroupEl
+              key={key}
+              group={group}
               x={ex}
               staffBottomY={staffBottomY}
+              clef={clef}
+              partIndex={partIndex}
+              measureNumber={measure.number}
+              noteColors={noteColors}
               sls={sls}
             />
           );
-        }
-        const group = event as ChordGroup;
-        return (
-          <ChordGroupEl
-            key={ei}
-            group={group}
-            x={ex}
-            staffBottomY={staffBottomY}
-            clef={clef}
-            partIndex={partIndex}
-            measureNumber={measure.number}
-            noteColors={noteColors}
-            sls={sls}
-          />
-        );
-      })}
+        });
+      })()}
     </g>
   );
 }
@@ -323,7 +361,7 @@ function KeySig({
         const y = noteY(pitch, clef, staffBottomY, sls);
         return (
           <text
-            key={i}
+            key={`${pitch.step}${pitch.octave}`}
             x={x + i * spacing}
             y={y + sls * 0.4}
             font-size={sls * 1.6}
@@ -470,7 +508,7 @@ function ChordGroupEl({
         const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
         const color = noteColors[id] ?? "black";
         return (
-          <g key={v}>
+          <g key={id}>
             <Notehead
               pitch={note.pitch}
               x={nx}
@@ -481,9 +519,9 @@ function ChordGroupEl({
               showAccidental={note.showAccidental}
               sls={sls}
             />
-            {ledgerLineYs(note.pitch, clef, staffBottomY, sls).map((ly, li) => (
+            {ledgerLineYs(note.pitch, clef, staffBottomY, sls).map((ly) => (
               <line
-                key={li}
+                key={ly}
                 x1={nx - nrx - 4}
                 x2={nx + nrx + 4}
                 y1={ly}
@@ -533,7 +571,7 @@ function Flags({
             : `M ${stemX} ${ty} C ${stemX - 10} ${ty - 8}, ${stemX - 10} ${ty - 18}, ${stemX - 2} ${ty - 22}`;
         return (
           <path
-            key={i}
+            key={d}
             d={d}
             fill="none"
             stroke="black"
