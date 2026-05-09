@@ -18,7 +18,7 @@ const DIVISIONS = 4;
 // dense 16th-note runs don't collapse noteheads into each other.
 const MIN_EVENT_ADVANCE = 18;
 
-const MEASURE_PADDING_LEFT = 8;
+const MEASURE_PADDING_LEFT = 14;
 const MEASURE_PADDING_RIGHT = 4;
 
 export function resolveLayout(

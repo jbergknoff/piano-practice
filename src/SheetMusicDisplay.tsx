@@ -265,11 +265,11 @@ function Clef({
   sls: number;
 }) {
   if (clef.sign === "G") {
-    // Treble: position the curl of 𝄞 so it sits on G line (line 2 = 1×sls from bottom)
+    // Treble: baseline at the bottom staff line puts the curl on line 2 (G line).
     return (
       <text
         x={x + 2}
-        y={staffBottomY - sls * 0.9}
+        y={staffBottomY}
         font-size={sls * 5.2}
         font-family="'Bravura', 'Gonville', serif"
         dominant-baseline="alphabetic"
@@ -278,11 +278,11 @@ function Clef({
       </text>
     );
   }
-  // Bass: 𝄢 — align so the F dot sits on line 4
+  // Bass: baseline 1 staff-space above bottom line puts the F-dot pair around line 4.
   return (
     <text
       x={x}
-      y={staffBottomY - sls * 3.2}
+      y={staffBottomY - sls}
       font-size={sls * 3.4}
       font-family="'Bravura', 'Gonville', serif"
       dominant-baseline="alphabetic"
