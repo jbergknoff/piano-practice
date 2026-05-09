@@ -2,7 +2,7 @@ import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
 import { useMemo, useState } from "preact/hooks";
 import { LivePianoInput } from "./LivePianoInput";
-import { MusicXmlDisplay } from "./MusicXmlDisplay";
+import { SheetMusicDisplay } from "./SheetMusicDisplay";
 import {
   type TrackInfo,
   getMidiTracks,
@@ -72,7 +72,7 @@ export function App() {
           ))}
         </div>
       )}
-      {musicxml && <MusicXmlDisplay musicxml={musicxml} />}
+      {musicxml && <SheetMusicDisplay musicxml={musicxml} />}
 
       <LivePianoInput />
     </div>
