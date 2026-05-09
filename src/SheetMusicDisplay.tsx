@@ -1,14 +1,14 @@
 import { useMemo } from "preact/hooks";
-import { parseScore, isRest, diatonicIndex } from "./musicxml-parser";
+import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
-  resolveLayout,
-  noteY,
-  stemDirection,
-  ledgerLineYs,
+  FLAT_POSITIONS,
+  SHARP_POSITIONS,
   eventXPositions,
   headerWidth,
-  SHARP_POSITIONS,
-  FLAT_POSITIONS,
+  ledgerLineYs,
+  noteY,
+  resolveLayout,
+  stemDirection,
 } from "./sheet-music-layout";
 import type {
   ChordGroup,

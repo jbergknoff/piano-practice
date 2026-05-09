@@ -1,4 +1,5 @@
 import { diatonicIndex } from "./musicxml-parser";
+import { isRest } from "./musicxml-parser";
 import type {
   ChordGroup,
   LayoutConfig,
@@ -9,7 +10,6 @@ import type {
   Pitch,
   ResolvedLayout,
 } from "./sheet-music-types";
-import { isRest } from "./musicxml-parser";
 
 // MusicXML divisions per quarter note (matches the generator constant)
 const DIVISIONS = 4;

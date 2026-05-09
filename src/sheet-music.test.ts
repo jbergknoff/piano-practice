@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { parseMidi } from "midi-file";
+import { midiToMusicXmlWithTracks } from "./midi-to-musicxml";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   eventXPositions,
@@ -15,10 +17,12 @@ import type { ChordGroup, ParsedRest, Pitch } from "./sheet-music-types";
 // Fixture helpers
 // ---------------------------------------------------------------------------
 
-const C_MAJOR_XML = readFileSync(
-  "src/test-fixtures/c-major-melody.expected.musicxml",
-  "utf-8",
-);
+// Full pipeline: MIDI file → MusicXML string → ParsedScore
+function parseMidiFixture(filename: string, trackIndices: number[]) {
+  const midiData = parseMidi(readFileSync(`src/test-fixtures/${filename}`));
+  const xml = midiToMusicXmlWithTracks(midiData, trackIndices);
+  return parseScore(xml);
+}
 
 function p(step: Pitch["step"], octave: number, alter: 0 | 1 = 0): Pitch {
   return { step, alter, octave };
@@ -97,26 +101,27 @@ describe("isRest", () => {
 });
 
 // ---------------------------------------------------------------------------
-// parseScore — c-major-melody fixture
+// parseScore — c-major-melody MIDI fixture (full pipeline)
 // ---------------------------------------------------------------------------
 
-describe("parseScore", () => {
+describe("parseScore (via MIDI pipeline)", () => {
+  // c-major-melody.mid: 2 measures, 4/4, C major, 8 quarter notes in 1 track
+  const score = parseMidiFixture("c-major-melody.mid", [0]);
+
   test("parses one part and two measures", () => {
-    const score = parseScore(C_MAJOR_XML);
     expect(score.parts).toHaveLength(1);
     expect(score.numMeasures).toBe(2);
   });
 
   test("part-level clef, key sig, time sig", () => {
-    const { parts } = parseScore(C_MAJOR_XML);
+    const { parts } = score;
     expect(parts[0].clef).toMatchObject({ sign: "G", line: 2 });
     expect(parts[0].keySig).toMatchObject({ fifths: 0, mode: "major" });
     expect(parts[0].timeSig).toMatchObject({ beats: 4, beatType: 4 });
   });
 
   test("measure 1 has 4 events, all quarter-note chords", () => {
-    const { parts } = parseScore(C_MAJOR_XML);
-    const events = parts[0].measures[0].events;
+    const events = score.parts[0].measures[0].events;
     expect(events).toHaveLength(4);
     for (const ev of events) {
       expect(isRest(ev)).toBe(false);
@@ -126,8 +131,7 @@ describe("parseScore", () => {
   });
 
   test("measure 1 note pitches are E4 C5 E5 B4 in order", () => {
-    const { parts } = parseScore(C_MAJOR_XML);
-    const events = parts[0].measures[0].events as ChordGroup[];
+    const events = score.parts[0].measures[0].events as ChordGroup[];
     const pitches = events.map((ev) => ev.notes[0].pitch);
     expect(pitches[0]).toMatchObject({ step: "E", octave: 4 });
     expect(pitches[1]).toMatchObject({ step: "C", octave: 5 });
@@ -136,8 +140,7 @@ describe("parseScore", () => {
   });
 
   test("measure 2 has 4 events with pitches G4 C5 D5 F4", () => {
-    const { parts } = parseScore(C_MAJOR_XML);
-    const events = parts[0].measures[1].events as ChordGroup[];
+    const events = score.parts[0].measures[1].events as ChordGroup[];
     const pitches = events.map((ev) => ev.notes[0].pitch);
     expect(pitches[0]).toMatchObject({ step: "G", octave: 4 });
     expect(pitches[1]).toMatchObject({ step: "C", octave: 5 });
@@ -146,19 +149,94 @@ describe("parseScore", () => {
   });
 
   test("noteIndex is assigned sequentially per measure (rests not counted)", () => {
-    const { parts } = parseScore(C_MAJOR_XML);
     // Measure 1: four consecutive notes → noteIndex 0..3
-    const m1 = parts[0].measures[0].events as ChordGroup[];
+    const m1 = score.parts[0].measures[0].events as ChordGroup[];
     expect(m1.map((e) => e.noteIndex)).toEqual([0, 1, 2, 3]);
     // Measure 2: starts fresh at 0
-    const m2 = parts[0].measures[1].events as ChordGroup[];
+    const m2 = score.parts[0].measures[1].events as ChordGroup[];
     expect(m2.map((e) => e.noteIndex)).toEqual([0, 1, 2, 3]);
   });
 
   test("measure number comes from the MusicXML attribute", () => {
-    const { parts } = parseScore(C_MAJOR_XML);
-    expect(parts[0].measures[0].number).toBe(1);
-    expect(parts[0].measures[1].number).toBe(2);
+    expect(score.parts[0].measures[0].number).toBe(1);
+    expect(score.parts[0].measures[1].number).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseScore — g-major-melody MIDI fixture
+// ---------------------------------------------------------------------------
+
+describe("parseScore (g-major-melody via MIDI pipeline)", () => {
+  // g-major-melody.mid: G major (1 sharp), 4/4, melody with eighth notes
+  const score = parseMidiFixture("g-major-melody.mid", [0]);
+
+  test("parses one part", () => {
+    expect(score.parts).toHaveLength(1);
+  });
+
+  test("key signature is G major (1 sharp)", () => {
+    expect(score.parts[0].keySig).toMatchObject({ fifths: 1, mode: "major" });
+  });
+
+  test("time signature is 4/4", () => {
+    expect(score.parts[0].timeSig).toMatchObject({ beats: 4, beatType: 4 });
+  });
+
+  test("has multiple measures", () => {
+    expect(score.numMeasures).toBeGreaterThan(1);
+  });
+
+  test("all measure events are chords or rests (no unknown kinds)", () => {
+    for (const measure of score.parts[0].measures) {
+      for (const ev of measure.events) {
+        if (isRest(ev)) {
+          expect(ev.kind).toBe("rest");
+        } else {
+          expect((ev as ChordGroup).notes.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseScore — mozart-k265-var1 MIDI fixture (multi-part)
+// ---------------------------------------------------------------------------
+
+describe("parseScore (mozart-k265-var1 via MIDI pipeline)", () => {
+  // mozart-k265-var1.mid: C major, 4/4, single track with all notes
+  const score = parseMidiFixture("mozart-k265-var1.mid", [0]);
+
+  test("parses one part", () => {
+    expect(score.parts).toHaveLength(1);
+  });
+
+  test("key signature is C major (0 fifths)", () => {
+    expect(score.parts[0].keySig).toMatchObject({ fifths: 0 });
+  });
+
+  test("has multiple measures", () => {
+    expect(score.numMeasures).toBeGreaterThan(4);
+  });
+
+  test("note IDs are stable and unique across all parts", () => {
+    const ids = new Set<string>();
+    for (let p = 0; p < score.parts.length; p++) {
+      for (const measure of score.parts[p].measures) {
+        for (const ev of measure.events) {
+          if (!isRest(ev)) {
+            const group = ev as ChordGroup;
+            for (let v = 0; v < group.notes.length; v++) {
+              const id = `p${p}-m${measure.number}-n${group.noteIndex}-v${v}`;
+              expect(ids.has(id)).toBe(false);
+              ids.add(id);
+            }
+          }
+        }
+      }
+    }
+    expect(ids.size).toBeGreaterThan(100);
   });
 });
 
@@ -369,7 +447,7 @@ describe("eventXPositions", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveLayout", () => {
-  const score = parseScore(C_MAJOR_XML);
+  const score = parseMidiFixture("c-major-melody.mid", [0]);
   // 4/4, C major, 4 quarter notes per measure, 2 measures, 1 part
   // Default: sls=10, noteUnitWidth=48, partGap=40, canvasPadding=20, ledgerMargin=35
 
