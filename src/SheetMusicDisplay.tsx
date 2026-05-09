@@ -1,5 +1,5 @@
 import { useMemo } from "preact/hooks";
-import { parseScore, isRest } from "./musicxml-parser";
+import { parseScore, isRest, diatonicIndex } from "./musicxml-parser";
 import {
   resolveLayout,
   noteY,
@@ -395,6 +395,26 @@ interface ChordGroupElProps {
   sls: number;
 }
 
+// Compute per-note x offsets within a chord to displace adjacent seconds.
+// Notes must already be sorted low→high. For stem-up, displaced notes shift
+// right (2×nrx); for stem-down they shift left. Cascading seconds alternate
+// sides: C-D-E → C normal, D displaced, E normal.
+function chordXOffsets(
+  notes: ParsedNote[],
+  stemDir: "up" | "down",
+  nrx: number,
+): number[] {
+  const offsets = new Array(notes.length).fill(0);
+  for (let i = 1; i < notes.length; i++) {
+    const stepDiff =
+      diatonicIndex(notes[i].pitch) - diatonicIndex(notes[i - 1].pitch);
+    if (stepDiff === 1 && offsets[i - 1] === 0) {
+      offsets[i] = stemDir === "up" ? nrx * 2 : -(nrx * 2);
+    }
+  }
+  return offsets;
+}
+
 function ChordGroupEl({
   group,
   x,
@@ -413,7 +433,8 @@ function ChordGroupEl({
   const bottomY = Math.max(...noteYs);
   const stemDir = stemDirection(group, clef);
   const stemLength = sls * 3;
-  const nrx = sls * 0.55; // notehead rx
+  const nrx = sls * 0.55;
+  const xOffsets = chordXOffsets(notes, stemDir, nrx);
 
   let stemX: number;
   let stemY1: number;
@@ -445,13 +466,14 @@ function ChordGroupEl({
       )}
       {notes.map((note, v) => {
         const ny = noteYs[v];
+        const nx = x + xOffsets[v];
         const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
         const color = noteColors[id] ?? "black";
         return (
           <g key={v}>
             <Notehead
               pitch={note.pitch}
-              x={x}
+              x={nx}
               y={ny}
               type={type}
               id={id}
@@ -462,8 +484,8 @@ function ChordGroupEl({
             {ledgerLineYs(note.pitch, clef, staffBottomY, sls).map((ly, li) => (
               <line
                 key={li}
-                x1={x - nrx - 4}
-                x2={x + nrx + 4}
+                x1={nx - nrx - 4}
+                x2={nx + nrx + 4}
                 y1={ly}
                 y2={ly}
                 stroke="black"
@@ -472,8 +494,8 @@ function ChordGroupEl({
             ))}
             {dot && (
               <circle
-                cx={x + nrx + 4}
-                cy={ny - (sls / 4)}
+                cx={nx + nrx + 4}
+                cy={ny - sls / 4}
                 r={1.5}
                 fill={color}
               />

@@ -14,12 +14,19 @@ import { isRest } from "./musicxml-parser";
 // MusicXML divisions per quarter note (matches the generator constant)
 const DIVISIONS = 4;
 
+// Minimum horizontal advance per event regardless of duration, so that
+// dense 16th-note runs don't collapse noteheads into each other.
+const MIN_EVENT_ADVANCE = 18;
+
+const MEASURE_PADDING_LEFT = 8;
+const MEASURE_PADDING_RIGHT = 4;
+
 export function resolveLayout(
   score: ParsedScore,
   config: LayoutConfig = {},
 ): ResolvedLayout {
   const sls = config.staffLineSpacing ?? 10;
-  const noteUnitWidth = config.noteUnitWidth ?? 28;
+  const noteUnitWidth = config.noteUnitWidth ?? 48;
   const partGap = config.partGap ?? 40;
   const canvasPadding = config.canvasPadding ?? 20;
   const ledgerMargin = config.ledgerMargin ?? 35;
@@ -71,28 +78,16 @@ function measureWidth(
   measure: ParsedMeasure,
   isFirst: boolean,
   fifths: number,
-  sls: number,
+  _sls: number,
   noteUnitWidth: number,
 ): number {
-  const clefWidth = 32;
-  const keySigWidth = Math.abs(fifths) * 10;
-  const timeSigWidth = 20;
-  const headerWidth = isFirst ? clefWidth + keySigWidth + timeSigWidth + 8 : 0;
-  const totalDivisions = measureTotalDivisions(measure);
-  return (
-    headerWidth +
-    8 + // MEASURE_PADDING_LEFT
-    (totalDivisions / DIVISIONS) * noteUnitWidth +
-    4 // MEASURE_PADDING_RIGHT
-  );
-}
-
-function measureTotalDivisions(measure: ParsedMeasure): number {
-  let total = 0;
+  const hdrW = isFirst ? headerWidth(fifths) : 0;
+  let contentW = 0;
   for (const event of measure.events) {
-    total += isRest(event) ? event.duration : (event as ChordGroup).duration;
+    const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
+    contentW += Math.max((dur / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
   }
-  return total;
+  return hdrW + MEASURE_PADDING_LEFT + contentW + MEASURE_PADDING_RIGHT;
 }
 
 export function headerWidth(fifths: number): number {
@@ -170,14 +165,13 @@ export function eventXPositions(
   fifths: number,
   noteUnitWidth: number,
 ): number[] {
-  const hdrWidth = isFirstMeasure ? headerWidth(fifths) : 0;
-  const PADDING_LEFT = 8;
+  const hdrW = isFirstMeasure ? headerWidth(fifths) : 0;
   const xs: number[] = [];
-  let offset = 0;
+  let x = measureX + hdrW + MEASURE_PADDING_LEFT;
   for (const event of events) {
-    xs.push(measureX + hdrWidth + PADDING_LEFT + (offset / DIVISIONS) * noteUnitWidth);
+    xs.push(x);
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
-    offset += dur;
+    x += Math.max((dur / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
   }
   return xs;
 }
