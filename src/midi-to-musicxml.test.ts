@@ -24,9 +24,9 @@
  *       structurally valid multi-measure score.
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
-import { readFileSync } from "node:fs";
 import { midiToMusicXml } from "./midi-to-musicxml";
 
 // ---------------------------------------------------------------------------
