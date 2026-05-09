@@ -21,9 +21,10 @@ export function getTempo(midiData: MidiData): number {
 export function buildNoteSchedule(
   midiData: MidiData,
   trackIndices: number[],
+  secondsPerBeat: number,
 ): ScheduledNote[] {
   const tpb = midiData.header.ticksPerBeat ?? 480;
-  const secondsPerTick = getTempo(midiData) / 1_000_000 / tpb;
+  const secondsPerTick = secondsPerBeat / tpb;
 
   const notes: ScheduledNote[] = [];
 

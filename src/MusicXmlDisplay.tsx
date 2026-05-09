@@ -13,8 +13,16 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [bpm, setBpm] = useState(120);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Reset BPM to the file's embedded tempo whenever a new MIDI file is loaded.
+  useEffect(() => {
+    if (midiData) {
+      setBpm(Math.round(60_000_000 / getTempo(midiData)));
+    }
+  }, [midiData]);
 
   // Store stopPlayback in a ref so effect cleanups always see the current version
   // without adding it to effect dependency arrays.
@@ -126,13 +134,16 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
       return;
     }
 
-    const secondsPerBeat = getTempo(midiData) / 1_000_000;
-    const startBeat = cursorBeats[0];
+    // OSMD currentTimeStamp.realValue is in whole notes; convert to ms.
+    // 1 whole note = 4 quarter-note beats, so multiply by 4.
+    const secondsPerBeat = 60 / bpm;
+    const wholeNoteToMs = 4 * secondsPerBeat * 1000;
+    const startWhole = cursorBeats[0];
 
     // Schedule cursor advances relative to the first cursor position
     const timeouts: ReturnType<typeof setTimeout>[] = [];
     for (let i = 1; i < cursorBeats.length; i++) {
-      const delay = (cursorBeats[i] - startBeat) * secondsPerBeat * 1000;
+      const delay = (cursorBeats[i] - startWhole) * wholeNoteToMs;
       timeouts.push(
         setTimeout(() => {
           cursor.next();
@@ -142,7 +153,7 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
 
     // Hide cursor and reset state after the last note
     const totalMs =
-      (cursorBeats[cursorBeats.length - 1] - startBeat) * secondsPerBeat * 1000;
+      (cursorBeats[cursorBeats.length - 1] - startWhole) * wholeNoteToMs;
     timeouts.push(
       setTimeout(
         () => {
@@ -159,7 +170,7 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
 
-    const notes = buildNoteSchedule(midiData, selectedTracks);
+    const notes = buildNoteSchedule(midiData, selectedTracks, secondsPerBeat);
     for (const n of notes) {
       scheduleNote(
         audioCtx,
@@ -186,13 +197,37 @@ export function MusicXmlDisplay({ musicxml, midiData, selectedTracks }: Props) {
   return (
     <div>
       {canPlay && (
-        <button
-          type="button"
-          onClick={handlePlayStop}
-          style={{ marginBottom: "0.5em" }}
+        <div
+          style={{
+            marginBottom: "0.5em",
+            display: "flex",
+            gap: "0.75em",
+            alignItems: "center",
+          }}
         >
-          {isPlaying ? "Stop" : "Play"}
-        </button>
+          <button type="button" onClick={handlePlayStop}>
+            {isPlaying ? "Stop" : "Play"}
+          </button>
+          <label>
+            BPM:{" "}
+            <input
+              type="number"
+              min={20}
+              max={300}
+              value={bpm}
+              disabled={isPlaying}
+              onInput={(e) =>
+                setBpm(
+                  Math.max(
+                    20,
+                    Math.min(300, Number((e.target as HTMLInputElement).value)),
+                  ),
+                )
+              }
+              style={{ width: "4em" }}
+            />
+          </label>
+        </div>
       )}
       <div style={{ overflowX: "auto" }}>
         <div ref={containerRef} />
