@@ -28,10 +28,12 @@ export class MidiPlayer {
   async play(): Promise<void> {
     if (this._state === "playing") return;
 
-    this.audioCtx ??= new AudioContext();
-    if (this.audioCtx.state === "suspended") {
-      await this.audioCtx.resume();
+    if (!this.audioCtx) {
+      this.audioCtx = new AudioContext();
     }
+    // Always resume — harmless if already running, required on first use in
+    // browsers that start AudioContext suspended until a user gesture.
+    await this.audioCtx.resume();
 
     const fromBeat = this._state === "paused" ? this.resumeBeat : 0;
     this.startSchedule(fromBeat);
@@ -57,7 +59,8 @@ export class MidiPlayer {
   setBpm(bpm: number): void {
     if (bpm === this._bpm) return;
     const wasPlaying = this._state === "playing";
-    const beat = this.elapsedBeat();
+    // Capture beat before changing _bpm (elapsedBeat uses current _bpm)
+    const beat = wasPlaying ? this.elapsedBeat() : this.resumeBeat;
 
     if (wasPlaying) {
       this.cancelNodes();
@@ -86,19 +89,23 @@ export class MidiPlayer {
 
   private startSchedule(fromBeat: number): void {
     if (!this.audioCtx) return;
-    this.resumeBeat = fromBeat;
-    this.startAudioTime = this.audioCtx.currentTime;
-
     const secsPerBeat = 60 / this._bpm;
-    const now = this.audioCtx.currentTime;
+
+    // Small lookahead so the first note is never scheduled in the past by the
+    // time the Web Audio engine processes it.
+    const LOOKAHEAD = 0.08;
+    const now = this.audioCtx.currentTime + LOOKAHEAD;
+
+    this.resumeBeat = fromBeat;
+    // Adjust startAudioTime so elapsedBeat() reads 0 when the first note plays.
+    this.startAudioTime = now - fromBeat * secsPerBeat;
 
     for (const note of this.notes) {
       if (note.tieStop) continue;
       const noteEnd = note.startBeat + note.durationBeats;
       if (noteEnd <= fromBeat) continue;
 
-      const delayBeats = note.startBeat - fromBeat;
-      const noteStart = now + Math.max(0, delayBeats) * secsPerBeat;
+      const noteStart = now + (note.startBeat - fromBeat) * secsPerBeat;
       const durationSecs = note.durationBeats * secsPerBeat;
       this.scheduleNote(note.noteNumber, noteStart, durationSecs, note.velocity);
     }
