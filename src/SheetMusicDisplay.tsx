@@ -269,7 +269,7 @@ function Measure({
       <Barline x={x} staffBottomY={staffBottomY} staffSpace={staffSpace} />
       {isFirstMeasure && (
         <>
-          <Clef clef={clef} x={clefX} staffBottomY={staffBottomY} />
+          <Clef clef={clef} x={clefX} staffBottomY={staffBottomY} staffSpace={staffSpace} />
           <KeySig
             keySig={keySig}
             clef={clef}
@@ -330,14 +330,22 @@ function Clef({
   clef,
   x,
   staffBottomY,
+  staffSpace,
 }: {
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
+  staffSpace: number;
 }) {
   const char = clef.sign === "G" ? G.gClef : G.fClef;
+  // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
+  // F clef baseline sits on the F line (4th line = 3 staffSpaces up).
+  const y =
+    clef.sign === "G"
+      ? staffBottomY - staffSpace
+      : staffBottomY - 3 * staffSpace;
   return (
-    <text x={x + 2} y={staffBottomY}>
+    <text x={x + 2} y={y}>
       {char}
     </text>
   );
