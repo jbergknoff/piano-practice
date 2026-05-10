@@ -44,9 +44,9 @@ export function App() {
   const waitModeRef = useRef(false);
   const waitPointIndexRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
-  // After advancing, require a full release before accepting the next chord to
-  // prevent the cursor from racing ahead when the same chord repeats.
-  const requireReleaseRef = useRef(false);
+  // Timestamp of the last cursor advance; used to enforce a brief cooldown so
+  // repeated identical chords don't race ahead, without blocking fast playing.
+  const lastAdvanceTimeRef = useRef(0);
 
   useEffect(() => {
     waitModeRef.current = waitMode;
@@ -137,7 +137,7 @@ export function App() {
     setWaitPointIndex(0);
     waitPointIndexRef.current = 0;
     heldNotesRef.current.clear();
-    requireReleaseRef.current = false;
+    lastAdvanceTimeRef.current = 0;
 
     if (musicxml && musicxml.totalBeats > 0) {
       const player = new MidiPlayer(musicxml.notes, musicxml.totalBeats, bpm);
@@ -185,7 +185,7 @@ export function App() {
         setCurrentBeat(waitPointsRef.current[0].beat);
       }
       heldNotesRef.current.clear();
-      requireReleaseRef.current = false;
+      lastAdvanceTimeRef.current = 0;
       return;
     }
     playerRef.current?.stop();
@@ -222,7 +222,7 @@ export function App() {
         setCurrentBeat(points[nearestIdx].beat);
       }
       heldNotesRef.current.clear();
-      requireReleaseRef.current = false;
+      lastAdvanceTimeRef.current = 0;
     }
     setWaitMode(entering);
   }
@@ -241,12 +241,9 @@ export function App() {
         held.delete(noteNumber);
       }
 
-      // After advancing, require all notes to be released before the next check
-      // so identical consecutive chords don't race ahead.
-      if (requireReleaseRef.current) {
-        if (held.size === 0) {
-          requireReleaseRef.current = false;
-        }
+      // Ignore events within 100 ms of the last advance so that repeated
+      // identical chords don't race ahead, while still allowing fast playing.
+      if (Date.now() - lastAdvanceTimeRef.current < 100) {
         return;
       }
 
@@ -261,7 +258,7 @@ export function App() {
         held.size === expected.size &&
         [...expected].every((n) => held.has(n))
       ) {
-        requireReleaseRef.current = true;
+        lastAdvanceTimeRef.current = Date.now();
         const nextIdx = idx + 1;
         waitPointIndexRef.current = nextIdx;
         if (nextIdx < points.length) {
