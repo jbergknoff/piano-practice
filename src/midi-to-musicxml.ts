@@ -112,7 +112,9 @@ function decompose(units: number): number[] {
   let rem = units;
   while (rem > 0) {
     const v = STANDARD_DURATIONS.find((d) => d <= rem);
-    if (v === undefined) break;
+    if (v === undefined) {
+      break;
+    }
     result.push(v);
     rem -= v;
   }
@@ -137,26 +139,39 @@ function renderNote(
   const [type, dot] = DURATION_TYPE.get(dur) ?? ["quarter", false];
   const i = indent;
   const lines: string[] = [`${i}<note>`];
-  if (chord) lines.push(`${i}  <chord/>`);
+  if (chord) {
+    lines.push(`${i}  <chord/>`);
+  }
   if (pitch === null) {
     lines.push(`${i}  <rest/>`);
   } else {
     lines.push(`${i}  <pitch>`);
     lines.push(`${i}    <step>${pitch.step}</step>`);
-    if (pitch.alter !== undefined)
+    if (pitch.alter !== undefined) {
       lines.push(`${i}    <alter>${pitch.alter}</alter>`);
+    }
     lines.push(`${i}    <octave>${pitch.octave}</octave>`);
     lines.push(`${i}  </pitch>`);
   }
   lines.push(`${i}  <duration>${dur}</duration>`);
-  if (tieStop) lines.push(`${i}  <tie type="stop"/>`);
-  if (tieStart) lines.push(`${i}  <tie type="start"/>`);
+  if (tieStop) {
+    lines.push(`${i}  <tie type="stop"/>`);
+  }
+  if (tieStart) {
+    lines.push(`${i}  <tie type="start"/>`);
+  }
   lines.push(`${i}  <type>${type}</type>`);
-  if (dot) lines.push(`${i}  <dot/>`);
+  if (dot) {
+    lines.push(`${i}  <dot/>`);
+  }
   if ((tieStop || tieStart) && pitch !== null) {
     lines.push(`${i}  <notations>`);
-    if (tieStop) lines.push(`${i}    <tied type="stop"/>`);
-    if (tieStart) lines.push(`${i}    <tied type="start"/>`);
+    if (tieStop) {
+      lines.push(`${i}    <tied type="stop"/>`);
+    }
+    if (tieStart) {
+      lines.push(`${i}    <tied type="start"/>`);
+    }
     lines.push(`${i}  </notations>`);
   }
   lines.push(`${i}</note>`);
@@ -219,7 +234,9 @@ function extractTrackNotes(track: MidiEvent[], tpb: number): RawNote[] {
 }
 
 function detectClef(notes: RawNote[]): { sign: string; line: number } {
-  if (notes.length === 0) return { sign: "G", line: 2 };
+  if (notes.length === 0) {
+    return { sign: "G", line: 2 };
+  }
   const sorted = notes.map((n) => n.noteNumber).sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
   return median < 60 ? { sign: "F", line: 4 } : { sign: "G", line: 2 };
@@ -287,7 +304,9 @@ function buildPartMeasuresXml(
       }
 
       let j = i;
-      while (j < mParts.length && mParts[j].startTick === startTick) j++;
+      while (j < mParts.length && mParts[j].startTick === startTick) {
+        j++;
+      }
       const chord = mParts.slice(i, j);
 
       // Use the space to the next chord's start as the displayed duration so
@@ -500,8 +519,9 @@ export function midiToMusicXml(midiData: MidiData): string {
     }
   }
 
-  if (rawNotes.length === 0)
+  if (rawNotes.length === 0) {
     return emptyScore(keyFifths, keyMode, timeSigNum, timeSigDen);
+  }
 
   // Quantize to 16th-note grid
   const grid = tpb / 4;
@@ -562,7 +582,9 @@ export function midiToMusicXml(midiData: MidiData): string {
 
       // Collect all parts at the same tick (chord group)
       let j = i;
-      while (j < mParts.length && mParts[j].startTick === startTick) j++;
+      while (j < mParts.length && mParts[j].startTick === startTick) {
+        j++;
+      }
       const chord = mParts.slice(i, j);
 
       for (let k = 0; k < chord.length; k++) {

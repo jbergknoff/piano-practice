@@ -40,7 +40,9 @@ export class MidiPlayer {
   }
 
   async play(): Promise<void> {
-    if (this._state === "playing") return;
+    if (this._state === "playing") {
+      return;
+    }
 
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext();
@@ -53,7 +55,9 @@ export class MidiPlayer {
   }
 
   pause(): void {
-    if (this._state !== "playing") return;
+    if (this._state !== "playing") {
+      return;
+    }
     this.resumeBeat = this.elapsedBeat();
     this.cancelAll();
     this.stopTick();
@@ -69,7 +73,9 @@ export class MidiPlayer {
   }
 
   setBpm(bpm: number): void {
-    if (bpm === this._bpm) return;
+    if (bpm === this._bpm) {
+      return;
+    }
     const wasPlaying = this._state === "playing";
     const beat = wasPlaying ? this.elapsedBeat() : this.resumeBeat;
 
@@ -93,12 +99,16 @@ export class MidiPlayer {
   }
 
   private elapsedBeat(): number {
-    if (!this.audioCtx || this._state === "stopped") return this.resumeBeat;
+    if (!this.audioCtx || this._state === "stopped") {
+      return this.resumeBeat;
+    }
     return (this.audioCtx.currentTime - this.startAudioTime) * (this._bpm / 60);
   }
 
   private startSchedule(fromBeat: number): void {
-    if (!this.audioCtx) return;
+    if (!this.audioCtx) {
+      return;
+    }
     const secsPerBeat = 60 / this._bpm;
 
     // startAudioTime is the AudioContext time at which beat 0 of the piece
@@ -126,14 +136,18 @@ export class MidiPlayer {
   // Called every SCHEDULER_INTERVAL ms: schedule any notes whose start time
   // falls within the next SCHEDULE_AHEAD seconds.
   private scheduleUpcoming(): void {
-    if (!this.audioCtx) return;
+    if (!this.audioCtx) {
+      return;
+    }
     const secsPerBeat = 60 / this._bpm;
     const horizon = this.audioCtx.currentTime + SCHEDULE_AHEAD;
 
     while (this.playQueueIndex < this.playQueue.length) {
       const note = this.playQueue[this.playQueueIndex];
       const noteStart = this.startAudioTime + note.startBeat * secsPerBeat;
-      if (noteStart > horizon) break;
+      if (noteStart > horizon) {
+        break;
+      }
 
       const durationSecs = note.durationBeats * secsPerBeat;
       this.scheduleNote(
@@ -173,7 +187,9 @@ export class MidiPlayer {
     velocity: number,
   ): void {
     const ctx = this.audioCtx;
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const freq = 440 * 2 ** ((midiNote - 69) / 12);
     const vol = (velocity / 127) * 0.22;
@@ -239,7 +255,9 @@ export class MidiPlayer {
 
   private startTick(): void {
     const tick = () => {
-      if (this._state !== "playing") return;
+      if (this._state !== "playing") {
+        return;
+      }
 
       const beat = this.elapsedBeat();
       this.onPositionUpdate?.(Math.min(beat, this.totalBeats));

@@ -34,7 +34,9 @@ function pitchSnapshot(measure: {
 }): string {
   return measure.events
     .flatMap((ev) => {
-      if (isRest(ev)) return [];
+      if (isRest(ev)) {
+        return [];
+      }
       return [
         (ev as ChordGroup).notes
           .map(

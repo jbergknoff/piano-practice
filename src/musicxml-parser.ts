@@ -82,7 +82,9 @@ function parseTimeSig(
   el: Element,
 ): { beats: number; beatType: number } | undefined {
   const timeEl = el.querySelector("time");
-  if (!timeEl) return undefined;
+  if (!timeEl) {
+    return undefined;
+  }
   const beats = Number.parseInt(
     timeEl.querySelector("beats")?.textContent ?? "4",
     10,
@@ -98,7 +100,9 @@ function parseKeySig(
   el: Element,
 ): { fifths: number; mode: string } | undefined {
   const keyEl = el.querySelector("key");
-  if (!keyEl) return undefined;
+  if (!keyEl) {
+    return undefined;
+  }
   const fifths = Number.parseInt(
     keyEl.querySelector("fifths")?.textContent ?? "0",
     10,
@@ -109,7 +113,9 @@ function parseKeySig(
 
 function parseClef(el: Element): { sign: "G" | "F"; line: number } | undefined {
   const clefEl = el.querySelector("clef");
-  if (!clefEl) return undefined;
+  if (!clefEl) {
+    return undefined;
+  }
   const sign = (clefEl.querySelector("sign")?.textContent ?? "G") as "G" | "F";
   const line = Number.parseInt(
     clefEl.querySelector("line")?.textContent ?? "2",

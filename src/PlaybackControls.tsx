@@ -25,7 +25,9 @@ export function PlaybackControls({
 
   function handleBpmInput(e: Event) {
     const val = Number((e.target as HTMLInputElement).value);
-    if (val >= 20 && val <= 300) onBpmChange(val);
+    if (val >= 20 && val <= 300) {
+      onBpmChange(val);
+    }
   }
 
   return (

@@ -65,10 +65,14 @@ function computeCursorX(
   const measureIndex = Math.floor(beat / beatsPerMeasure);
   const beatInMeasure = beat % beatsPerMeasure;
 
-  if (measureIndex >= layout.measureXs.length) return null;
+  if (measureIndex >= layout.measureXs.length) {
+    return null;
+  }
 
   const measure = score.parts[0]?.measures[measureIndex];
-  if (!measure) return null;
+  if (!measure) {
+    return null;
+  }
 
   const isFirst = measureIndex === 0;
   const fifths = score.parts[0]?.keySig?.fifths ?? 0;
@@ -164,7 +168,9 @@ export function SheetMusicDisplay({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (cursorX === null || !containerRef.current) return;
+    if (cursorX === null || !containerRef.current) {
+      return;
+    }
     const el = containerRef.current;
     const margin = 80;
     const relX = cursorX - el.scrollLeft;
@@ -476,7 +482,9 @@ function KeySig({
   staffSpace: number;
 }) {
   const { fifths } = keySig;
-  if (fifths === 0) return null;
+  if (fifths === 0) {
+    return null;
+  }
 
   const positions =
     fifths > 0

@@ -27,7 +27,9 @@ export function App() {
 
   function handleFile(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     setFileName(file.name);
     setError(null);
@@ -59,7 +61,9 @@ export function App() {
   }
 
   const conversionResult = useMemo<MidiConversionResult | null>(() => {
-    if (!midiData || selectedTracks.length === 0) return null;
+    if (!midiData || selectedTracks.length === 0) {
+      return null;
+    }
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
@@ -94,7 +98,9 @@ export function App() {
 
   async function handlePlayPause() {
     const player = playerRef.current;
-    if (!player) return;
+    if (!player) {
+      return;
+    }
     if (isPlaying) {
       player.pause();
       setIsPlaying(false);
@@ -117,7 +123,9 @@ export function App() {
 
   // Derive note colors: highlight notes currently playing
   const noteColors = useMemo(() => {
-    if (!conversionResult || currentBeat === 0) return {};
+    if (!conversionResult || currentBeat === 0) {
+      return {};
+    }
     const colors: Record<string, string> = {};
     for (const note of conversionResult.notes) {
       if (
