@@ -782,43 +782,43 @@ function RestEl({
     );
   }
   if (effectiveType === "eighth") {
-    const ty = staffBottomY - 3.5 * sls;
-    const by = staffBottomY - sls;
-    const dotY = staffBottomY - 2.5 * sls;
+    // Large dot with a diagonal tail going lower-right, like a "/" with a blob.
+    const dotR = sls * 0.42;
+    const dotCx = x;
+    const dotCy = staffBottomY - 2.8 * sls;
     return (
       <g>
-        <line x1={x} y1={ty} x2={x} y2={by} stroke="black" stroke-width="1.5" />
-        <circle cx={x + 4} cy={dotY} r={sls * 0.3} fill="black" />
-        <path
-          d={`M ${x} ${ty} Q ${x + 6} ${ty + sls * 0.5}, ${x + 4} ${dotY}`}
-          fill="none"
+        <circle cx={dotCx} cy={dotCy} r={dotR} fill="black" />
+        <line
+          x1={dotCx + dotR * 0.6}
+          y1={dotCy + dotR * 0.8}
+          x2={dotCx + sls * 1.1}
+          y2={staffBottomY - sls * 0.6}
           stroke="black"
           stroke-width="1.5"
+          stroke-linecap="round"
         />
       </g>
     );
   }
-  // 16th rest: two eighth-style flag heads
-  const ty = staffBottomY - 3.5 * sls;
-  const by = staffBottomY - sls * 0.5;
-  const dot1Y = staffBottomY - 2.5 * sls;
-  const dot2Y = staffBottomY - 1.5 * sls;
+  // 16th rest: two dots with a shared diagonal tail
+  const dotR = sls * 0.42;
+  const dot1Cx = x;
+  const dot1Cy = staffBottomY - 3.2 * sls;
+  const dot2Cx = x;
+  const dot2Cy = staffBottomY - 2.1 * sls;
   return (
     <g>
-      <line x1={x} y1={ty} x2={x} y2={by} stroke="black" stroke-width="1.5" />
-      <circle cx={x + 4} cy={dot1Y} r={sls * 0.3} fill="black" />
+      <circle cx={dot1Cx} cy={dot1Cy} r={dotR} fill="black" />
+      <circle cx={dot2Cx} cy={dot2Cy} r={dotR} fill="black" />
       <path
-        d={`M ${x} ${ty} Q ${x + 6} ${ty + sls * 0.5}, ${x + 4} ${dot1Y}`}
-        fill="none"
+        x1={dot1Cx + dotR * 0.6}
+        y1={dot1Cy + dotR * 0.8}
+        x2={dot1Cx + sls * 1.1}
+        y2={staffBottomY - sls * 0.6}
         stroke="black"
         stroke-width="1.5"
-      />
-      <circle cx={x + 4} cy={dot2Y} r={sls * 0.3} fill="black" />
-      <path
-        d={`M ${x} ${ty + sls} Q ${x + 6} ${ty + sls * 1.5}, ${x + 4} ${dot2Y}`}
-        fill="none"
-        stroke="black"
-        stroke-width="1.5"
+        stroke-linecap="round"
       />
     </g>
   );
