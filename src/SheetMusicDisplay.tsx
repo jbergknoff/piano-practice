@@ -188,7 +188,7 @@ export function SheetMusicDisplay({
       : layout.totalHeight;
 
   return (
-    <div ref={containerRef} style={{ overflowX: "auto" }}>
+    <div ref={containerRef} style={{ overflowX: "auto", userSelect: "none" }}>
       {/*
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
