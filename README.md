@@ -1,5 +1,9 @@
 # piano-practice
 
+## Licenses
+
+Sheet music notation glyphs are rendered using the [Bravura](https://github.com/steinbergmedia/bravura) font by Steinberg Media Technologies GmbH, licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/).
+
 ## Bluetooth Piano Input
 
 The app can receive live MIDI notes from a Bluetooth-connected electric piano using the

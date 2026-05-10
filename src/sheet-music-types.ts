@@ -66,7 +66,7 @@ export interface LayoutConfig {
 }
 
 export interface ResolvedLayout {
-  sls: number;
+  staffSpace: number;
   noteUnitWidth: number;
   measureXs: number[];
   measureWidths: number[];

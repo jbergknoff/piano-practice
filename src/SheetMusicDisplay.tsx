@@ -88,7 +88,7 @@ export function SheetMusicDisplay({
     return <p>No music to display.</p>;
   }
 
-  const fontSize = glyphFontSize ?? layout.sls * 4;
+  const fontSize = glyphFontSize ?? layout.staffSpace * 4;
 
   return (
     <div style={{ overflowX: "auto" }}>
@@ -139,7 +139,7 @@ function Staff({
   noteColors,
   visible,
 }: StaffProps) {
-  const { sls: staffSpace, totalWidth, measureXs, measureWidths } = layout;
+  const { staffSpace, totalWidth, measureXs, measureWidths } = layout;
   return (
     <g visibility={visible ? "visible" : "hidden"}>
       <StaffLines
@@ -250,7 +250,7 @@ function Measure({
   layout,
   noteColors,
 }: MeasureProps) {
-  const { sls: staffSpace, noteUnitWidth } = layout;
+  const { staffSpace, noteUnitWidth } = layout;
   const eventXs = eventXPositions(
     measure.events,
     x,
