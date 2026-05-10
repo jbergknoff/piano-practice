@@ -5,10 +5,12 @@ interface PlaybackControlsProps {
   totalBeats: number;
   timeSigNum: number;
   waitMode: boolean;
+  measureRange: { from: number; to: number } | null;
   onPlayPause: () => void;
   onStop: () => void;
   onBpmChange: (bpm: number) => void;
   onToggleWaitMode: () => void;
+  onMeasureRangeChange: (range: { from: number; to: number } | null) => void;
 }
 
 export function PlaybackControls({
@@ -18,20 +20,40 @@ export function PlaybackControls({
   totalBeats,
   timeSigNum,
   waitMode,
+  measureRange,
   onPlayPause,
   onStop,
   onBpmChange,
   onToggleWaitMode,
+  onMeasureRangeChange,
 }: PlaybackControlsProps) {
+  const totalMeasures = totalBeats > 0 ? Math.ceil(totalBeats / timeSigNum) : 0;
   const currentMeasure =
     totalBeats > 0 ? Math.floor(currentBeat / timeSigNum) + 1 : 1;
-  const totalMeasures = totalBeats > 0 ? Math.ceil(totalBeats / timeSigNum) : 0;
 
   function handleBpmInput(e: Event) {
     const val = Number((e.target as HTMLInputElement).value);
     if (val >= 20 && val <= 300) {
       onBpmChange(val);
     }
+  }
+
+  function handleFromInput(e: Event) {
+    const val = Number((e.target as HTMLInputElement).value);
+    if (!val || val < 1 || val > totalMeasures) {
+      return;
+    }
+    const to = measureRange ? Math.max(measureRange.to, val) : totalMeasures;
+    onMeasureRangeChange({ from: val, to });
+  }
+
+  function handleToInput(e: Event) {
+    const val = Number((e.target as HTMLInputElement).value);
+    if (!val || val < 1 || val > totalMeasures) {
+      return;
+    }
+    const from = measureRange ? Math.min(measureRange.from, val) : 1;
+    onMeasureRangeChange({ from, to: val });
   }
 
   return (
@@ -121,6 +143,53 @@ export function PlaybackControls({
           style={{ width: "52px", fontSize: "14px", textAlign: "center" }}
         />
       </div>
+
+      {totalMeasures > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ fontSize: "14px", whiteSpace: "nowrap" }}>Loop:</span>
+          <input
+            type="number"
+            min={1}
+            max={totalMeasures}
+            value={measureRange?.from ?? ""}
+            placeholder="1"
+            onInput={handleFromInput}
+            style={{ width: "46px", fontSize: "14px", textAlign: "center" }}
+            aria-label="Loop from measure"
+          />
+          <span style={{ fontSize: "14px" }}>–</span>
+          <input
+            type="number"
+            min={1}
+            max={totalMeasures}
+            value={measureRange?.to ?? ""}
+            placeholder={String(totalMeasures)}
+            onInput={handleToInput}
+            style={{ width: "46px", fontSize: "14px", textAlign: "center" }}
+            aria-label="Loop to measure"
+          />
+          {measureRange && (
+            <button
+              type="button"
+              onClick={() => onMeasureRangeChange(null)}
+              style={{
+                fontSize: "14px",
+                width: "24px",
+                height: "24px",
+                cursor: "pointer",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                background: "#f5f5f5",
+                lineHeight: 1,
+                padding: 0,
+              }}
+              aria-label="Clear loop range"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
 
       {totalBeats > 0 && (
         <span style={{ fontSize: "13px", color: "#555" }}>

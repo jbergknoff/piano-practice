@@ -125,6 +125,8 @@ interface SheetMusicDisplayProps {
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
   playbackBeat?: number;
+  /** Color of the playback cursor line. Defaults to blue (#1976d2). */
+  cursorColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
 }
@@ -135,6 +137,7 @@ export function SheetMusicDisplay({
   noteColors = {},
   visibleParts,
   playbackBeat,
+  cursorColor = "#1976d2",
   glyphFontSize,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -215,7 +218,7 @@ export function SheetMusicDisplay({
             x2={cursorX}
             y1={cursorY1 - 4}
             y2={cursorY2 + 4}
-            stroke="#1976d2"
+            stroke={cursorColor}
             stroke-width="2"
             stroke-opacity="0.75"
           />

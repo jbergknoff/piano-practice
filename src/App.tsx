@@ -24,8 +24,16 @@ export function App() {
   const [bpm, setBpm] = useState(120);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
+  const [measureRange, setMeasureRange] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
 
   const playerRef = useRef<MidiPlayer | null>(null);
+  const measureRangeRef = useRef(measureRange);
+  useEffect(() => {
+    measureRangeRef.current = measureRange;
+  }, [measureRange]);
 
   const musicxml = useMemo<MidiConversionResult | null>(() => {
     if (!midiData || selectedTracks.length === 0) {
@@ -34,7 +42,7 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
-  const waitMode = useWaitMode(musicxml);
+  const waitMode = useWaitMode(musicxml, measureRange);
 
   function handleFile(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -49,6 +57,7 @@ export function App() {
     setSelectedTracks([]);
     setIsPlaying(false);
     setCurrentBeat(0);
+    setMeasureRange(null);
 
     file.arrayBuffer().then((buffer) => {
       try {
@@ -73,7 +82,8 @@ export function App() {
   }
 
   // Rebuild player whenever the conversion result changes.
-  // bpm is intentionally excluded: bpm changes go through player.setBpm, not a rebuild.
+  // bpm and measureRange are intentionally excluded: they go through
+  // player.setBpm / player.loopRange without a full rebuild.
   // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
   useEffect(() => {
     playerRef.current?.dispose();
@@ -83,6 +93,13 @@ export function App() {
 
     if (musicxml && musicxml.totalBeats > 0) {
       const player = new MidiPlayer(musicxml.notes, musicxml.totalBeats, bpm);
+      const range = measureRangeRef.current;
+      if (range) {
+        player.loopRange = {
+          startBeat: (range.from - 1) * musicxml.timeSigNum,
+          endBeat: range.to * musicxml.timeSigNum,
+        };
+      }
       // Suppress position updates while wait mode is driving the cursor.
       player.onPositionUpdate = (beat) => {
         if (!waitMode.activeRef.current) {
@@ -101,6 +118,29 @@ export function App() {
       playerRef.current = null;
     };
   }, [musicxml]);
+
+  // Keep the player's loop range in sync and scroll to the range start.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: waitMode.activeRef is a ref; reading .current is intentional
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!musicxml) {
+      return;
+    }
+    const { timeSigNum } = musicxml;
+    if (measureRange) {
+      const startBeat = (measureRange.from - 1) * timeSigNum;
+      const endBeat = measureRange.to * timeSigNum;
+      if (player) {
+        player.loopRange = { startBeat, endBeat };
+        player.seek(startBeat);
+      }
+      if (!waitMode.activeRef.current) {
+        setCurrentBeat(startBeat);
+      }
+    } else if (player) {
+      player.loopRange = null;
+    }
+  }, [measureRange, musicxml]);
 
   async function handlePlayPause() {
     if (waitMode.active) {
@@ -197,10 +237,12 @@ export function App() {
           totalBeats={musicxml.totalBeats}
           timeSigNum={musicxml.timeSigNum}
           waitMode={waitMode.active}
+          measureRange={measureRange}
           onPlayPause={handlePlayPause}
           onStop={handleStop}
           onBpmChange={handleBpmChange}
           onToggleWaitMode={handleToggleWaitMode}
+          onMeasureRangeChange={setMeasureRange}
         />
       )}
       {musicxml && (
@@ -208,6 +250,7 @@ export function App() {
           musicxml={musicxml.musicxml}
           noteColors={noteColors}
           playbackBeat={playbackBeat}
+          cursorColor={waitMode.wrongNoteFlash ? "#c62828" : undefined}
         />
       )}
 
