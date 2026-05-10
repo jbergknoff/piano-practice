@@ -19,9 +19,35 @@ import type {
   ParsedPart,
   ParsedRest,
   ParsedScore,
-  Pitch,
   ResolvedLayout,
 } from "./sheet-music-types";
+
+// ── Bravura / SMuFL glyph constants ──────────────────────────────────────────
+
+const BRAVURA = "Bravura, serif";
+
+// SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
+// meaningful when rendered with a SMuFL font such as Bravura.  Each glyph is
+// designed for font-size = 4 × staff-space, with its baseline at the bottom
+// staff line (y = staffBottomY in our SVG coordinate system).
+const G = {
+  gClef: "\uE050",
+  fClef: "\uE062",
+  accSharp: "\uE262",
+  accFlat: "\uE260",
+  noteheadWhole: "\uE0A2",
+  noteheadHalf: "\uE0A3",
+  noteheadBlack: "\uE0A4",
+  restWhole: "\uE4E3",
+  restHalf: "\uE4E4",
+  restQuarter: "\uE4E5",
+  rest8th: "\uE4E6",
+  rest16th: "\uE4E7",
+  flag8thUp: "\uE240",
+  flag8thDown: "\uE241",
+  flag16thUp: "\uE242",
+  flag16thDown: "\uE243",
+} as const;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -30,6 +56,8 @@ interface SheetMusicDisplayProps {
   layout?: LayoutConfig;
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
+  /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
+  glyphFontSize?: number;
 }
 
 export function SheetMusicDisplay({
@@ -37,6 +65,7 @@ export function SheetMusicDisplay({
   layout: layoutConfig,
   noteColors = {},
   visibleParts,
+  glyphFontSize,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -59,12 +88,19 @@ export function SheetMusicDisplay({
     return <p>No music to display.</p>;
   }
 
+  const fontSize = glyphFontSize ?? layout.staffSpace * 4;
+
   return (
     <div style={{ overflowX: "auto" }}>
+      {/*
+        Set font-family and font-size once here so every <text> element inside
+        inherits them automatically.  Components that use a different font
+        (e.g. TimeSig) override via their own attributes.
+      */}
       <svg
         width={layout.totalWidth}
         height={layout.totalHeight}
-        style={{ display: "block" }}
+        style={{ display: "block", fontFamily: BRAVURA, fontSize: fontSize }}
         role="img"
         aria-label="Sheet music"
       >
@@ -103,13 +139,13 @@ function Staff({
   noteColors,
   visible,
 }: StaffProps) {
-  const { sls, totalWidth, measureXs, measureWidths } = layout;
+  const { staffSpace, totalWidth, measureXs, measureWidths } = layout;
   return (
     <g visibility={visible ? "visible" : "hidden"}>
       <StaffLines
         totalWidth={totalWidth}
         staffBottomY={staffBottomY}
-        sls={sls}
+        staffSpace={staffSpace}
       />
       {part.measures.map((measure, m) => (
         <Measure
@@ -134,7 +170,7 @@ function Staff({
             measureWidths[measureWidths.length - 1]
           }
           staffBottomY={staffBottomY}
-          sls={sls}
+          staffSpace={staffSpace}
         />
       )}
     </g>
@@ -146,12 +182,12 @@ function Staff({
 function StaffLines({
   totalWidth,
   staffBottomY,
-  sls,
-}: { totalWidth: number; staffBottomY: number; sls: number }) {
+  staffSpace,
+}: { totalWidth: number; staffBottomY: number; staffSpace: number }) {
   return (
     <g>
       {[0, 1, 2, 3, 4].map((i) => {
-        const y = staffBottomY - i * sls;
+        const y = staffBottomY - i * staffSpace;
         return (
           <line
             key={i}
@@ -173,13 +209,13 @@ function StaffLines({
 function Barline({
   x,
   staffBottomY,
-  sls,
-}: { x: number; staffBottomY: number; sls: number }) {
+  staffSpace,
+}: { x: number; staffBottomY: number; staffSpace: number }) {
   return (
     <line
       x1={x}
       x2={x}
-      y1={staffBottomY - 4 * sls}
+      y1={staffBottomY - 4 * staffSpace}
       y2={staffBottomY}
       stroke="black"
       stroke-width="1.5"
@@ -214,7 +250,7 @@ function Measure({
   layout,
   noteColors,
 }: MeasureProps) {
-  const { sls, noteUnitWidth } = layout;
+  const { staffSpace, noteUnitWidth } = layout;
   const eventXs = eventXPositions(
     measure.events,
     x,
@@ -230,22 +266,27 @@ function Measure({
 
   return (
     <g>
-      <Barline x={x} staffBottomY={staffBottomY} sls={sls} />
+      <Barline x={x} staffBottomY={staffBottomY} staffSpace={staffSpace} />
       {isFirstMeasure && (
         <>
-          <Clef clef={clef} x={clefX} staffBottomY={staffBottomY} sls={sls} />
+          <Clef
+            clef={clef}
+            x={clefX}
+            staffBottomY={staffBottomY}
+            staffSpace={staffSpace}
+          />
           <KeySig
             keySig={keySig}
             clef={clef}
             x={keySigX}
             staffBottomY={staffBottomY}
-            sls={sls}
+            staffSpace={staffSpace}
           />
           <TimeSig
             timeSig={measure.timeSig ?? { beats: 4, beatType: 4 }}
             x={timeSigX}
             staffBottomY={staffBottomY}
-            sls={sls}
+            staffSpace={staffSpace}
           />
         </>
       )}
@@ -265,7 +306,6 @@ function Measure({
                 rest={event}
                 x={ex}
                 staffBottomY={staffBottomY}
-                sls={sls}
               />
             );
           }
@@ -280,7 +320,7 @@ function Measure({
               partIndex={partIndex}
               measureNumber={measure.number}
               noteColors={noteColors}
-              sls={sls}
+              staffSpace={staffSpace}
             />
           );
         });
@@ -295,37 +335,23 @@ function Clef({
   clef,
   x,
   staffBottomY,
-  sls,
+  staffSpace,
 }: {
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
-  sls: number;
+  staffSpace: number;
 }) {
-  if (clef.sign === "G") {
-    // Treble: baseline at the bottom staff line puts the curl on line 2 (G line).
-    return (
-      <text
-        x={x + 2}
-        y={staffBottomY}
-        font-size={sls * 5.2}
-        font-family="'Bravura', 'Gonville', serif"
-        dominant-baseline="alphabetic"
-      >
-        𝄞
-      </text>
-    );
-  }
-  // Bass: baseline 1 staff-space above bottom line puts the F-dot pair around line 4.
+  const char = clef.sign === "G" ? G.gClef : G.fClef;
+  // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
+  // F clef baseline sits on the F line (4th line = 3 staffSpaces up).
+  const y =
+    clef.sign === "G"
+      ? staffBottomY - staffSpace
+      : staffBottomY - 3 * staffSpace;
   return (
-    <text
-      x={x}
-      y={staffBottomY - sls}
-      font-size={sls * 3.4}
-      font-family="'Bravura', 'Gonville', serif"
-      dominant-baseline="alphabetic"
-    >
-      𝄢
+    <text x={x + 2} y={y}>
+      {char}
     </text>
   );
 }
@@ -337,13 +363,13 @@ function KeySig({
   clef,
   x,
   staffBottomY,
-  sls,
+  staffSpace,
 }: {
   keySig: { fifths: number };
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
-  sls: number;
+  staffSpace: number;
 }) {
   const { fifths } = keySig;
   if (fifths === 0) return null;
@@ -352,22 +378,19 @@ function KeySig({
     fifths > 0
       ? SHARP_POSITIONS[clef.sign].slice(0, fifths)
       : FLAT_POSITIONS[clef.sign].slice(0, -fifths);
-  const symbol = fifths > 0 ? "♯" : "♭";
-  const spacing = 10;
+  const symbol = fifths > 0 ? G.accSharp : G.accFlat;
+  const spacing = staffSpace * 1.1;
 
   return (
     <g>
       {positions.map((pitch, i) => {
-        const y = noteY(pitch, clef, staffBottomY, sls);
+        const y = noteY(pitch, clef, staffBottomY, staffSpace);
         return (
           <text
             key={`${pitch.step}${pitch.octave}`}
             x={x + i * spacing}
-            y={y + sls * 0.4}
-            font-size={sls * 1.6}
-            font-family="serif"
+            y={y}
             text-anchor="middle"
-            dominant-baseline="middle"
           >
             {symbol}
           </text>
@@ -383,20 +406,20 @@ function TimeSig({
   timeSig,
   x,
   staffBottomY,
-  sls,
+  staffSpace,
 }: {
   timeSig: { beats: number; beatType: number };
   x: number;
   staffBottomY: number;
-  sls: number;
+  staffSpace: number;
 }) {
   const centerX = x + 10;
-  const fontSize = sls * 2;
+  const fontSize = staffSpace * 2;
   return (
     <g>
       <text
         x={centerX}
-        y={staffBottomY - sls * 3}
+        y={staffBottomY - staffSpace * 3}
         font-size={fontSize}
         font-family="serif"
         font-weight="bold"
@@ -407,7 +430,7 @@ function TimeSig({
       </text>
       <text
         x={centerX}
-        y={staffBottomY - sls * 1}
+        y={staffBottomY - staffSpace * 1}
         font-size={fontSize}
         font-family="serif"
         font-weight="bold"
@@ -430,7 +453,7 @@ interface ChordGroupElProps {
   partIndex: number;
   measureNumber: number;
   noteColors: Record<string, string>;
-  sls: number;
+  staffSpace: number;
 }
 
 // Compute per-note x offsets within a chord to displace adjacent seconds.
@@ -461,17 +484,19 @@ function ChordGroupEl({
   partIndex,
   measureNumber,
   noteColors,
-  sls,
+  staffSpace,
 }: ChordGroupElProps) {
   const { type, notes, noteIndex, dot } = group;
   const hasNoStem = type === "whole";
 
-  const noteYs = notes.map((n) => noteY(n.pitch, clef, staffBottomY, sls));
+  const noteYs = notes.map((n) =>
+    noteY(n.pitch, clef, staffBottomY, staffSpace),
+  );
   const topY = Math.min(...noteYs);
   const bottomY = Math.max(...noteYs);
   const stemDir = stemDirection(group, clef);
-  const stemLength = sls * 3;
-  const nrx = sls * 0.55;
+  const stemLength = staffSpace * 3;
+  const nrx = staffSpace * 0.55;
   const xOffsets = chordXOffsets(notes, stemDir, nrx);
 
   let stemX: number;
@@ -510,30 +535,31 @@ function ChordGroupEl({
         return (
           <g key={id}>
             <Notehead
-              pitch={note.pitch}
               x={nx}
               y={ny}
               type={type}
               id={id}
               color={color}
               showAccidental={note.showAccidental}
-              sls={sls}
+              staffSpace={staffSpace}
             />
-            {ledgerLineYs(note.pitch, clef, staffBottomY, sls).map((ly) => (
-              <line
-                key={ly}
-                x1={nx - nrx - 4}
-                x2={nx + nrx + 4}
-                y1={ly}
-                y2={ly}
-                stroke="black"
-                stroke-width="1"
-              />
-            ))}
+            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map(
+              (ly) => (
+                <line
+                  key={ly}
+                  x1={nx - nrx - 4}
+                  x2={nx + nrx + 4}
+                  y1={ly}
+                  y2={ly}
+                  stroke="black"
+                  stroke-width="1"
+                />
+              ),
+            )}
             {dot && (
               <circle
                 cx={nx + nrx + 4}
-                cy={ny - sls / 4}
+                cy={ny - staffSpace / 4}
                 r={1.5}
                 fill={color}
               />
@@ -558,84 +584,57 @@ function Flags({
   stemX: number;
   stemTipY: number;
 }) {
-  const flags = type === "16th" ? 2 : 1;
-  const sign = stemDir === "up" ? 1 : -1;
-
+  const char =
+    stemDir === "up"
+      ? type === "16th"
+        ? G.flag16thUp
+        : G.flag8thUp
+      : type === "16th"
+        ? G.flag16thDown
+        : G.flag8thDown;
   return (
-    <g>
-      {Array.from({ length: flags }, (_, i) => {
-        const ty = stemTipY + i * 8 * sign;
-        const d =
-          stemDir === "up"
-            ? `M ${stemX} ${ty} C ${stemX + 10} ${ty + 8}, ${stemX + 10} ${ty + 18}, ${stemX + 2} ${ty + 22}`
-            : `M ${stemX} ${ty} C ${stemX - 10} ${ty - 8}, ${stemX - 10} ${ty - 18}, ${stemX - 2} ${ty - 22}`;
-        return (
-          <path
-            key={d}
-            d={d}
-            fill="none"
-            stroke="black"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-        );
-      })}
-    </g>
+    <text x={stemX} y={stemTipY} text-anchor="start">
+      {char}
+    </text>
   );
 }
 
 // ── Notehead ──────────────────────────────────────────────────────────────────
 
 function Notehead({
-  pitch,
   x,
   y,
   type,
   id,
   color,
   showAccidental,
-  sls,
+  staffSpace,
 }: {
-  pitch: Pitch;
   x: number;
   y: number;
   type: NoteType;
   id: string;
   color: string;
   showAccidental: boolean;
-  sls: number;
+  staffSpace: number;
 }) {
-  const rx = type === "whole" ? sls * 0.77 : sls * 0.55;
-  const ry = sls * 0.38;
-  const rotate = type === "whole" ? -8 : -15;
-  const open = type === "whole" || type === "half";
+  const char =
+    type === "whole"
+      ? G.noteheadWhole
+      : type === "half"
+        ? G.noteheadHalf
+        : G.noteheadBlack;
 
   return (
     <g>
       {showAccidental && (
-        <text
-          x={x - rx - 6}
-          y={y + sls * 0.35}
-          font-size={sls * 1.8}
-          fill={color}
-          text-anchor="middle"
-          dominant-baseline="middle"
-          font-family="serif"
-        >
-          ♯
+        <text x={x - staffSpace * 1.4} y={y} fill={color} text-anchor="middle">
+          {G.accSharp}
         </text>
       )}
-      <ellipse
-        id={id}
-        cx={x}
-        cy={y}
-        rx={rx}
-        ry={ry}
-        fill={open ? "white" : color}
-        stroke={open ? color : "none"}
-        stroke-width={open ? "1.5" : "0"}
-        transform={`rotate(${rotate}, ${x}, ${y})`}
-      />
+      <text id={id} x={x} y={y} fill={color} text-anchor="middle">
+        {char}
+      </text>
     </g>
   );
 }
@@ -646,92 +645,28 @@ function RestEl({
   rest,
   x,
   staffBottomY,
-  sls,
 }: {
   rest: ParsedRest;
   x: number;
   staffBottomY: number;
-  sls: number;
 }) {
   const { type, fullMeasure } = rest;
   const effectiveType = fullMeasure ? "whole" : type;
 
-  if (effectiveType === "whole") {
-    // Filled rect hanging below line 4
-    return (
-      <rect
-        x={x - 8}
-        y={staffBottomY - 4 * sls - sls * 0.5}
-        width={16}
-        height={sls * 0.5}
-        fill="black"
-      />
-    );
-  }
-  if (effectiveType === "half") {
-    // Filled rect sitting on line 3
-    return (
-      <rect
-        x={x - 8}
-        y={staffBottomY - 3 * sls}
-        width={16}
-        height={sls * 0.5}
-        fill="black"
-      />
-    );
-  }
-  if (effectiveType === "quarter") {
-    const my = staffBottomY - 2 * sls;
-    return (
-      <path
-        d={`M ${x} ${my - 12} L ${x + 5} ${my - 7} L ${x - 3} ${my - 2} L ${x + 5} ${my + 3} L ${x} ${my + 8} L ${x - 2} ${my + 12}`}
-        fill="none"
-        stroke="black"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    );
-  }
-  if (effectiveType === "eighth") {
-    const ty = staffBottomY - 3.5 * sls;
-    const by = staffBottomY - sls;
-    const dotY = staffBottomY - 2.5 * sls;
-    return (
-      <g>
-        <line x1={x} y1={ty} x2={x} y2={by} stroke="black" stroke-width="1.5" />
-        <circle cx={x + 4} cy={dotY} r={sls * 0.3} fill="black" />
-        <path
-          d={`M ${x} ${ty} Q ${x + 6} ${ty + sls * 0.5}, ${x + 4} ${dotY}`}
-          fill="none"
-          stroke="black"
-          stroke-width="1.5"
-        />
-      </g>
-    );
-  }
-  // 16th rest: two eighth-style flag heads
-  const ty = staffBottomY - 3.5 * sls;
-  const by = staffBottomY - sls * 0.5;
-  const dot1Y = staffBottomY - 2.5 * sls;
-  const dot2Y = staffBottomY - 1.5 * sls;
+  const char =
+    effectiveType === "whole"
+      ? G.restWhole
+      : effectiveType === "half"
+        ? G.restHalf
+        : effectiveType === "quarter"
+          ? G.restQuarter
+          : effectiveType === "eighth"
+            ? G.rest8th
+            : G.rest16th;
+
   return (
-    <g>
-      <line x1={x} y1={ty} x2={x} y2={by} stroke="black" stroke-width="1.5" />
-      <circle cx={x + 4} cy={dot1Y} r={sls * 0.3} fill="black" />
-      <path
-        d={`M ${x} ${ty} Q ${x + 6} ${ty + sls * 0.5}, ${x + 4} ${dot1Y}`}
-        fill="none"
-        stroke="black"
-        stroke-width="1.5"
-      />
-      <circle cx={x + 4} cy={dot2Y} r={sls * 0.3} fill="black" />
-      <path
-        d={`M ${x} ${ty + sls} Q ${x + 6} ${ty + sls * 1.5}, ${x + 4} ${dot2Y}`}
-        fill="none"
-        stroke="black"
-        stroke-width="1.5"
-      />
-    </g>
+    <text x={x} y={staffBottomY} text-anchor="middle">
+      {char}
+    </text>
   );
 }

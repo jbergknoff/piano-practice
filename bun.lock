@@ -5,6 +5,7 @@
     "": {
       "name": "piano-practice",
       "dependencies": {
+        "@fontsource/bravura": "^5.2.5",
         "midi-file": "^1.2.4",
         "preact": "^10.25.4",
       },
@@ -36,6 +37,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@1.9.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-tlbhLk+WXZmgwoIKwHIHEBZUwxml7bRJgk0X2sPyNR3S93cdRq6XulAZRQJ17FYGGzWne0fgrXBKpl7l4M87Hg=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@1.9.4", "", { "os": "win32", "cpu": "x64" }, "sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA=="],
+
+    "@fontsource/bravura": ["@fontsource/bravura@5.2.5", "", {}, "sha512-iPFVa9Z/3nQcJs/6Fc9mKeEIDHZAOWHm6shFWYhdyNlmn5H1U4pnzOuWQATUJGWHziXpoIjtNoST4vHmfLiG/w=="],
 
     "@types/bun": ["@types/bun@1.3.13", "", { "dependencies": { "bun-types": "1.3.13" } }, "sha512-9fqXWk5YIHGGnUau9TEi+qdlTYDAnOj+xLCmSTwXfAIqXr2x4tytJb43E9uCvt09zJURKXwAtkoH4nLQfzeTXw=="],
 
