@@ -306,6 +306,7 @@ function Measure({
                 rest={event}
                 x={ex}
                 staffBottomY={staffBottomY}
+                staffSpace={staffSpace}
               />
             );
           }
@@ -645,10 +646,12 @@ function RestEl({
   rest,
   x,
   staffBottomY,
+  staffSpace,
 }: {
   rest: ParsedRest;
   x: number;
   staffBottomY: number;
+  staffSpace: number;
 }) {
   const { type, fullMeasure } = rest;
   const effectiveType = fullMeasure ? "whole" : type;
@@ -665,7 +668,7 @@ function RestEl({
             : G.rest16th;
 
   return (
-    <text x={x} y={staffBottomY} text-anchor="middle">
+    <text x={x} y={staffBottomY - 2 * staffSpace} text-anchor="middle">
       {char}
     </text>
   );
