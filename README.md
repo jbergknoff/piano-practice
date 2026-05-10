@@ -1,9 +1,5 @@
 # piano-practice
 
-## Licenses
-
-Sheet music notation glyphs are rendered using the [Bravura](https://github.com/steinbergmedia/bravura) font by Steinberg Media Technologies GmbH, licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/).
-
 ## Bluetooth Piano Input
 
 The app can receive live MIDI notes from a Bluetooth-connected electric piano using the
@@ -48,3 +44,7 @@ to connect directly to the piano's BLE MIDI GATT service
 (UUID `03b80e5a-ede8-4b33-a751-6ce34ec4c700`) and subscribes to characteristic
 notifications. Incoming BLE MIDI packets are parsed to extract Note On and Note Off
 messages, which are displayed in a scrolling log (up to 200 entries).
+
+## Licenses
+
+Sheet music notation glyphs are rendered using the [Bravura](https://github.com/steinbergmedia/bravura) font by Steinberg Media Technologies GmbH, licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/).

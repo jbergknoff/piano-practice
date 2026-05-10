@@ -31,22 +31,22 @@ const BRAVURA = "Bravura, serif";
 // designed for font-size = 4 × staff-space, with its baseline at the bottom
 // staff line (y = staffBottomY in our SVG coordinate system).
 const G = {
-  gClef:         "",
-  fClef:         "",
-  accSharp:      "",
-  accFlat:       "",
-  noteheadWhole: "",
-  noteheadHalf:  "",
-  noteheadBlack: "",
-  restWhole:     "",
-  restHalf:      "",
-  restQuarter:   "",
-  rest8th:       "",
-  rest16th:      "",
-  flag8thUp:     "",
-  flag8thDown:   "",
-  flag16thUp:    "",
-  flag16thDown:  "",
+  gClef: "\uE050",
+  fClef: "\uE062",
+  accSharp: "\uE262",
+  accFlat: "\uE260",
+  noteheadWhole: "\uE0A2",
+  noteheadHalf: "\uE0A3",
+  noteheadBlack: "\uE0A4",
+  restWhole: "\uE4E3",
+  restHalf: "\uE4E4",
+  restQuarter: "\uE4E5",
+  rest8th: "\uE4E6",
+  rest16th: "\uE4E7",
+  flag8thUp: "\uE240",
+  flag8thDown: "\uE241",
+  flag16thUp: "\uE242",
+  flag16thDown: "\uE243",
 } as const;
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -476,7 +476,9 @@ function ChordGroupEl({
   const { type, notes, noteIndex, dot } = group;
   const hasNoStem = type === "whole";
 
-  const noteYs = notes.map((n) => noteY(n.pitch, clef, staffBottomY, staffSpace));
+  const noteYs = notes.map((n) =>
+    noteY(n.pitch, clef, staffBottomY, staffSpace),
+  );
   const topY = Math.min(...noteYs);
   const bottomY = Math.max(...noteYs);
   const stemDir = stemDirection(group, clef);
@@ -528,17 +530,19 @@ function ChordGroupEl({
               showAccidental={note.showAccidental}
               staffSpace={staffSpace}
             />
-            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map((ly) => (
-              <line
-                key={ly}
-                x1={nx - nrx - 4}
-                x2={nx + nrx + 4}
-                y1={ly}
-                y2={ly}
-                stroke="black"
-                stroke-width="1"
-              />
-            ))}
+            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map(
+              (ly) => (
+                <line
+                  key={ly}
+                  x1={nx - nrx - 4}
+                  x2={nx + nrx + 4}
+                  y1={ly}
+                  y2={ly}
+                  stroke="black"
+                  stroke-width="1"
+                />
+              ),
+            )}
             {dot && (
               <circle
                 cx={nx + nrx + 4}
@@ -569,8 +573,12 @@ function Flags({
 }) {
   const char =
     stemDir === "up"
-      ? (type === "16th" ? G.flag16thUp : G.flag8thUp)
-      : (type === "16th" ? G.flag16thDown : G.flag8thDown);
+      ? type === "16th"
+        ? G.flag16thUp
+        : G.flag8thUp
+      : type === "16th"
+        ? G.flag16thDown
+        : G.flag8thDown;
   return (
     <text x={stemX} y={stemTipY} text-anchor="start">
       {char}
@@ -598,19 +606,16 @@ function Notehead({
   staffSpace: number;
 }) {
   const char =
-    type === "whole" ? G.noteheadWhole :
-    type === "half"  ? G.noteheadHalf :
-    G.noteheadBlack;
+    type === "whole"
+      ? G.noteheadWhole
+      : type === "half"
+        ? G.noteheadHalf
+        : G.noteheadBlack;
 
   return (
     <g>
       {showAccidental && (
-        <text
-          x={x - staffSpace * 1.4}
-          y={y}
-          fill={color}
-          text-anchor="middle"
-        >
+        <text x={x - staffSpace * 1.4} y={y} fill={color} text-anchor="middle">
           {G.accSharp}
         </text>
       )}
@@ -636,11 +641,15 @@ function RestEl({
   const effectiveType = fullMeasure ? "whole" : type;
 
   const char =
-    effectiveType === "whole"   ? G.restWhole :
-    effectiveType === "half"    ? G.restHalf :
-    effectiveType === "quarter" ? G.restQuarter :
-    effectiveType === "eighth"  ? G.rest8th :
-    G.rest16th;
+    effectiveType === "whole"
+      ? G.restWhole
+      : effectiveType === "half"
+        ? G.restHalf
+        : effectiveType === "quarter"
+          ? G.restQuarter
+          : effectiveType === "eighth"
+            ? G.rest8th
+            : G.rest16th;
 
   return (
     <text x={x} y={staffBottomY} text-anchor="middle">
