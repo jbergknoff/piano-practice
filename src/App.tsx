@@ -193,7 +193,7 @@ export function App() {
         <PlaybackControls
           isPlaying={isPlaying}
           bpm={bpm}
-          currentBeat={currentBeat}
+          currentBeat={playbackBeat ?? 0}
           totalBeats={musicxml.totalBeats}
           timeSigNum={musicxml.timeSigNum}
           waitMode={waitMode.active}
