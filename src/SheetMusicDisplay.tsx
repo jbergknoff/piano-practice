@@ -172,11 +172,7 @@ export function SheetMusicDisplay({
       return;
     }
     const el = containerRef.current;
-    const margin = 80;
-    const relX = cursorX - el.scrollLeft;
-    if (relX > el.clientWidth - margin || relX < margin) {
-      el.scrollLeft = Math.max(0, cursorX - el.clientWidth * 0.3);
-    }
+    el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
   }, [cursorX]);
 
   const cursorY1 =
