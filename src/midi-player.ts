@@ -1,15 +1,29 @@
 import type { PlaybackNote } from "./midi-to-musicxml";
 
+// How far ahead (seconds) to schedule notes in each scheduler tick.
+const SCHEDULE_AHEAD = 0.3;
+// Scheduler tick interval (ms).
+const SCHEDULER_INTERVAL = 25;
+// Small offset so the very first notes are never scheduled in the past.
+const LOOKAHEAD = 0.05;
+
 export class MidiPlayer {
   private audioCtx: AudioContext | null = null;
   private activeOscillators: OscillatorNode[] = [];
   private activeGains: AudioNode[] = [];
+  private schedulerTimer: ReturnType<typeof setInterval> | null = null;
+  private animFrameId: number | null = null;
+
+  // Sorted subset of notes that still need scheduling in the current playback.
+  private playQueue: PlaybackNote[] = [];
+  private playQueueIndex = 0;
+
+  // AudioContext.currentTime at which beat 0 of the piece plays.
   private startAudioTime = 0;
   private resumeBeat = 0;
   private _bpm: number;
   private notes: PlaybackNote[];
   private totalBeats: number;
-  private animFrameId: number | null = null;
   private _state: "stopped" | "playing" | "paused" = "stopped";
 
   onPositionUpdate?: (beat: number) => void;
@@ -31,8 +45,6 @@ export class MidiPlayer {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext();
     }
-    // Always resume — harmless if already running, required on first use in
-    // browsers that start AudioContext suspended until a user gesture.
     await this.audioCtx.resume();
 
     const fromBeat = this._state === "paused" ? this.resumeBeat : 0;
@@ -43,13 +55,13 @@ export class MidiPlayer {
   pause(): void {
     if (this._state !== "playing") return;
     this.resumeBeat = this.elapsedBeat();
-    this.cancelNodes();
+    this.cancelAll();
     this.stopTick();
     this._state = "paused";
   }
 
   stop(): void {
-    this.cancelNodes();
+    this.cancelAll();
     this.stopTick();
     this.resumeBeat = 0;
     this._state = "stopped";
@@ -59,11 +71,10 @@ export class MidiPlayer {
   setBpm(bpm: number): void {
     if (bpm === this._bpm) return;
     const wasPlaying = this._state === "playing";
-    // Capture beat before changing _bpm (elapsedBeat uses current _bpm)
     const beat = wasPlaying ? this.elapsedBeat() : this.resumeBeat;
 
     if (wasPlaying) {
-      this.cancelNodes();
+      this.cancelAll();
       this.stopTick();
     }
 
@@ -75,7 +86,7 @@ export class MidiPlayer {
   }
 
   dispose(): void {
-    this.cancelNodes();
+    this.cancelAll();
     this.stopTick();
     void this.audioCtx?.close();
     this.audioCtx = null;
@@ -83,37 +94,58 @@ export class MidiPlayer {
 
   private elapsedBeat(): number {
     if (!this.audioCtx || this._state === "stopped") return this.resumeBeat;
-    const elapsedSecs = this.audioCtx.currentTime - this.startAudioTime;
-    return this.resumeBeat + elapsedSecs * (this._bpm / 60);
+    return (this.audioCtx.currentTime - this.startAudioTime) * (this._bpm / 60);
   }
 
   private startSchedule(fromBeat: number): void {
     if (!this.audioCtx) return;
     const secsPerBeat = 60 / this._bpm;
 
-    // Small lookahead so the first note is never scheduled in the past by the
-    // time the Web Audio engine processes it.
-    const LOOKAHEAD = 0.08;
-    const now = this.audioCtx.currentTime + LOOKAHEAD;
+    // startAudioTime is the AudioContext time at which beat 0 of the piece
+    // would play.  Adding LOOKAHEAD ensures the first scheduled note is always
+    // slightly in the future when the engine picks it up.
+    this.startAudioTime =
+      this.audioCtx.currentTime + LOOKAHEAD - fromBeat * secsPerBeat;
 
     this.resumeBeat = fromBeat;
-    // Adjust startAudioTime so elapsedBeat() reads 0 when the first note plays.
-    this.startAudioTime = now - fromBeat * secsPerBeat;
 
-    for (const note of this.notes) {
-      if (note.tieStop) continue;
-      const noteEnd = note.startBeat + note.durationBeats;
-      if (noteEnd <= fromBeat) continue;
+    // Build a sorted queue of notes that haven't finished yet.
+    this.playQueue = this.notes
+      .filter((n) => !n.tieStop && n.startBeat + n.durationBeats > fromBeat)
+      .sort((a, b) => a.startBeat - b.startBeat);
+    this.playQueueIndex = 0;
 
-      const noteStart = now + (note.startBeat - fromBeat) * secsPerBeat;
-      const durationSecs = note.durationBeats * secsPerBeat;
-      this.scheduleNote(note.noteNumber, noteStart, durationSecs, note.velocity);
-    }
-
+    this.scheduleUpcoming();
+    this.schedulerTimer = setInterval(
+      () => this.scheduleUpcoming(),
+      SCHEDULER_INTERVAL,
+    );
     this.startTick();
   }
 
-  private cancelNodes(): void {
+  // Called every SCHEDULER_INTERVAL ms: schedule any notes whose start time
+  // falls within the next SCHEDULE_AHEAD seconds.
+  private scheduleUpcoming(): void {
+    if (!this.audioCtx) return;
+    const secsPerBeat = 60 / this._bpm;
+    const horizon = this.audioCtx.currentTime + SCHEDULE_AHEAD;
+
+    while (this.playQueueIndex < this.playQueue.length) {
+      const note = this.playQueue[this.playQueueIndex];
+      const noteStart = this.startAudioTime + note.startBeat * secsPerBeat;
+      if (noteStart > horizon) break;
+
+      const durationSecs = note.durationBeats * secsPerBeat;
+      this.scheduleNote(note.noteNumber, noteStart, durationSecs, note.velocity);
+      this.playQueueIndex++;
+    }
+  }
+
+  private cancelAll(): void {
+    if (this.schedulerTimer !== null) {
+      clearInterval(this.schedulerTimer);
+      this.schedulerTimer = null;
+    }
     for (const osc of this.activeOscillators) {
       try {
         osc.stop(0);
@@ -125,6 +157,8 @@ export class MidiPlayer {
     }
     this.activeOscillators = [];
     this.activeGains = [];
+    this.playQueue = [];
+    this.playQueueIndex = 0;
   }
 
   private scheduleNote(
@@ -141,7 +175,6 @@ export class MidiPlayer {
     const releaseTime = 0.35;
     const totalDuration = duration + releaseTime;
 
-    // Low-pass filter — brighter at higher velocities, mimicking piano hammer strike
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
     filter.frequency.value = 800 + (velocity / 127) * 3200;
@@ -149,17 +182,21 @@ export class MidiPlayer {
     filter.connect(ctx.destination);
     this.activeGains.push(filter);
 
-    // Main amplitude envelope
     const gain = ctx.createGain();
     gain.connect(filter);
     gain.gain.setValueAtTime(0, startTime);
     gain.gain.linearRampToValueAtTime(vol, startTime + 0.012);
-    gain.gain.exponentialRampToValueAtTime(vol * 0.55, startTime + 0.012 + 0.18);
+    gain.gain.exponentialRampToValueAtTime(
+      vol * 0.55,
+      startTime + 0.012 + 0.18,
+    );
     gain.gain.setValueAtTime(vol * 0.55, startTime + duration);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration + releaseTime);
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      startTime + duration + releaseTime,
+    );
     this.activeGains.push(gain);
 
-    // Fundamental oscillator (triangle wave — richer than sine)
     const osc1 = ctx.createOscillator();
     osc1.frequency.value = freq;
     osc1.type = "triangle";
@@ -168,7 +205,6 @@ export class MidiPlayer {
     osc1.stop(startTime + totalDuration);
     this.activeOscillators.push(osc1);
 
-    // 2nd harmonic at lower amplitude
     const gain2 = ctx.createGain();
     gain2.gain.value = 0.22;
     gain2.connect(gain);
@@ -182,7 +218,6 @@ export class MidiPlayer {
     osc2.stop(startTime + totalDuration);
     this.activeOscillators.push(osc2);
 
-    // 3rd harmonic — very subtle
     const gain3 = ctx.createGain();
     gain3.gain.value = 0.08;
     gain3.connect(gain);
@@ -206,7 +241,7 @@ export class MidiPlayer {
 
       if (beat >= this.totalBeats) {
         this.stopTick();
-        this.cancelNodes();
+        this.cancelAll();
         this._state = "stopped";
         this.resumeBeat = 0;
         this.onPositionUpdate?.(0);
