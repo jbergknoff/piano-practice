@@ -26,5 +26,6 @@ test: node_modules
 
 build: node_modules
 	$(bun) build src/main.tsx --outdir dist --minify
+	cp node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2 dist/bravura.woff2
 
 pr-ready: format lint typecheck test build
