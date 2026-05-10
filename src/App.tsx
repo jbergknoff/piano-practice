@@ -63,7 +63,9 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
-  // Rebuild player whenever the conversion result changes
+  // Rebuild player whenever the conversion result changes.
+  // bpm is intentionally excluded: bpm changes go through player.setBpm, not a rebuild.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
   useEffect(() => {
     playerRef.current?.dispose();
     playerRef.current = null;
@@ -88,8 +90,6 @@ export function App() {
       playerRef.current?.dispose();
       playerRef.current = null;
     };
-    // bpm is intentionally excluded — setBpm on the player handles that path
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversionResult]);
 
   async function handlePlayPause() {

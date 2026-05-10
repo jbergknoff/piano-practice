@@ -19,12 +19,9 @@ export function PlaybackControls({
   onStop,
   onBpmChange,
 }: PlaybackControlsProps) {
-  const currentMeasure = totalBeats > 0
-    ? Math.floor(currentBeat / timeSigNum) + 1
-    : 1;
-  const totalMeasures = totalBeats > 0
-    ? Math.ceil(totalBeats / timeSigNum)
-    : 0;
+  const currentMeasure =
+    totalBeats > 0 ? Math.floor(currentBeat / timeSigNum) + 1 : 1;
+  const totalMeasures = totalBeats > 0 ? Math.ceil(totalBeats / timeSigNum) : 0;
 
   function handleBpmInput(e: Event) {
     const val = Number((e.target as HTMLInputElement).value);
@@ -32,13 +29,15 @@ export function PlaybackControls({
   }
 
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "12px",
-      padding: "10px 4px",
-      flexWrap: "wrap",
-    }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "10px 4px",
+        flexWrap: "wrap",
+      }}
+    >
       <button
         type="button"
         onClick={onPlayPause}
@@ -76,15 +75,15 @@ export function PlaybackControls({
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <label style={{ fontSize: "14px", whiteSpace: "nowrap" }}>
           BPM:
+          <input
+            type="range"
+            min={20}
+            max={300}
+            value={bpm}
+            onInput={handleBpmInput}
+            style={{ width: "120px" }}
+          />
         </label>
-        <input
-          type="range"
-          min={20}
-          max={300}
-          value={bpm}
-          onInput={handleBpmInput}
-          style={{ width: "120px" }}
-        />
         <input
           type="number"
           min={20}
