@@ -67,15 +67,21 @@ function computeCursorX(
 
     if (acc + dur > targetDiv) {
       const frac = (targetDiv - acc) / dur;
+      if (i === 0) {
+        // Anchor the first event at the barline so the cursor arrives from the
+        // previous measure without a jump: at frac=0 the cursor is exactly on
+        // the barline; by frac=1 it has crossed the first event.
+        const barlineX = layout.measureXs[measureIndex];
+        return barlineX + frac * (eventXs[0] + eventWidth - barlineX);
+      }
       return eventXs[i] + frac * eventWidth;
     }
     acc += dur;
   }
 
-  // Past all events — return end of measure content
-  const mX = layout.measureXs[measureIndex];
-  const mW = layout.measureWidths[measureIndex];
-  return mX + mW - MEASURE_PADDING_RIGHT;
+  // Return the next barline so the end of this measure matches the start of
+  // the next (which also begins at the barline via the i===0 branch above).
+  return layout.measureXs[measureIndex] + layout.measureWidths[measureIndex];
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
