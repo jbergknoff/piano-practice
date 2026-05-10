@@ -275,7 +275,9 @@ function buildPartMeasuresXml(
       for (let k = 0; k < chord.length; k++) {
         const p = chord[k];
         const pitch = noteNumberToPitch(p.noteNumber);
-        lines.push(renderNote(pitch, displayDur, p.tieStop, p.tieStart, k > 0, ind));
+        lines.push(
+          renderNote(pitch, displayDur, p.tieStop, p.tieStart, k > 0, ind),
+        );
       }
 
       cursor = startTick + displayDur * grid;
