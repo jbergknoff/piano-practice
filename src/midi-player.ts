@@ -136,7 +136,12 @@ export class MidiPlayer {
       if (noteStart > horizon) break;
 
       const durationSecs = note.durationBeats * secsPerBeat;
-      this.scheduleNote(note.noteNumber, noteStart, durationSecs, note.velocity);
+      this.scheduleNote(
+        note.noteNumber,
+        noteStart,
+        durationSecs,
+        note.velocity,
+      );
       this.playQueueIndex++;
     }
   }
