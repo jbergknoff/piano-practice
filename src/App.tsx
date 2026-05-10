@@ -1,6 +1,12 @@
 import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { LivePianoInput } from "./LivePianoInput";
 import { MidiPlayer } from "./midi-player";
 import {
@@ -94,10 +100,14 @@ export function App() {
 
   // One wait point per unique startBeat; note numbers deduplicated across parts.
   const waitPoints = useMemo<WaitPoint[]>(() => {
-    if (!musicxml) return [];
+    if (!musicxml) {
+      return [];
+    }
     const beatMap = new Map<number, Set<number>>();
     for (const note of musicxml.notes) {
-      if (note.tieStop) continue;
+      if (note.tieStop) {
+        continue;
+      }
       const existing = beatMap.get(note.startBeat);
       if (existing) {
         existing.add(note.noteNumber);
@@ -150,7 +160,9 @@ export function App() {
   }, [musicxml]);
 
   async function handlePlayPause() {
-    if (waitMode) return;
+    if (waitMode) {
+      return;
+    }
     const player = playerRef.current;
     if (!player) {
       return;
@@ -218,7 +230,9 @@ export function App() {
   // Stable callback forwarded from LivePianoInput; advances the cursor in wait mode.
   const handleNoteEvent = useCallback(
     (noteNumber: number, kind: "on" | "off") => {
-      if (!waitModeRef.current || waitPointsRef.current.length === 0) return;
+      if (!waitModeRef.current || waitPointsRef.current.length === 0) {
+        return;
+      }
 
       const held = heldNotesRef.current;
       if (kind === "on") {
@@ -238,7 +252,9 @@ export function App() {
 
       const points = waitPointsRef.current;
       const idx = waitPointIndexRef.current;
-      if (idx >= points.length) return;
+      if (idx >= points.length) {
+        return;
+      }
 
       const expected = points[idx].noteNumbers;
       if (
