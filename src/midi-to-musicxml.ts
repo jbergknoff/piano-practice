@@ -264,19 +264,23 @@ function buildPartMeasuresXml(
       while (j < mParts.length && mParts[j].startTick === startTick) j++;
       const chord = mParts.slice(i, j);
 
+      // Use the space to the next chord's start as the displayed duration so
+      // that short MIDI note-off times (performance articulation) don't create
+      // spurious rests between notes.  Audio playback keeps the original MIDI
+      // duration via durationTicks.
+      const nextStartTick = j < mParts.length ? mParts[j].startTick : mEnd;
+      const spaceGrid = Math.round((nextStartTick - startTick) / grid);
+      const displayDur = STANDARD_DURATIONS.find((d) => d <= spaceGrid) ?? 1;
+
       for (let k = 0; k < chord.length; k++) {
         const p = chord[k];
-        const durRaw = Math.round(p.durationTicks / grid);
-        const dur = DURATION_TYPE.has(durRaw) ? durRaw : snapToStandard(durRaw);
         const pitch = noteNumberToPitch(p.noteNumber);
-        lines.push(renderNote(pitch, dur, p.tieStop, p.tieStart, k > 0, ind));
+        lines.push(
+          renderNote(pitch, displayDur, p.tieStop, p.tieStart, k > 0, ind),
+        );
       }
 
-      const firstDurRaw = Math.round(chord[0].durationTicks / grid);
-      const firstDur = DURATION_TYPE.has(firstDurRaw)
-        ? firstDurRaw
-        : snapToStandard(firstDurRaw);
-      cursor = startTick + firstDur * grid;
+      cursor = startTick + displayDur * grid;
       i = j;
     }
 
