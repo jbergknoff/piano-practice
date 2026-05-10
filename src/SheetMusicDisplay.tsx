@@ -1,7 +1,10 @@
-import { useMemo } from "preact/hooks";
+import { useEffect, useMemo, useRef } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
+  DIVISIONS,
   FLAT_POSITIONS,
+  MEASURE_PADDING_RIGHT,
+  MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
   eventXPositions,
   headerWidth,
@@ -49,6 +52,71 @@ const G = {
   flag16thDown: "\uE243",
 } as const;
 
+// ── Cursor position helper ────────────────────────────────────────────────────
+
+function computeCursorX(
+  beat: number,
+  score: ParsedScore,
+  layout: ResolvedLayout,
+): number | null {
+  const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
+  // Convert beat (in quarter notes) to beat count in the time signature's unit
+  const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
+  const measureIndex = Math.floor(beat / beatsPerMeasure);
+  const beatInMeasure = beat % beatsPerMeasure;
+
+  if (measureIndex >= layout.measureXs.length) {
+    return null;
+  }
+
+  const measure = score.parts[0]?.measures[measureIndex];
+  if (!measure) {
+    return null;
+  }
+
+  const isFirst = measureIndex === 0;
+  const fifths = score.parts[0]?.keySig?.fifths ?? 0;
+  const eventXs = eventXPositions(
+    measure.events,
+    layout.measureXs[measureIndex],
+    isFirst,
+    fifths,
+    layout.noteUnitWidth,
+  );
+
+  // Walk through measure events to find the X position for the current beat.
+  // Duration in MusicXML divisions; 4 divisions = 1 quarter note.
+  const divisionsPerBeat = DIVISIONS * (4 / timeSig.beatType);
+  const targetDiv = beatInMeasure * divisionsPerBeat;
+
+  let acc = 0;
+  for (let i = 0; i < measure.events.length; i++) {
+    const event = measure.events[i];
+    const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
+    const eventWidth = Math.max(
+      (dur / DIVISIONS) * layout.noteUnitWidth,
+      MIN_EVENT_ADVANCE,
+    );
+
+    if (acc + dur > targetDiv) {
+      const frac = (targetDiv - acc) / dur;
+      if (i === 0) {
+        // Anchor the first event at the barline so the cursor arrives from the
+        // previous measure without a jump: at frac=0 the cursor is exactly on
+        // the barline; by frac=1 it has crossed the first event.
+        const barlineX = layout.measureXs[measureIndex];
+        return barlineX + frac * (eventXs[0] + eventWidth - barlineX);
+      }
+      return eventXs[i] + frac * eventWidth;
+    }
+    acc += dur;
+  }
+
+  // Return the next barline so the end of this measure matches the start of
+  // the next (which also begins at the barline via the i===0 branch above).
+  return layout.measureXs[measureIndex] + layout.measureWidths[measureIndex];
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 interface SheetMusicDisplayProps {
@@ -56,6 +124,7 @@ interface SheetMusicDisplayProps {
   layout?: LayoutConfig;
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
+  playbackBeat?: number;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
 }
@@ -65,6 +134,7 @@ export function SheetMusicDisplay({
   layout: layoutConfig,
   noteColors = {},
   visibleParts,
+  playbackBeat,
   glyphFontSize,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -90,8 +160,32 @@ export function SheetMusicDisplay({
 
   const fontSize = glyphFontSize ?? layout.staffSpace * 4;
 
+  const cursorX =
+    playbackBeat !== undefined
+      ? computeCursorX(playbackBeat, score, layout)
+      : null;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (cursorX === null || !containerRef.current) {
+      return;
+    }
+    const el = containerRef.current;
+    el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
+  }, [cursorX]);
+
+  const cursorY1 =
+    layout.staffBottomYs.length > 0
+      ? layout.staffBottomYs[0] - 4 * layout.staffSpace
+      : 0;
+  const cursorY2 =
+    layout.staffBottomYs.length > 0
+      ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
+      : layout.totalHeight;
+
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div ref={containerRef} style={{ overflowX: "auto" }}>
       {/*
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
@@ -115,6 +209,17 @@ export function SheetMusicDisplay({
             visible={visibleParts ? visibleParts.has(part.id) : true}
           />
         ))}
+        {cursorX !== null && (
+          <line
+            x1={cursorX}
+            x2={cursorX}
+            y1={cursorY1 - 4}
+            y2={cursorY2 + 4}
+            stroke="#1976d2"
+            stroke-width="2"
+            stroke-opacity="0.75"
+          />
+        )}
       </svg>
     </div>
   );
@@ -373,7 +478,9 @@ function KeySig({
   staffSpace: number;
 }) {
   const { fifths } = keySig;
-  if (fifths === 0) return null;
+  if (fifths === 0) {
+    return null;
+  }
 
   const positions =
     fifths > 0
