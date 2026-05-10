@@ -25,7 +25,7 @@ export function resolveLayout(
   score: ParsedScore,
   config: LayoutConfig = {},
 ): ResolvedLayout {
-  const sls = config.staffLineSpacing ?? 10;
+  const staffSpace = config.staffLineSpacing ?? 10;
   const noteUnitWidth = config.noteUnitWidth ?? 48;
   const partGap = config.partGap ?? 40;
   const canvasPadding = config.canvasPadding ?? 20;
@@ -37,7 +37,7 @@ export function resolveLayout(
   // Compute width of each measure (shared across all parts)
   const measureWidths =
     firstPart?.measures.map((m, i) =>
-      measureWidth(m, i === 0, firstKeySig.fifths, sls, noteUnitWidth),
+      measureWidth(m, i === 0, firstKeySig.fifths, staffSpace, noteUnitWidth),
     ) ?? [];
 
   // Accumulate measure X positions
@@ -49,10 +49,10 @@ export function resolveLayout(
   }
 
   const totalWidth = x;
-  const staffStride = 4 * sls + partGap;
+  const staffStride = 4 * staffSpace + partGap;
 
   const staffBottomYs = score.parts.map(
-    (_, p) => canvasPadding + ledgerMargin + p * staffStride + 4 * sls,
+    (_, p) => canvasPadding + ledgerMargin + p * staffStride + 4 * staffSpace,
   );
 
   const totalHeight =
@@ -64,7 +64,7 @@ export function resolveLayout(
     canvasPadding;
 
   return {
-    sls,
+    staffSpace,
     noteUnitWidth,
     measureXs,
     measureWidths,
@@ -78,7 +78,7 @@ function measureWidth(
   measure: ParsedMeasure,
   isFirst: boolean,
   fifths: number,
-  _sls: number,
+  _staffSpace: number,
   noteUnitWidth: number,
 ): number {
   const hdrW = isFirst ? headerWidth(fifths) : 0;
@@ -111,11 +111,11 @@ export function noteY(
   pitch: Pitch,
   clef: { sign: "G" | "F" },
   staffBottomY: number,
-  sls: number,
+  staffSpace: number,
 ): number {
   const bottomRef = clef.sign === "G" ? TREBLE_BOTTOM : BASS_BOTTOM;
   const stepsFromBottom = diatonicIndex(pitch) - bottomRef;
-  return staffBottomY - stepsFromBottom * (sls / 2);
+  return staffBottomY - stepsFromBottom * (staffSpace / 2);
 }
 
 export function stemDirection(
@@ -137,7 +137,7 @@ export function ledgerLineYs(
   pitch: Pitch,
   clef: { sign: "G" | "F" },
   staffBottomY: number,
-  sls: number,
+  staffSpace: number,
 ): number[] {
   const bottomRef = clef.sign === "G" ? TREBLE_BOTTOM : BASS_BOTTOM;
   const stepsFromBottom = diatonicIndex(pitch) - bottomRef;
@@ -145,12 +145,12 @@ export function ledgerLineYs(
   if (stepsFromBottom < 0) {
     // Lines below the staff: at steps -2, -4, …
     for (let s = -2; s >= stepsFromBottom; s -= 2) {
-      ys.push(staffBottomY - s * (sls / 2));
+      ys.push(staffBottomY - s * (staffSpace / 2));
     }
   } else if (stepsFromBottom > 8) {
     // Lines above the staff: at steps 10, 12, …
     for (let s = 10; s <= stepsFromBottom; s += 2) {
-      ys.push(staffBottomY - s * (sls / 2));
+      ys.push(staffBottomY - s * (staffSpace / 2));
     }
   }
   return ys;

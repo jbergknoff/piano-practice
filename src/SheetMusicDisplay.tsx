@@ -29,25 +29,27 @@ import type {
 
 const BRAVURA = "Bravura, serif";
 
-// SMuFL Private Use Area codepoints, all designed for font-size = 4 × staff-space.
-// Baseline sits at the bottom staff line (y = staffBottomY in our coordinate system).
+// SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
+// meaningful when rendered with a SMuFL font such as Bravura.  Each glyph is
+// designed for font-size = 4 × staff-space, with its baseline at the bottom
+// staff line (y = staffBottomY in our SVG coordinate system).
 const G = {
-  gClef:        "",
-  fClef:        "",
-  accSharp:     "",
-  accFlat:      "",
-  noteheadWhole: "",
-  noteheadHalf:  "",
-  noteheadBlack: "",
-  restWhole:    "",
-  restHalf:     "",
-  restQuarter:  "",
-  rest8th:      "",
-  rest16th:     "",
-  flag8thUp:    "",
-  flag8thDown:  "",
-  flag16thUp:   "",
-  flag16thDown: "",
+  gClef: "\uE050",
+  fClef: "\uE062",
+  accSharp: "\uE262",
+  accFlat: "\uE260",
+  noteheadWhole: "\uE0A2",
+  noteheadHalf: "\uE0A3",
+  noteheadBlack: "\uE0A4",
+  restWhole: "\uE4E3",
+  restHalf: "\uE4E4",
+  restQuarter: "\uE4E5",
+  rest8th: "\uE4E6",
+  rest16th: "\uE4E7",
+  flag8thUp: "\uE240",
+  flag8thDown: "\uE241",
+  flag16thUp: "\uE242",
+  flag16thDown: "\uE243",
 } as const;
 
 // ── Cursor position helper ────────────────────────────────────────────────────
@@ -87,7 +89,10 @@ function computeCursorX(
   for (let i = 0; i < measure.events.length; i++) {
     const event = measure.events[i];
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
-    const eventWidth = Math.max((dur / DIVISIONS) * layout.noteUnitWidth, MIN_EVENT_ADVANCE);
+    const eventWidth = Math.max(
+      (dur / DIVISIONS) * layout.noteUnitWidth,
+      MIN_EVENT_ADVANCE,
+    );
 
     if (acc + dur > targetDiv) {
       const frac = (targetDiv - acc) / dur;
@@ -116,6 +121,8 @@ interface SheetMusicDisplayProps {
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
   playbackBeat?: number;
+  /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
+  glyphFontSize?: number;
 }
 
 export function SheetMusicDisplay({
@@ -124,6 +131,7 @@ export function SheetMusicDisplay({
   noteColors = {},
   visibleParts,
   playbackBeat,
+  glyphFontSize,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -146,6 +154,8 @@ export function SheetMusicDisplay({
     return <p>No music to display.</p>;
   }
 
+  const fontSize = glyphFontSize ?? layout.staffSpace * 4;
+
   const cursorX =
     playbackBeat !== undefined
       ? computeCursorX(playbackBeat, score, layout)
@@ -165,7 +175,7 @@ export function SheetMusicDisplay({
 
   const cursorY1 =
     layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[0] - 4 * layout.sls
+      ? layout.staffBottomYs[0] - 4 * layout.staffSpace
       : 0;
   const cursorY2 =
     layout.staffBottomYs.length > 0
@@ -174,10 +184,15 @@ export function SheetMusicDisplay({
 
   return (
     <div ref={containerRef} style={{ overflowX: "auto" }}>
+      {/*
+        Set font-family and font-size once here so every <text> element inside
+        inherits them automatically.  Components that use a different font
+        (e.g. TimeSig) override via their own attributes.
+      */}
       <svg
         width={layout.totalWidth}
         height={layout.totalHeight}
-        style={{ display: "block" }}
+        style={{ display: "block", fontFamily: BRAVURA, fontSize: fontSize }}
         role="img"
         aria-label="Sheet music"
       >
@@ -227,13 +242,13 @@ function Staff({
   noteColors,
   visible,
 }: StaffProps) {
-  const { sls, totalWidth, measureXs, measureWidths } = layout;
+  const { staffSpace, totalWidth, measureXs, measureWidths } = layout;
   return (
     <g visibility={visible ? "visible" : "hidden"}>
       <StaffLines
         totalWidth={totalWidth}
         staffBottomY={staffBottomY}
-        sls={sls}
+        staffSpace={staffSpace}
       />
       {part.measures.map((measure, m) => (
         <Measure
@@ -258,7 +273,7 @@ function Staff({
             measureWidths[measureWidths.length - 1]
           }
           staffBottomY={staffBottomY}
-          sls={sls}
+          staffSpace={staffSpace}
         />
       )}
     </g>
@@ -270,12 +285,12 @@ function Staff({
 function StaffLines({
   totalWidth,
   staffBottomY,
-  sls,
-}: { totalWidth: number; staffBottomY: number; sls: number }) {
+  staffSpace,
+}: { totalWidth: number; staffBottomY: number; staffSpace: number }) {
   return (
     <g>
       {[0, 1, 2, 3, 4].map((i) => {
-        const y = staffBottomY - i * sls;
+        const y = staffBottomY - i * staffSpace;
         return (
           <line
             key={i}
@@ -297,13 +312,13 @@ function StaffLines({
 function Barline({
   x,
   staffBottomY,
-  sls,
-}: { x: number; staffBottomY: number; sls: number }) {
+  staffSpace,
+}: { x: number; staffBottomY: number; staffSpace: number }) {
   return (
     <line
       x1={x}
       x2={x}
-      y1={staffBottomY - 4 * sls}
+      y1={staffBottomY - 4 * staffSpace}
       y2={staffBottomY}
       stroke="black"
       stroke-width="1.5"
@@ -338,7 +353,7 @@ function Measure({
   layout,
   noteColors,
 }: MeasureProps) {
-  const { sls, noteUnitWidth } = layout;
+  const { staffSpace, noteUnitWidth } = layout;
   const eventXs = eventXPositions(
     measure.events,
     x,
@@ -354,22 +369,27 @@ function Measure({
 
   return (
     <g>
-      <Barline x={x} staffBottomY={staffBottomY} sls={sls} />
+      <Barline x={x} staffBottomY={staffBottomY} staffSpace={staffSpace} />
       {isFirstMeasure && (
         <>
-          <Clef clef={clef} x={clefX} staffBottomY={staffBottomY} sls={sls} />
+          <Clef
+            clef={clef}
+            x={clefX}
+            staffBottomY={staffBottomY}
+            staffSpace={staffSpace}
+          />
           <KeySig
             keySig={keySig}
             clef={clef}
             x={keySigX}
             staffBottomY={staffBottomY}
-            sls={sls}
+            staffSpace={staffSpace}
           />
           <TimeSig
             timeSig={measure.timeSig ?? { beats: 4, beatType: 4 }}
             x={timeSigX}
             staffBottomY={staffBottomY}
-            sls={sls}
+            staffSpace={staffSpace}
           />
         </>
       )}
@@ -389,7 +409,6 @@ function Measure({
                 rest={event}
                 x={ex}
                 staffBottomY={staffBottomY}
-                sls={sls}
               />
             );
           }
@@ -404,7 +423,7 @@ function Measure({
               partIndex={partIndex}
               measureNumber={measure.number}
               noteColors={noteColors}
-              sls={sls}
+              staffSpace={staffSpace}
             />
           );
         });
@@ -419,21 +438,22 @@ function Clef({
   clef,
   x,
   staffBottomY,
-  sls,
+  staffSpace,
 }: {
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
-  sls: number;
+  staffSpace: number;
 }) {
   const char = clef.sign === "G" ? G.gClef : G.fClef;
+  // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
+  // F clef baseline sits on the F line (4th line = 3 staffSpaces up).
+  const y =
+    clef.sign === "G"
+      ? staffBottomY - staffSpace
+      : staffBottomY - 3 * staffSpace;
   return (
-    <text
-      x={x + 2}
-      y={staffBottomY}
-      font-size={sls * 4}
-      font-family={BRAVURA}
-    >
+    <text x={x + 2} y={y}>
       {char}
     </text>
   );
@@ -446,13 +466,13 @@ function KeySig({
   clef,
   x,
   staffBottomY,
-  sls,
+  staffSpace,
 }: {
   keySig: { fifths: number };
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
-  sls: number;
+  staffSpace: number;
 }) {
   const { fifths } = keySig;
   if (fifths === 0) return null;
@@ -462,19 +482,17 @@ function KeySig({
       ? SHARP_POSITIONS[clef.sign].slice(0, fifths)
       : FLAT_POSITIONS[clef.sign].slice(0, -fifths);
   const symbol = fifths > 0 ? G.accSharp : G.accFlat;
-  const spacing = sls * 1.1;
+  const spacing = staffSpace * 1.1;
 
   return (
     <g>
       {positions.map((pitch, i) => {
-        const y = noteY(pitch, clef, staffBottomY, sls);
+        const y = noteY(pitch, clef, staffBottomY, staffSpace);
         return (
           <text
             key={`${pitch.step}${pitch.octave}`}
             x={x + i * spacing}
             y={y}
-            font-size={sls * 4}
-            font-family={BRAVURA}
             text-anchor="middle"
           >
             {symbol}
@@ -491,20 +509,20 @@ function TimeSig({
   timeSig,
   x,
   staffBottomY,
-  sls,
+  staffSpace,
 }: {
   timeSig: { beats: number; beatType: number };
   x: number;
   staffBottomY: number;
-  sls: number;
+  staffSpace: number;
 }) {
   const centerX = x + 10;
-  const fontSize = sls * 2;
+  const fontSize = staffSpace * 2;
   return (
     <g>
       <text
         x={centerX}
-        y={staffBottomY - sls * 3}
+        y={staffBottomY - staffSpace * 3}
         font-size={fontSize}
         font-family="serif"
         font-weight="bold"
@@ -515,7 +533,7 @@ function TimeSig({
       </text>
       <text
         x={centerX}
-        y={staffBottomY - sls * 1}
+        y={staffBottomY - staffSpace * 1}
         font-size={fontSize}
         font-family="serif"
         font-weight="bold"
@@ -538,7 +556,7 @@ interface ChordGroupElProps {
   partIndex: number;
   measureNumber: number;
   noteColors: Record<string, string>;
-  sls: number;
+  staffSpace: number;
 }
 
 // Compute per-note x offsets within a chord to displace adjacent seconds.
@@ -569,17 +587,19 @@ function ChordGroupEl({
   partIndex,
   measureNumber,
   noteColors,
-  sls,
+  staffSpace,
 }: ChordGroupElProps) {
   const { type, notes, noteIndex, dot } = group;
   const hasNoStem = type === "whole";
 
-  const noteYs = notes.map((n) => noteY(n.pitch, clef, staffBottomY, sls));
+  const noteYs = notes.map((n) =>
+    noteY(n.pitch, clef, staffBottomY, staffSpace),
+  );
   const topY = Math.min(...noteYs);
   const bottomY = Math.max(...noteYs);
   const stemDir = stemDirection(group, clef);
-  const stemLength = sls * 3;
-  const nrx = sls * 0.55;
+  const stemLength = staffSpace * 3;
+  const nrx = staffSpace * 0.55;
   const xOffsets = chordXOffsets(notes, stemDir, nrx);
 
   let stemX: number;
@@ -608,7 +628,7 @@ function ChordGroupEl({
         />
       )}
       {!hasNoStem && (type === "eighth" || type === "16th") && (
-        <Flags type={type} stemDir={stemDir} stemX={stemX} stemTipY={stemY2} sls={sls} />
+        <Flags type={type} stemDir={stemDir} stemX={stemX} stemTipY={stemY2} />
       )}
       {notes.map((note, v) => {
         const ny = noteYs[v];
@@ -624,23 +644,25 @@ function ChordGroupEl({
               id={id}
               color={color}
               showAccidental={note.showAccidental}
-              sls={sls}
+              staffSpace={staffSpace}
             />
-            {ledgerLineYs(note.pitch, clef, staffBottomY, sls).map((ly) => (
-              <line
-                key={ly}
-                x1={nx - nrx - 4}
-                x2={nx + nrx + 4}
-                y1={ly}
-                y2={ly}
-                stroke="black"
-                stroke-width="1"
-              />
-            ))}
+            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map(
+              (ly) => (
+                <line
+                  key={ly}
+                  x1={nx - nrx - 4}
+                  x2={nx + nrx + 4}
+                  y1={ly}
+                  y2={ly}
+                  stroke="black"
+                  stroke-width="1"
+                />
+              ),
+            )}
             {dot && (
               <circle
                 cx={nx + nrx + 4}
-                cy={ny - sls / 4}
+                cy={ny - staffSpace / 4}
                 r={1.5}
                 fill={color}
               />
@@ -659,26 +681,22 @@ function Flags({
   stemDir,
   stemX,
   stemTipY,
-  sls,
 }: {
   type: NoteType;
   stemDir: "up" | "down";
   stemX: number;
   stemTipY: number;
-  sls: number;
 }) {
   const char =
     stemDir === "up"
-      ? (type === "16th" ? G.flag16thUp : G.flag8thUp)
-      : (type === "16th" ? G.flag16thDown : G.flag8thDown);
+      ? type === "16th"
+        ? G.flag16thUp
+        : G.flag8thUp
+      : type === "16th"
+        ? G.flag16thDown
+        : G.flag8thDown;
   return (
-    <text
-      x={stemX}
-      y={stemTipY}
-      font-size={sls * 4}
-      font-family={BRAVURA}
-      text-anchor="start"
-    >
+    <text x={stemX} y={stemTipY} text-anchor="start">
       {char}
     </text>
   );
@@ -693,7 +711,7 @@ function Notehead({
   id,
   color,
   showAccidental,
-  sls,
+  staffSpace,
 }: {
   x: number;
   y: number;
@@ -701,36 +719,23 @@ function Notehead({
   id: string;
   color: string;
   showAccidental: boolean;
-  sls: number;
+  staffSpace: number;
 }) {
   const char =
-    type === "whole" ? G.noteheadWhole :
-    type === "half"  ? G.noteheadHalf :
-    G.noteheadBlack;
+    type === "whole"
+      ? G.noteheadWhole
+      : type === "half"
+        ? G.noteheadHalf
+        : G.noteheadBlack;
 
   return (
     <g>
       {showAccidental && (
-        <text
-          x={x - sls * 1.4}
-          y={y}
-          font-size={sls * 4}
-          font-family={BRAVURA}
-          fill={color}
-          text-anchor="middle"
-        >
+        <text x={x - staffSpace * 1.4} y={y} fill={color} text-anchor="middle">
           {G.accSharp}
         </text>
       )}
-      <text
-        id={id}
-        x={x}
-        y={y}
-        font-size={sls * 4}
-        font-family={BRAVURA}
-        fill={color}
-        text-anchor="middle"
-      >
+      <text id={id} x={x} y={y} fill={color} text-anchor="middle">
         {char}
       </text>
     </g>
@@ -743,31 +748,27 @@ function RestEl({
   rest,
   x,
   staffBottomY,
-  sls,
 }: {
   rest: ParsedRest;
   x: number;
   staffBottomY: number;
-  sls: number;
 }) {
   const { type, fullMeasure } = rest;
   const effectiveType = fullMeasure ? "whole" : type;
 
   const char =
-    effectiveType === "whole"   ? G.restWhole :
-    effectiveType === "half"    ? G.restHalf :
-    effectiveType === "quarter" ? G.restQuarter :
-    effectiveType === "eighth"  ? G.rest8th :
-    G.rest16th;
+    effectiveType === "whole"
+      ? G.restWhole
+      : effectiveType === "half"
+        ? G.restHalf
+        : effectiveType === "quarter"
+          ? G.restQuarter
+          : effectiveType === "eighth"
+            ? G.rest8th
+            : G.rest16th;
 
   return (
-    <text
-      x={x}
-      y={staffBottomY}
-      font-size={sls * 4}
-      font-family={BRAVURA}
-      text-anchor="middle"
-    >
+    <text x={x} y={staffBottomY} text-anchor="middle">
       {char}
     </text>
   );

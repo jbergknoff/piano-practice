@@ -25,6 +25,7 @@ test: node_modules
 	$(bun) test
 
 build: node_modules
+	mkdir -p dist
 	$(bun) build src/main.tsx --outdir dist --minify
 	cp node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2 dist/bravura.woff2
 
