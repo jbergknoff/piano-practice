@@ -79,11 +79,7 @@ export function App() {
     setCurrentBeat(0);
 
     if (musicxml && musicxml.totalBeats > 0) {
-      const player = new MidiPlayer(
-        musicxml.notes,
-        musicxml.totalBeats,
-        bpm,
-      );
+      const player = new MidiPlayer(musicxml.notes, musicxml.totalBeats, bpm);
       player.onPositionUpdate = (beat) => setCurrentBeat(beat);
       player.onEnd = () => {
         setIsPlaying(false);
