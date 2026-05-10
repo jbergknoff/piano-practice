@@ -7,6 +7,7 @@ import {
   type MidiConversionResult,
   type TrackInfo,
   getMidiTracks,
+  getMidiTempo,
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
 import { PlaybackControls } from "./PlaybackControls";
@@ -46,6 +47,7 @@ export function App() {
         setMidiData(parsed);
         setTracks(trackList);
         setSelectedTracks(trackList.map((t) => t.index));
+        setBpm(getMidiTempo(parsed));
       } catch (err) {
         setError(String(err));
       }
