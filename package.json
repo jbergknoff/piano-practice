@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@fontsource/bravura": "^5.2.5",
     "midi-file": "^1.2.4",
     "preact": "^10.25.4"
   },
