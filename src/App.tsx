@@ -62,7 +62,7 @@ export function App() {
     );
   }
 
-  const conversionResult = useMemo<MidiConversionResult | null>(() => {
+  const musicxml = useMemo<MidiConversionResult | null>(() => {
     if (!midiData || selectedTracks.length === 0) {
       return null;
     }
@@ -78,10 +78,10 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
 
-    if (conversionResult && conversionResult.totalBeats > 0) {
+    if (musicxml && musicxml.totalBeats > 0) {
       const player = new MidiPlayer(
-        conversionResult.notes,
-        conversionResult.totalBeats,
+        musicxml.notes,
+        musicxml.totalBeats,
         bpm,
       );
       player.onPositionUpdate = (beat) => setCurrentBeat(beat);
@@ -96,7 +96,7 @@ export function App() {
       playerRef.current?.dispose();
       playerRef.current = null;
     };
-  }, [conversionResult]);
+  }, [musicxml]);
 
   async function handlePlayPause() {
     const player = playerRef.current;
@@ -125,11 +125,11 @@ export function App() {
 
   // Derive note colors: highlight notes currently playing
   const noteColors = useMemo(() => {
-    if (!conversionResult || currentBeat === 0) {
+    if (!musicxml || currentBeat === 0) {
       return {};
     }
     const colors: Record<string, string> = {};
-    for (const note of conversionResult.notes) {
+    for (const note of musicxml.notes) {
       if (
         note.startBeat <= currentBeat &&
         currentBeat < note.startBeat + note.durationBeats
@@ -139,7 +139,7 @@ export function App() {
       }
     }
     return colors;
-  }, [conversionResult, currentBeat]);
+  }, [musicxml, currentBeat]);
 
   return (
     <div>
@@ -161,21 +161,21 @@ export function App() {
           ))}
         </div>
       )}
-      {conversionResult && (
+      {musicxml && (
         <PlaybackControls
           isPlaying={isPlaying}
           bpm={bpm}
           currentBeat={currentBeat}
-          totalBeats={conversionResult.totalBeats}
-          timeSigNum={conversionResult.timeSigNum}
+          totalBeats={musicxml.totalBeats}
+          timeSigNum={musicxml.timeSigNum}
           onPlayPause={handlePlayPause}
           onStop={handleStop}
           onBpmChange={handleBpmChange}
         />
       )}
-      {conversionResult && (
+      {musicxml && (
         <SheetMusicDisplay
-          musicxml={conversionResult.musicxml}
+          musicxml={musicxml.musicxml}
           noteColors={noteColors}
           playbackBeat={currentBeat > 0 ? currentBeat : undefined}
         />
