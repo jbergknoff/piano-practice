@@ -158,6 +158,7 @@ export function useWaitMode(
       held.add(noteNumber);
     } else {
       held.delete(noteNumber);
+      return; // only check for a match when a new note is pressed
     }
 
     // Ignore events within 100 ms of the last advance so that repeated
@@ -172,11 +173,10 @@ export function useWaitMode(
       return;
     }
 
+    // All expected notes must be held; extra held notes (e.g. the other hand
+    // still sustaining a previous chord) are fine.
     const expected = points[idx].noteNumbers;
-    if (
-      held.size === expected.size &&
-      [...expected].every((n) => held.has(n))
-    ) {
+    if ([...expected].every((n) => held.has(n))) {
       lastAdvanceTimeRef.current = Date.now();
       const nextIdx = idx + 1;
       pointIndexRef.current = nextIdx;
