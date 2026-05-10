@@ -269,7 +269,12 @@ function Measure({
       <Barline x={x} staffBottomY={staffBottomY} staffSpace={staffSpace} />
       {isFirstMeasure && (
         <>
-          <Clef clef={clef} x={clefX} staffBottomY={staffBottomY} staffSpace={staffSpace} />
+          <Clef
+            clef={clef}
+            x={clefX}
+            staffBottomY={staffBottomY}
+            staffSpace={staffSpace}
+          />
           <KeySig
             keySig={keySig}
             clef={clef}
