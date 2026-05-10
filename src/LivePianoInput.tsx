@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   BLE_MIDI_CHARACTERISTIC,
   BLE_MIDI_SERVICE,
@@ -8,10 +8,21 @@ import {
 
 type BtStatus = "idle" | "connecting" | "connected" | "error";
 
-export function LivePianoInput() {
+interface LivePianoInputProps {
+  onNoteEvent?: (noteNumber: number, kind: "on" | "off") => void;
+}
+
+export function LivePianoInput({ onNoteEvent }: LivePianoInputProps) {
   const [btStatus, setBtStatus] = useState<BtStatus>("idle");
   const [btError, setBtError] = useState<string | null>(null);
   const [noteLog, setNoteLog] = useState<NoteEvent[]>([]);
+
+  // Keep callback ref current so the long-lived BLE event listener always
+  // invokes the latest version without needing to re-subscribe.
+  const onNoteEventRef = useRef(onNoteEvent);
+  useEffect(() => {
+    onNoteEventRef.current = onNoteEvent;
+  }, [onNoteEvent]);
 
   // Connects to a BLE MIDI device using the Web Bluetooth API.
   // Web Bluetooth overview: https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API
@@ -39,6 +50,9 @@ export function LivePianoInput() {
         }
         const events = parseBLEMIDI(new Uint8Array(val.buffer));
         if (events.length > 0) {
+          for (const ev of events) {
+            onNoteEventRef.current?.(ev.note, ev.kind);
+          }
           setNoteLog((prev) => [...events.reverse(), ...prev].slice(0, 200));
         }
       });

@@ -4,9 +4,11 @@ interface PlaybackControlsProps {
   currentBeat: number;
   totalBeats: number;
   timeSigNum: number;
+  waitMode: boolean;
   onPlayPause: () => void;
   onStop: () => void;
   onBpmChange: (bpm: number) => void;
+  onToggleWaitMode: () => void;
 }
 
 export function PlaybackControls({
@@ -15,9 +17,11 @@ export function PlaybackControls({
   currentBeat,
   totalBeats,
   timeSigNum,
+  waitMode,
   onPlayPause,
   onStop,
   onBpmChange,
+  onToggleWaitMode,
 }: PlaybackControlsProps) {
   const currentMeasure =
     totalBeats > 0 ? Math.floor(currentBeat / timeSigNum) + 1 : 1;
@@ -43,14 +47,16 @@ export function PlaybackControls({
       <button
         type="button"
         onClick={onPlayPause}
+        disabled={waitMode}
         style={{
           fontSize: "18px",
           width: "40px",
           height: "40px",
-          cursor: "pointer",
+          cursor: waitMode ? "default" : "pointer",
           border: "1px solid #ccc",
           borderRadius: "6px",
           background: isPlaying ? "#e8f4fd" : "#f5f5f5",
+          opacity: waitMode ? 0.4 : 1,
         }}
         aria-label={isPlaying ? "Pause" : "Play"}
       >
@@ -72,6 +78,26 @@ export function PlaybackControls({
         aria-label="Stop"
       >
         ⏹
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleWaitMode}
+        style={{
+          fontSize: "14px",
+          padding: "0 14px",
+          height: "40px",
+          cursor: "pointer",
+          border: `1px solid ${waitMode ? "#e65100" : "#ccc"}`,
+          borderRadius: "6px",
+          background: waitMode ? "#fff3e0" : "#f5f5f5",
+          fontWeight: waitMode ? "bold" : "normal",
+          color: waitMode ? "#e65100" : "inherit",
+        }}
+        aria-pressed={waitMode}
+        aria-label={waitMode ? "Disable wait mode" : "Enable wait mode"}
+      >
+        Wait
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
