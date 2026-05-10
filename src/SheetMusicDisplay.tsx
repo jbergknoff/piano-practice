@@ -1,4 +1,4 @@
-import { useMemo } from "preact/hooks";
+import { useEffect, useMemo, useRef } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   DIVISIONS,
@@ -127,6 +127,18 @@ export function SheetMusicDisplay({
       ? computeCursorX(playbackBeat, score, layout)
       : null;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (cursorX === null || !containerRef.current) return;
+    const el = containerRef.current;
+    const margin = 80;
+    const relX = cursorX - el.scrollLeft;
+    if (relX > el.clientWidth - margin || relX < margin) {
+      el.scrollLeft = Math.max(0, cursorX - el.clientWidth * 0.3);
+    }
+  }, [cursorX]);
+
   const cursorY1 =
     layout.staffBottomYs.length > 0
       ? layout.staffBottomYs[0] - 4 * layout.sls
@@ -137,7 +149,7 @@ export function SheetMusicDisplay({
       : layout.totalHeight;
 
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div ref={containerRef} style={{ overflowX: "auto" }}>
       <svg
         width={layout.totalWidth}
         height={layout.totalHeight}
