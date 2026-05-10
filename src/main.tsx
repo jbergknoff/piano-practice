@@ -1,3 +1,4 @@
+import "@fontsource/bravura";
 import { render } from "preact";
 import { App } from "./App";
 
