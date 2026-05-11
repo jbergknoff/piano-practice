@@ -28,6 +28,8 @@ export class MidiPlayer {
 
   onPositionUpdate?: (beat: number) => void;
   onEnd?: () => void;
+  /** When set, the player loops back to startBeat once beat reaches endBeat. */
+  loopRange: { startBeat: number; endBeat: number } | null = null;
 
   constructor(notes: PlaybackNote[], totalBeats: number, bpm = 120) {
     this.notes = notes;
@@ -253,6 +255,18 @@ export class MidiPlayer {
     this.activeOscillators.push(osc3);
   }
 
+  /** Seek to a beat position. If playing, restarts audio from that beat. */
+  seek(beat: number): void {
+    if (this._state === "playing") {
+      this.cancelAll();
+      this.stopTick();
+      this.startSchedule(beat);
+    } else {
+      this.resumeBeat = beat;
+      this.onPositionUpdate?.(beat);
+    }
+  }
+
   private startTick(): void {
     const tick = () => {
       if (this._state !== "playing") {
@@ -260,6 +274,15 @@ export class MidiPlayer {
       }
 
       const beat = this.elapsedBeat();
+
+      // Loop range takes priority: restart before the end-of-piece check fires.
+      if (this.loopRange && beat >= this.loopRange.endBeat) {
+        this.cancelAll();
+        this.stopTick();
+        this.startSchedule(this.loopRange.startBeat);
+        return;
+      }
+
       this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
 
       if (beat >= this.totalBeats) {
