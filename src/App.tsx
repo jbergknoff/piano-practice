@@ -396,14 +396,58 @@ export function App() {
 
   if (screen === "landing") {
     return (
-      <LandingScreen
-        theme={theme}
-        accent={accent}
-        fileError={fileError}
-        bluetooth={bluetooth}
-        onFile={handleFileInput}
-        onDrop={handleFileDrop}
-      />
+      <div style={{ width: "100%", height: "100%", position: "relative" }}>
+        <LandingScreen
+          theme={theme}
+          accent={accent}
+          fileError={fileError}
+          bluetooth={bluetooth}
+          onFile={handleFileInput}
+          onDrop={handleFileDrop}
+          onDrawerOpen={() => setDrawerOpen(true)}
+        />
+        <SettingsDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          theme={theme}
+          themeName={themeName}
+          accent={accent}
+          bpm={bpm}
+          showLoop={showLoop}
+          measureRange={measureRange}
+          totalMeasures={totalMeasures}
+          tracks={tracks}
+          selectedTracks={selectedTracks}
+          hands={hands}
+          countIn={countIn}
+          onMiss={onMiss}
+          bluetooth={bluetooth}
+          onThemeChange={setThemeName}
+          onBpmChange={handleBpmChange}
+          onLoopToggle={() => {
+            setShowLoop((v) => {
+              if (!v && musicxml) {
+                setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
+              }
+              if (v) {
+                setMeasureRange(null);
+              }
+              return !v;
+            });
+          }}
+          onMeasureRangeChange={setMeasureRange}
+          onTrackToggle={(idx) =>
+            setSelectedTracks((prev) =>
+              prev.includes(idx)
+                ? prev.filter((i) => i !== idx)
+                : [...prev, idx].sort((a, b) => a - b),
+            )
+          }
+          onHandsChange={setHands}
+          onCountInChange={setCountIn}
+          onOnMissChange={setOnMiss}
+        />
+      </div>
     );
   }
 
@@ -476,6 +520,7 @@ interface LandingScreenProps {
   bluetooth: ReturnType<typeof useBluetooth>;
   onFile: (e: Event) => void;
   onDrop: (e: DragEvent) => void;
+  onDrawerOpen: () => void;
 }
 
 function LandingScreen({
@@ -485,6 +530,7 @@ function LandingScreen({
   bluetooth,
   onFile,
   onDrop,
+  onDrawerOpen,
 }: LandingScreenProps) {
   const [hovering, setHovering] = useState(false);
   const connected = bluetooth.status === "connected";
@@ -581,6 +627,17 @@ function LandingScreen({
           />
         ))}
       </svg>
+
+      {/* Gear button — top left */}
+      <div style={{ position: "absolute", top: 22, left: 24, zIndex: 3 }}>
+        <button
+          type="button"
+          onClick={onDrawerOpen}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+        >
+          <GearIcon />
+        </button>
+      </div>
 
       {/* Connection badge + help — top right */}
       <div
@@ -1220,33 +1277,6 @@ function PracticeScreen({
           </button>
         </div>
       </div>
-
-      {/* Settings drawer */}
-      <SettingsDrawer
-        open={drawerOpen}
-        onClose={onDrawerClose}
-        theme={theme}
-        themeName={themeName}
-        accent={accent}
-        bpm={bpm}
-        showLoop={showLoop}
-        measureRange={measureRange}
-        totalMeasures={totalMeasures}
-        tracks={tracks}
-        selectedTracks={selectedTracks}
-        hands={hands}
-        countIn={countIn}
-        onMiss={onMiss}
-        bluetooth={bluetooth}
-        onThemeChange={onThemeChange}
-        onBpmChange={onBpmChange}
-        onLoopToggle={onLoopToggle}
-        onMeasureRangeChange={onMeasureRangeChange}
-        onTrackToggle={onTrackToggle}
-        onHandsChange={onHandsChange}
-        onCountInChange={onCountInChange}
-        onOnMissChange={onOnMissChange}
-      />
 
       <style>{`
         @keyframes bar0 { 0%,100% { height: 4px } 50% { height: 12px } }
