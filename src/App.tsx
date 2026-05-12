@@ -492,6 +492,9 @@ function LandingScreen({
 }: LandingScreenProps) {
   const [hovering, setHovering] = useState(false);
   const [showBtHelp, setShowBtHelp] = useState(false);
+  const isMobileBrave =
+    "brave" in navigator &&
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
   return (
     <div
@@ -722,6 +725,43 @@ function LandingScreen({
                   </span>
                 </div>
               ))}
+              {isMobileBrave && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    paddingTop: 10,
+                    borderTop: `1px solid ${theme.border}`,
+                    fontSize: 11,
+                    color: theme.inkSoft,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>
+                    Enable Web Bluetooth in Brave (one-time):
+                  </span>{" "}
+                  open{" "}
+                  <span
+                    style={{
+                      fontFamily: "'Geist Mono', monospace",
+                      fontSize: 10,
+                    }}
+                  >
+                    brave://flags
+                  </span>{" "}
+                  in Brave, search for{" "}
+                  <span
+                    style={{
+                      fontFamily: "'Geist Mono', monospace",
+                      fontSize: 10,
+                    }}
+                  >
+                    enable-experimental-web-platform-features
+                  </span>
+                  , set it to <span style={{ fontWeight: 600 }}>Enabled</span>,
+                  then tap <span style={{ fontWeight: 600 }}>Relaunch</span> at
+                  the bottom.
+                </div>
+              )}
               <div
                 style={{
                   marginTop: 12,
