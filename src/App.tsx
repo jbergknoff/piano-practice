@@ -181,14 +181,12 @@ export function App() {
 
   // UI state
   const [screen, setScreen] = useState<"landing" | "practice">("landing");
-  const [themeName, setThemeName] = useState<ThemeName>("cream");
+  const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
   const [showLoop, setShowLoop] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Settings drawer state
-  const [hands, setHands] = useState<"Left" | "Both" | "Right">("Both");
-  const [countIn, setCountIn] = useState<0 | 1 | 2>(0);
   const [onMiss, setOnMiss] = useState<"wait" | "skip">("wait");
 
   const theme = THEMES[themeName];
@@ -410,7 +408,6 @@ export function App() {
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           theme={theme}
-          themeName={themeName}
           accent={accent}
           bpm={bpm}
           showLoop={showLoop}
@@ -418,11 +415,8 @@ export function App() {
           totalMeasures={totalMeasures}
           tracks={tracks}
           selectedTracks={selectedTracks}
-          hands={hands}
-          countIn={countIn}
           onMiss={onMiss}
           bluetooth={bluetooth}
-          onThemeChange={setThemeName}
           onBpmChange={handleBpmChange}
           onLoopToggle={() => {
             setShowLoop((v) => {
@@ -443,8 +437,6 @@ export function App() {
                 : [...prev, idx].sort((a, b) => a - b),
             )
           }
-          onHandsChange={setHands}
-          onCountInChange={setCountIn}
           onOnMissChange={setOnMiss}
         />
       </div>
@@ -454,7 +446,6 @@ export function App() {
   return (
     <PracticeScreen
       theme={theme}
-      themeName={themeName}
       accent={accent}
       pieceTitle={pieceTitle}
       musicxml={musicxml}
@@ -473,10 +464,7 @@ export function App() {
       tracks={tracks}
       selectedTracks={selectedTracks}
       // Settings
-      hands={hands}
-      countIn={countIn}
       onMiss={onMiss}
-      onThemeChange={setThemeName}
       onPlayPause={handlePlayPause}
       onStop={handleStop}
       onRestart={handleRestart}
@@ -503,8 +491,6 @@ export function App() {
             : [...prev, idx].sort((a, b) => a - b),
         )
       }
-      onHandsChange={setHands}
-      onCountInChange={setCountIn}
       onOnMissChange={setOnMiss}
       onGoToLanding={() => setScreen("landing")}
     />
@@ -846,7 +832,6 @@ function LandingScreen({
 
 interface PracticeScreenProps {
   theme: ThemeTokens;
-  themeName: ThemeName;
   accent: string;
   pieceTitle: string;
   musicxml: MidiConversionResult | null;
@@ -864,10 +849,7 @@ interface PracticeScreenProps {
   waitMode: boolean;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  hands: "Left" | "Both" | "Right";
-  countIn: 0 | 1 | 2;
   onMiss: "wait" | "skip";
-  onThemeChange: (t: ThemeName) => void;
   onPlayPause: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -878,15 +860,12 @@ interface PracticeScreenProps {
   onDrawerClose: () => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
-  onHandsChange: (h: "Left" | "Both" | "Right") => void;
-  onCountInChange: (c: 0 | 1 | 2) => void;
   onOnMissChange: (m: "wait" | "skip") => void;
   onGoToLanding: () => void;
 }
 
 function PracticeScreen({
   theme,
-  themeName,
   accent,
   pieceTitle,
   musicxml,
@@ -904,10 +883,7 @@ function PracticeScreen({
   waitMode,
   tracks,
   selectedTracks,
-  hands,
-  countIn,
   onMiss,
-  onThemeChange,
   onPlayPause,
   onStop,
   onRestart,
@@ -918,8 +894,6 @@ function PracticeScreen({
   onDrawerClose,
   onToggleWaitMode,
   onTrackToggle,
-  onHandsChange,
-  onCountInChange,
   onOnMissChange,
   onGoToLanding,
 }: PracticeScreenProps) {
@@ -1569,7 +1543,6 @@ interface SettingsDrawerProps {
   open: boolean;
   onClose: () => void;
   theme: ThemeTokens;
-  themeName: ThemeName;
   accent: string;
   bpm: number;
   showLoop: boolean;
@@ -1577,17 +1550,12 @@ interface SettingsDrawerProps {
   totalMeasures: number;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  hands: "Left" | "Both" | "Right";
-  countIn: 0 | 1 | 2;
   onMiss: "wait" | "skip";
   bluetooth: ReturnType<typeof useBluetooth>;
-  onThemeChange: (t: ThemeName) => void;
   onBpmChange: (bpm: number) => void;
   onLoopToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onTrackToggle: (idx: number) => void;
-  onHandsChange: (h: "Left" | "Both" | "Right") => void;
-  onCountInChange: (c: 0 | 1 | 2) => void;
   onOnMissChange: (m: "wait" | "skip") => void;
 }
 
@@ -1595,7 +1563,6 @@ function SettingsDrawer({
   open,
   onClose,
   theme,
-  themeName,
   accent,
   bpm,
   showLoop,
@@ -1603,17 +1570,12 @@ function SettingsDrawer({
   totalMeasures,
   tracks,
   selectedTracks,
-  hands,
-  countIn,
   onMiss,
   bluetooth,
-  onThemeChange,
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
   onTrackToggle,
-  onHandsChange,
-  onCountInChange,
   onOnMissChange,
 }: SettingsDrawerProps) {
   const connected = bluetooth.status === "connected";
@@ -1695,18 +1657,6 @@ function SettingsDrawer({
             ✕
           </button>
         </div>
-
-        {/* Appearance */}
-        <DrawerRow theme={theme} label="Theme" hint={THEMES[themeName].name}>
-          <Segmented
-            options={["cream", "sepia", "dark"] as ThemeName[]}
-            labels={["Paper", "Vellum", "Dark"]}
-            value={themeName}
-            theme={theme}
-            accent={accent}
-            onChange={(v) => onThemeChange(v as ThemeName)}
-          />
-        </DrawerRow>
 
         {/* Tempo */}
         <DrawerRow theme={theme} label="Tempo" hint={`${bpm} BPM`}>
@@ -1804,33 +1754,6 @@ function SettingsDrawer({
             </div>
           </DrawerRow>
         )}
-
-        {/* Hands */}
-        <DrawerRow theme={theme} label="Hands" hint={hands}>
-          <Segmented
-            options={["Left", "Both", "Right"]}
-            value={hands}
-            theme={theme}
-            accent={accent}
-            onChange={(v) => onHandsChange(v as "Left" | "Both" | "Right")}
-          />
-        </DrawerRow>
-
-        {/* Count-in */}
-        <DrawerRow
-          theme={theme}
-          label="Count-in"
-          hint={countIn === 0 ? "Off" : `${countIn} measure`}
-        >
-          <Segmented
-            options={["0", "1", "2"]}
-            labels={["Off", "1", "2"]}
-            value={String(countIn)}
-            theme={theme}
-            accent={accent}
-            onChange={(v) => onCountInChange(Number.parseInt(v) as 0 | 1 | 2)}
-          />
-        </DrawerRow>
 
         {/* On miss */}
         <DrawerRow
