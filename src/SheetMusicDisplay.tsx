@@ -3,10 +3,11 @@ import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   DIVISIONS,
   FLAT_POSITIONS,
-  MEASURE_PADDING_RIGHT,
   MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
+  beamStemDirection,
   eventXPositions,
+  groupBeamableEvents,
   headerWidth,
   ledgerLineYs,
   noteY,
@@ -16,6 +17,7 @@ import {
 import type {
   ChordGroup,
   LayoutConfig,
+  MeasureEvent,
   NoteType,
   ParsedMeasure,
   ParsedNote,
@@ -51,6 +53,115 @@ const G = {
   flag16thUp: "\uE242",
   flag16thDown: "\uE243",
 } as const;
+
+// ── Beam geometry ─────────────────────────────────────────────────────────────
+
+interface BeamGroupData {
+  eventIndices: number[];
+  stemDir: "up" | "down";
+  /** Y coordinate of the primary (outermost) beam line */
+  beamY: number;
+  /** Per-event stem X and the Y where the stem meets the beam */
+  stems: Array<{ stemX: number; stemTipY: number }>;
+  /** NoteType of each event, used to place secondary beams for 16th notes */
+  types: NoteType[];
+}
+
+function computeBeamGroups(
+  events: MeasureEvent[],
+  eventXs: number[],
+  clef: { sign: "G" | "F"; line: number },
+  staffBottomY: number,
+  staffSpace: number,
+): BeamGroupData[] {
+  const stemLength = staffSpace * 3;
+  const nrx = staffSpace * 0.55;
+
+  return groupBeamableEvents(events).map((indices) => {
+    const chords = indices.map((i) => events[i] as ChordGroup);
+    const stemDir = beamStemDirection(chords, clef);
+
+    // Candidate stem-tip Y using the standard stem length for each chord.
+    const candidateTipYs = chords.map((g) => {
+      const ys = g.notes.map((n) =>
+        noteY(n.pitch, clef, staffBottomY, staffSpace),
+      );
+      const topY = Math.min(...ys);
+      const bottomY = Math.max(...ys);
+      return stemDir === "up" ? topY - stemLength : bottomY + stemLength;
+    });
+
+    // Flat beam: set beam Y so every stem is at least stemLength long.
+    const beamY =
+      stemDir === "up"
+        ? Math.min(...candidateTipYs)
+        : Math.max(...candidateTipYs);
+
+    const stems = chords.map((_, j) => ({
+      stemX:
+        stemDir === "up"
+          ? eventXs[indices[j]] + nrx
+          : eventXs[indices[j]] - nrx,
+      stemTipY: beamY,
+    }));
+
+    return {
+      eventIndices: indices,
+      stemDir,
+      beamY,
+      stems,
+      types: chords.map((g) => g.type),
+    };
+  });
+}
+
+// Compute secondary beam segments for 16th notes within a beam group.
+// Returns x-spans to draw at the secondary beam Y.
+function secondaryBeamSegments(
+  types: NoteType[],
+  stems: Array<{ stemX: number }>,
+): Array<{ x1: number; x2: number }> {
+  const segments: Array<{ x1: number; x2: number }> = [];
+  let i = 0;
+  while (i < types.length) {
+    if (types[i] !== "16th") {
+      i++;
+      continue;
+    }
+    const runStart = i;
+    while (i < types.length && types[i] === "16th") {
+      i++;
+    }
+    const runEnd = i;
+
+    if (runEnd - runStart === 1) {
+      // Isolated 16th: half-stub toward nearest neighbor
+      const idx = runStart;
+      if (idx > 0) {
+        const halfGap = (stems[idx].stemX - stems[idx - 1].stemX) / 2;
+        segments.push({
+          x1: stems[idx].stemX - halfGap,
+          x2: stems[idx].stemX,
+        });
+      } else {
+        const halfGap =
+          ((stems[idx + 1]?.stemX ?? stems[idx].stemX + 10) -
+            stems[idx].stemX) /
+          2;
+        segments.push({
+          x1: stems[idx].stemX,
+          x2: stems[idx].stemX + halfGap,
+        });
+      }
+    } else {
+      segments.push({
+        x1: stems[runStart].stemX,
+        x2: stems[runEnd - 1].stemX,
+      });
+    }
+  }
+  return segments;
+}
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
@@ -372,6 +483,28 @@ function Measure({
   const keySigX = clefX + 32;
   const timeSigX = keySigX + Math.abs(keySig.fifths) * 10;
 
+  const beamGroups = computeBeamGroups(
+    measure.events,
+    eventXs,
+    clef,
+    staffBottomY,
+    staffSpace,
+  );
+
+  // Map from event index → beam stem override (direction + tip Y)
+  const beamOverrideMap = new Map<
+    number,
+    { stemDir: "up" | "down"; stemTipY: number }
+  >();
+  for (const group of beamGroups) {
+    group.eventIndices.forEach((ei, i) => {
+      beamOverrideMap.set(ei, {
+        stemDir: group.stemDir,
+        stemTipY: group.stems[i].stemTipY,
+      });
+    });
+  }
+
   return (
     <g>
       <Barline x={x} staffBottomY={staffBottomY} staffSpace={staffSpace} />
@@ -430,10 +563,12 @@ function Measure({
               measureNumber={measure.number}
               noteColors={noteColors}
               staffSpace={staffSpace}
+              beamStemOverride={beamOverrideMap.get(ei)}
             />
           );
         });
       })()}
+      <BeamLines beamGroups={beamGroups} staffSpace={staffSpace} />
     </g>
   );
 }
@@ -565,6 +700,10 @@ interface ChordGroupElProps {
   measureNumber: number;
   noteColors: Record<string, string>;
   staffSpace: number;
+  /** When set, this note is part of a beam group: use the given stem direction
+   *  and extend the stem to stemTipY instead of the default length. No flag
+   *  is rendered — the beam line is drawn by BeamLines instead. */
+  beamStemOverride?: { stemDir: "up" | "down"; stemTipY: number };
 }
 
 // Compute per-note x offsets within a chord to displace adjacent seconds.
@@ -596,6 +735,7 @@ function ChordGroupEl({
   measureNumber,
   noteColors,
   staffSpace,
+  beamStemOverride,
 }: ChordGroupElProps) {
   const { type, notes, noteIndex, dot } = group;
   const hasNoStem = type === "whole";
@@ -605,7 +745,7 @@ function ChordGroupEl({
   );
   const topY = Math.min(...noteYs);
   const bottomY = Math.max(...noteYs);
-  const stemDir = stemDirection(group, clef);
+  const stemDir = beamStemOverride?.stemDir ?? stemDirection(group, clef);
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
   const xOffsets = chordXOffsets(notes, stemDir, nrx);
@@ -616,11 +756,11 @@ function ChordGroupEl({
   if (stemDir === "up") {
     stemX = x + nrx;
     stemY1 = bottomY;
-    stemY2 = topY - stemLength;
+    stemY2 = beamStemOverride?.stemTipY ?? topY - stemLength;
   } else {
     stemX = x - nrx;
     stemY1 = topY;
-    stemY2 = bottomY + stemLength;
+    stemY2 = beamStemOverride?.stemTipY ?? bottomY + stemLength;
   }
 
   return (
@@ -635,9 +775,16 @@ function ChordGroupEl({
           stroke-width="1.2"
         />
       )}
-      {!hasNoStem && (type === "eighth" || type === "16th") && (
-        <Flags type={type} stemDir={stemDir} stemX={stemX} stemTipY={stemY2} />
-      )}
+      {!hasNoStem &&
+        (type === "eighth" || type === "16th") &&
+        !beamStemOverride && (
+          <Flags
+            type={type}
+            stemDir={stemDir}
+            stemX={stemX}
+            stemTipY={stemY2}
+          />
+        )}
       {notes.map((note, v) => {
         const ny = noteYs[v];
         const nx = x + xOffsets[v];
@@ -746,6 +893,60 @@ function Notehead({
       <text id={id} x={x} y={y} fill={color} text-anchor="middle">
         {char}
       </text>
+    </g>
+  );
+}
+
+// ── Beam Lines ────────────────────────────────────────────────────────────────
+
+function BeamLines({
+  beamGroups,
+  staffSpace,
+}: {
+  beamGroups: BeamGroupData[];
+  staffSpace: number;
+}) {
+  const beamThickness = staffSpace * 0.5;
+  // Gap between primary and secondary beam: beam thickness + small clearance
+  const beamOffset = beamThickness + staffSpace * 0.25;
+
+  return (
+    <g>
+      {beamGroups.map((group) => {
+        const { eventIndices, stems, beamY, stemDir, types } = group;
+        const x1 = stems[0].stemX;
+        const x2 = stems[stems.length - 1].stemX;
+        // Secondary beam sits closer to the noteheads than the primary beam.
+        const beam2Y =
+          stemDir === "up" ? beamY + beamOffset : beamY - beamOffset;
+        const secSegments = secondaryBeamSegments(types, stems);
+        // Use first event index as stable key — unique within a measure.
+        const groupKey = eventIndices[0];
+
+        return (
+          <g key={groupKey}>
+            <line
+              x1={x1}
+              x2={x2}
+              y1={beamY}
+              y2={beamY}
+              stroke="black"
+              stroke-width={beamThickness}
+            />
+            {secSegments.map((seg) => (
+              <line
+                key={seg.x1}
+                x1={seg.x1}
+                x2={seg.x2}
+                y1={beam2Y}
+                y2={beam2Y}
+                stroke="black"
+                stroke-width={beamThickness}
+              />
+            ))}
+          </g>
+        );
+      })}
     </g>
   );
 }

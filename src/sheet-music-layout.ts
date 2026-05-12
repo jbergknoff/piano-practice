@@ -222,3 +222,63 @@ export const FLAT_POSITIONS: Record<"G" | "F", Pitch[]> = {
 export function partClef(part: ParsedPart): { sign: "G" | "F"; line: number } {
   return part.clef;
 }
+
+// ── Beaming helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Identify which events in a measure should be beamed together.
+ * Returns arrays of event indices; each inner array is one beam group (2+
+ * consecutive beamable events with no intervening rests or non-beamable notes).
+ * A single isolated eighth/16th keeps its flag and is not returned here.
+ */
+export function groupBeamableEvents(events: MeasureEvent[]): number[][] {
+  const groups: number[][] = [];
+  let i = 0;
+  while (i < events.length) {
+    const ev = events[i];
+    if (
+      !isRest(ev) &&
+      ((ev as ChordGroup).type === "eighth" ||
+        (ev as ChordGroup).type === "16th")
+    ) {
+      const runStart = i;
+      while (
+        i < events.length &&
+        !isRest(events[i]) &&
+        ((events[i] as ChordGroup).type === "eighth" ||
+          (events[i] as ChordGroup).type === "16th")
+      ) {
+        i++;
+      }
+      if (i - runStart >= 2) {
+        groups.push(
+          Array.from({ length: i - runStart }, (_, j) => runStart + j),
+        );
+      }
+    } else {
+      i++;
+    }
+  }
+  return groups;
+}
+
+/**
+ * Determine a unified stem direction for a beam group by finding the note
+ * farthest from the clef's middle line across all chords in the group.
+ */
+export function beamStemDirection(
+  groups: ChordGroup[],
+  clef: { sign: "G" | "F" },
+): "up" | "down" {
+  const middleRef = clef.sign === "G" ? TREBLE_MIDDLE : BASS_MIDDLE;
+  let farthestSteps = 0;
+  for (const group of groups) {
+    for (const note of group.notes) {
+      const steps = diatonicIndex(note.pitch) - middleRef;
+      if (Math.abs(steps) > Math.abs(farthestSteps)) {
+        farthestSteps = steps;
+      }
+    }
+  }
+  return farthestSteps <= 0 ? "up" : "down";
+}

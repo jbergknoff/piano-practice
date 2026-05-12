@@ -4,7 +4,9 @@ import { parseMidi } from "midi-file";
 import { midiToMusicXmlWithTracks } from "./midi-to-musicxml";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
+  beamStemDirection,
   eventXPositions,
+  groupBeamableEvents,
   headerWidth,
   ledgerLineYs,
   noteY,
@@ -489,6 +491,103 @@ describe("eventXPositions", () => {
     const events = [rest(4, "quarter"), chord([p("C", 4)])];
     const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT);
     expect(xs[1] - xs[0]).toBe(48); // quarter rest = 48px advance
+  });
+});
+
+// ---------------------------------------------------------------------------
+// groupBeamableEvents
+// ---------------------------------------------------------------------------
+
+describe("groupBeamableEvents", () => {
+  test("empty measure returns no groups", () => {
+    expect(groupBeamableEvents([])).toEqual([]);
+  });
+
+  test("single eighth note is not beamed (needs 2+)", () => {
+    expect(groupBeamableEvents([chord([p("C", 4)], "eighth", 2)])).toEqual([]);
+  });
+
+  test("two consecutive eighth notes form one group", () => {
+    const events = [
+      chord([p("C", 4)], "eighth", 2),
+      chord([p("D", 4)], "eighth", 2),
+    ];
+    expect(groupBeamableEvents(events)).toEqual([[0, 1]]);
+  });
+
+  test("four consecutive 16th notes form one group", () => {
+    const events = [
+      chord([p("C", 4)], "16th", 1),
+      chord([p("D", 4)], "16th", 1),
+      chord([p("E", 4)], "16th", 1),
+      chord([p("F", 4)], "16th", 1),
+    ];
+    expect(groupBeamableEvents(events)).toEqual([[0, 1, 2, 3]]);
+  });
+
+  test("rest between eighths breaks the run — no groups", () => {
+    const events = [
+      chord([p("C", 4)], "eighth", 2),
+      rest(2, "eighth"),
+      chord([p("D", 4)], "eighth", 2),
+    ];
+    expect(groupBeamableEvents(events)).toEqual([]);
+  });
+
+  test("quarter notes are not beamable", () => {
+    const events = [chord([p("C", 4)]), chord([p("D", 4)]), chord([p("E", 4)])];
+    expect(groupBeamableEvents(events)).toEqual([]);
+  });
+
+  test("quarter interrupts an eighth run into two groups", () => {
+    const events = [
+      chord([p("C", 4)], "eighth", 2),
+      chord([p("D", 4)], "eighth", 2),
+      chord([p("E", 4)]), // quarter — breaks beam
+      chord([p("F", 4)], "eighth", 2),
+      chord([p("G", 4)], "eighth", 2),
+    ];
+    expect(groupBeamableEvents(events)).toEqual([
+      [0, 1],
+      [3, 4],
+    ]);
+  });
+
+  test("mixed 8th and 16th notes in one run form one group", () => {
+    const events = [
+      chord([p("C", 4)], "eighth", 2),
+      chord([p("D", 4)], "16th", 1),
+      chord([p("E", 4)], "16th", 1),
+      chord([p("F", 4)], "eighth", 2),
+    ];
+    expect(groupBeamableEvents(events)).toEqual([[0, 1, 2, 3]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// beamStemDirection
+// ---------------------------------------------------------------------------
+
+describe("beamStemDirection", () => {
+  test("all notes below middle line → stem up", () => {
+    const chords = [chord([p("E", 4)], "eighth"), chord([p("F", 4)], "eighth")];
+    expect(beamStemDirection(chords, TREBLE)).toBe("up");
+  });
+
+  test("all notes above middle line → stem down", () => {
+    const chords = [chord([p("D", 5)], "eighth"), chord([p("E", 5)], "eighth")];
+    expect(beamStemDirection(chords, TREBLE)).toBe("down");
+  });
+
+  test("farthest note from middle determines direction", () => {
+    // E4 is 4 steps below B4 (middle); D5 is only 2 steps above → stem up
+    const chords = [chord([p("E", 4)], "eighth"), chord([p("D", 5)], "eighth")];
+    expect(beamStemDirection(chords, TREBLE)).toBe("up");
+  });
+
+  test("bass clef: notes below middle (D3) → stem up", () => {
+    const chords = [chord([p("G", 2)], "eighth"), chord([p("A", 2)], "eighth")];
+    expect(beamStemDirection(chords, BASS)).toBe("up");
   });
 });
 
