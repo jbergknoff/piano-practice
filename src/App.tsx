@@ -156,49 +156,6 @@ function PlusIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-// ── Recent pieces ─────────────────────────────────────────────────────────────
-
-interface RecentPiece {
-  title: string;
-  timestamp: number;
-}
-
-function loadRecents(): RecentPiece[] {
-  try {
-    return JSON.parse(localStorage.getItem("piano-practice-recents") ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveRecents(recents: RecentPiece[]) {
-  try {
-    localStorage.setItem("piano-practice-recents", JSON.stringify(recents));
-  } catch {}
-}
-
-function addRecent(title: string, prev: RecentPiece[]): RecentPiece[] {
-  const filtered = prev.filter((r) => r.title !== title);
-  return [{ title, timestamp: Date.now() }, ...filtered].slice(0, 5);
-}
-
-function formatRecency(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) {
-    return `${Math.max(1, mins)}m ago`;
-  }
-  const hours = Math.floor(diff / 3600000);
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
-  const days = Math.floor(diff / 86400000);
-  if (days === 1) {
-    return "Yesterday";
-  }
-  return `${days}d ago`;
-}
-
 function prettyTitle(filename: string): string {
   return filename
     .replace(/\.(mid|midi|musicxml|mxl|xml)$/i, "")
@@ -230,7 +187,6 @@ export function App() {
   const [accent, setAccent] = useState<string>(ACCENT_COLORS[0]);
   const [showLoop, setShowLoop] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [recents, setRecents] = useState<RecentPiece[]>(loadRecents);
 
   // Settings drawer state
   const [hands, setHands] = useState<"Left" | "Both" | "Right">("Both");
@@ -361,7 +317,6 @@ export function App() {
   }
 
   function parseMidiFile(file: File) {
-    const title = prettyTitle(file.name);
     setFileName(file.name);
     setFileError(null);
     setMidiData(null);
@@ -380,10 +335,6 @@ export function App() {
         setTracks(trackList);
         setSelectedTracks(trackList.map((t) => t.index));
         setBpm(getMidiTempo(parsed));
-
-        const updated = addRecent(title, recents);
-        setRecents(updated);
-        saveRecents(updated);
         setScreen("practice");
       } catch (err) {
         setFileError(String(err));
@@ -451,18 +402,10 @@ export function App() {
       <LandingScreen
         theme={theme}
         accent={accent}
-        recents={recents}
         fileError={fileError}
         bluetooth={bluetooth}
         onFile={handleFileInput}
         onDrop={handleFileDrop}
-        onRecentLoad={(title) => {
-          // Load from recents — just navigate to practice with existing state if title matches
-          // In a real app this would reload from disk; here we just switch screens if loaded
-          if (fileName && prettyTitle(fileName) === title && musicxml) {
-            setScreen("practice");
-          }
-        }}
       />
     );
   }
@@ -535,23 +478,19 @@ export function App() {
 interface LandingScreenProps {
   theme: ThemeTokens;
   accent: string;
-  recents: RecentPiece[];
   fileError: string | null;
   bluetooth: ReturnType<typeof useBluetooth>;
   onFile: (e: Event) => void;
   onDrop: (e: DragEvent) => void;
-  onRecentLoad: (title: string) => void;
 }
 
 function LandingScreen({
   theme,
   accent,
-  recents,
   fileError,
   bluetooth,
   onFile,
   onDrop,
-  onRecentLoad,
 }: LandingScreenProps) {
   const [hovering, setHovering] = useState(false);
 
@@ -678,7 +617,7 @@ function LandingScreen({
             color: theme.ink,
           }}
         >
-          Today's
+          Piano
           <br />
           practice.
         </h1>
@@ -699,80 +638,6 @@ function LandingScreen({
           <p style={{ marginTop: 12, fontSize: 12, color: theme.error }}>
             {fileError}
           </p>
-        )}
-
-        {/* Recents */}
-        {recents.length > 0 && (
-          <div style={{ marginTop: 28 }}>
-            <div
-              style={{
-                fontSize: 9,
-                color: theme.inkSoft,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                marginBottom: 10,
-              }}
-            >
-              Recent
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {recents.map((r) => (
-                <button
-                  key={r.title}
-                  type="button"
-                  onClick={() => onRecentLoad(r.title)}
-                  style={{
-                    appearance: "none",
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    padding: "6px 8px",
-                    borderRadius: 8,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    color: theme.ink,
-                    gap: 14,
-                    textAlign: "left",
-                    width: "100%",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background =
-                      theme.border;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.background =
-                      "transparent";
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'Instrument Serif', serif",
-                      fontStyle: "italic",
-                      fontSize: 15,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {r.title}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'Geist Mono', monospace",
-                      fontSize: 9,
-                      color: theme.inkFaint,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {formatRecency(r.timestamp)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
         )}
       </div>
 
