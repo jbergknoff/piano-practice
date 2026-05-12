@@ -182,7 +182,7 @@ export function App() {
   // UI state
   const [screen, setScreen] = useState<"landing" | "practice">("landing");
   const [themeName, setThemeName] = useState<ThemeName>("cream");
-  const [accent, setAccent] = useState<string>(ACCENT_COLORS[0]);
+  const accent = ACCENT_COLORS[0];
   const [showLoop, setShowLoop] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -190,7 +190,6 @@ export function App() {
   const [hands, setHands] = useState<"Left" | "Both" | "Right">("Both");
   const [countIn, setCountIn] = useState<0 | 1 | 2>(0);
   const [onMiss, setOnMiss] = useState<"wait" | "skip">("wait");
-  const [metronome, setMetronome] = useState(false);
 
   const theme = THEMES[themeName];
 
@@ -433,9 +432,7 @@ export function App() {
       hands={hands}
       countIn={countIn}
       onMiss={onMiss}
-      metronome={metronome}
       onThemeChange={setThemeName}
-      onAccentChange={setAccent}
       onPlayPause={handlePlayPause}
       onStop={handleStop}
       onRestart={handleRestart}
@@ -465,7 +462,6 @@ export function App() {
       onHandsChange={setHands}
       onCountInChange={setCountIn}
       onOnMissChange={setOnMiss}
-      onMetronomeChange={setMetronome}
       onGoToLanding={() => setScreen("landing")}
     />
   );
@@ -994,9 +990,7 @@ interface PracticeScreenProps {
   hands: "Left" | "Both" | "Right";
   countIn: 0 | 1 | 2;
   onMiss: "wait" | "skip";
-  metronome: boolean;
   onThemeChange: (t: ThemeName) => void;
-  onAccentChange: (a: string) => void;
   onPlayPause: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -1010,7 +1004,6 @@ interface PracticeScreenProps {
   onHandsChange: (h: "Left" | "Both" | "Right") => void;
   onCountInChange: (c: 0 | 1 | 2) => void;
   onOnMissChange: (m: "wait" | "skip") => void;
-  onMetronomeChange: (v: boolean) => void;
   onGoToLanding: () => void;
 }
 
@@ -1037,9 +1030,7 @@ function PracticeScreen({
   hands,
   countIn,
   onMiss,
-  metronome,
   onThemeChange,
-  onAccentChange,
   onPlayPause,
   onStop,
   onRestart,
@@ -1053,7 +1044,6 @@ function PracticeScreen({
   onHandsChange,
   onCountInChange,
   onOnMissChange,
-  onMetronomeChange,
   onGoToLanding,
 }: PracticeScreenProps) {
   const progress = totalMeasures > 0 ? (currentMeasure - 1) / totalMeasures : 0;
@@ -1424,10 +1414,8 @@ function PracticeScreen({
         hands={hands}
         countIn={countIn}
         onMiss={onMiss}
-        metronome={metronome}
         bluetooth={bluetooth}
         onThemeChange={onThemeChange}
-        onAccentChange={onAccentChange}
         onBpmChange={onBpmChange}
         onLoopToggle={onLoopToggle}
         onMeasureRangeChange={onMeasureRangeChange}
@@ -1435,7 +1423,6 @@ function PracticeScreen({
         onHandsChange={onHandsChange}
         onCountInChange={onCountInChange}
         onOnMissChange={onOnMissChange}
-        onMetronomeChange={onMetronomeChange}
       />
 
       <style>{`
@@ -1561,10 +1548,8 @@ interface SettingsDrawerProps {
   hands: "Left" | "Both" | "Right";
   countIn: 0 | 1 | 2;
   onMiss: "wait" | "skip";
-  metronome: boolean;
   bluetooth: ReturnType<typeof useBluetooth>;
   onThemeChange: (t: ThemeName) => void;
-  onAccentChange: (a: string) => void;
   onBpmChange: (bpm: number) => void;
   onLoopToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
@@ -1572,7 +1557,6 @@ interface SettingsDrawerProps {
   onHandsChange: (h: "Left" | "Both" | "Right") => void;
   onCountInChange: (c: 0 | 1 | 2) => void;
   onOnMissChange: (m: "wait" | "skip") => void;
-  onMetronomeChange: (v: boolean) => void;
 }
 
 function SettingsDrawer({
@@ -1590,10 +1574,8 @@ function SettingsDrawer({
   hands,
   countIn,
   onMiss,
-  metronome,
   bluetooth,
   onThemeChange,
-  onAccentChange,
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
@@ -1601,7 +1583,6 @@ function SettingsDrawer({
   onHandsChange,
   onCountInChange,
   onOnMissChange,
-  onMetronomeChange,
 }: SettingsDrawerProps) {
   const connected = bluetooth.status === "connected";
 
@@ -1693,28 +1674,6 @@ function SettingsDrawer({
             accent={accent}
             onChange={(v) => onThemeChange(v as ThemeName)}
           />
-        </DrawerRow>
-
-        <DrawerRow theme={theme} label="Accent color" hint="">
-          <div style={{ display: "flex", gap: 8 }}>
-            {ACCENT_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => onAccentChange(c)}
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  background: c,
-                  border: `2px solid ${c === accent ? theme.ink : "transparent"}`,
-                  cursor: "pointer",
-                  outline: "none",
-                  boxShadow: c === accent ? `0 0 0 2px ${theme.bg}` : "none",
-                }}
-              />
-            ))}
-          </div>
         </DrawerRow>
 
         {/* Tempo */}
@@ -1854,20 +1813,6 @@ function SettingsDrawer({
             theme={theme}
             accent={accent}
             onChange={(v) => onOnMissChange(v as "wait" | "skip")}
-          />
-        </DrawerRow>
-
-        {/* Metronome */}
-        <DrawerRow
-          theme={theme}
-          label="Metronome"
-          hint={metronome ? "On" : "Off"}
-        >
-          <Toggle
-            on={metronome}
-            onChange={onMetronomeChange}
-            accent={accent}
-            theme={theme}
           />
         </DrawerRow>
 
