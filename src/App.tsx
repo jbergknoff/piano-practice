@@ -1,17 +1,15 @@
 import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { SheetMusicDisplay } from "./SheetMusicDisplay";
 import { MidiPlayer } from "./midi-player";
 import {
   type MidiConversionResult,
   type TrackInfo,
-  getMidiTracks,
   getMidiTempo,
+  getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
-import { SheetMusicDisplay } from "./SheetMusicDisplay";
-import { useWaitMode } from "./use-wait-mode";
-import { useBluetooth } from "./useBluetooth";
 import {
   ACCENT_COLORS,
   THEMES,
@@ -21,6 +19,8 @@ import {
   hexA,
   miniBtnStyle,
 } from "./theme";
+import { useWaitMode } from "./use-wait-mode";
+import { useBluetooth } from "./useBluetooth";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
@@ -157,9 +157,7 @@ function PlusIcon({ size = 14 }: { size?: number }) {
 }
 
 function prettyTitle(filename: string): string {
-  return filename
-    .replace(/\.(mid|midi|musicxml|mxl|xml)$/i, "")
-    .replace(/[-_]/g, " ");
+  return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -684,7 +682,7 @@ function LandingScreen({
         >
           <input
             type="file"
-            accept=".mid,.midi,.xml,.musicxml,.mxl,audio/midi,application/vnd.recordare.musicxml+xml"
+            accept=".mid,.midi,audio/midi"
             onChange={onFile}
             style={{
               position: "absolute",
@@ -756,7 +754,7 @@ function LandingScreen({
               bottom: 14,
             }}
           >
-            {[".mid", ".midi", ".musicxml", ".mxl"].map((ext) => (
+            {[".mid", ".midi"].map((ext) => (
               <span
                 key={ext}
                 style={{
