@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   DIVISIONS,
@@ -244,6 +244,8 @@ interface SheetMusicDisplayProps {
   loopRange?: { from: number; to: number } | null;
   /** Fill color for the loop range highlight. */
   loopColor?: string;
+  /** Called when the user finishes dragging a loop boundary handle. */
+  onLoopRangeChange?: (range: { from: number; to: number }) => void;
 }
 
 export function SheetMusicDisplay({
@@ -258,6 +260,7 @@ export function SheetMusicDisplay({
   containerStyle,
   loopRange,
   loopColor,
+  onLoopRangeChange,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -322,6 +325,85 @@ export function SheetMusicDisplay({
     scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
 
+  // Loop handle drag state — ref tracks the live value between renders, state
+  // drives visual feedback.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const loopDragRef = useRef<{ handle: "left" | "right" } | null>(null);
+  const dragLoopRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const [dragLoopRange, setDragLoopRange] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+
+  const snapToMeasureStart = (svgX: number): number => {
+    let best = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < layout.measureXs.length; i++) {
+      const d = Math.abs(layout.measureXs[i] - svgX);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best + 1;
+  };
+
+  const snapToMeasureEnd = (svgX: number): number => {
+    let best = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < layout.measureXs.length; i++) {
+      const d = Math.abs(layout.measureXs[i] + layout.measureWidths[i] - svgX);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best + 1;
+  };
+
+  const onHandlePointerDown = (e: PointerEvent, handle: "left" | "right") => {
+    if (!loopRange) {
+      return;
+    }
+    e.stopPropagation();
+    loopDragRef.current = { handle };
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    dragLoopRangeRef.current = { ...loopRange };
+    setDragLoopRange({ ...loopRange });
+  };
+
+  const onHandlePointerMove = (e: PointerEvent) => {
+    const drag = loopDragRef.current;
+    if (!drag || !loopRange) {
+      return;
+    }
+    const svgX =
+      e.clientX - (svgRef.current?.getBoundingClientRect().left ?? 0);
+    const current = dragLoopRangeRef.current ?? loopRange;
+    const next =
+      drag.handle === "left"
+        ? {
+            from: Math.min(snapToMeasureStart(svgX), current.to),
+            to: current.to,
+          }
+        : {
+            from: current.from,
+            to: Math.max(snapToMeasureEnd(svgX), current.from),
+          };
+    dragLoopRangeRef.current = next;
+    setDragLoopRange(next);
+  };
+
+  const onHandlePointerUp = () => {
+    const range = dragLoopRangeRef.current;
+    if (range && onLoopRangeChange) {
+      onLoopRangeChange(range);
+    }
+    loopDragRef.current = null;
+    dragLoopRangeRef.current = null;
+    setDragLoopRange(null);
+  };
+
   // Pointer-drag to scroll (mouse and touch via pointer events).
   const dragRef = useRef<{ startX: number; scrollLeft: number } | null>(null);
 
@@ -370,11 +452,13 @@ export function SheetMusicDisplay({
       : layout.totalHeight;
 
   // Compute loop highlight rect bounds (measure indices are 1-indexed in loopRange).
+  // Use dragLoopRange during an active handle drag for live visual feedback.
+  const displayedLoopRange = dragLoopRange ?? loopRange;
   let loopX1: number | null = null;
   let loopX2: number | null = null;
-  if (loopRange) {
-    const fromIdx = loopRange.from - 1;
-    const toIdx = loopRange.to - 1;
+  if (displayedLoopRange) {
+    const fromIdx = displayedLoopRange.from - 1;
+    const toIdx = displayedLoopRange.to - 1;
     if (fromIdx >= 0 && fromIdx < layout.measureXs.length) {
       loopX1 = layout.measureXs[fromIdx];
     }
@@ -390,7 +474,7 @@ export function SheetMusicDisplay({
         overflowX: "auto",
         userSelect: "none",
         touchAction: "pan-x",
-        cursor: "grab",
+        cursor: dragLoopRange ? "ew-resize" : "grab",
         ...(containerStyle as Record<string, string | number> | undefined),
       }}
     >
@@ -400,6 +484,7 @@ export function SheetMusicDisplay({
         (e.g. TimeSig) override via their own attributes.
       */}
       <svg
+        ref={svgRef}
         width={layout.totalWidth}
         height={layout.totalHeight}
         style={{
@@ -444,6 +529,63 @@ export function SheetMusicDisplay({
             stroke-width="2"
             stroke-opacity="0.85"
           />
+        )}
+        {/* Loop range drag handles — rendered last so they sit above all other content */}
+        {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+          <g>
+            <rect
+              x={loopX1 - 2}
+              y={cursorY1 - 4}
+              width={4}
+              height={cursorY2 - cursorY1 + 8}
+              fill={cursorColor}
+              opacity={0.55}
+              rx={2}
+              style={{ pointerEvents: "none" }}
+            />
+            <rect
+              x={loopX1 - 8}
+              y={cursorY1 - 4}
+              width={16}
+              height={cursorY2 - cursorY1 + 8}
+              fill="transparent"
+              style={{ cursor: "ew-resize" }}
+              onPointerDown={(e) =>
+                onHandlePointerDown(e as unknown as PointerEvent, "left")
+              }
+              onPointerMove={(e) =>
+                onHandlePointerMove(e as unknown as PointerEvent)
+              }
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            />
+            <rect
+              x={loopX2 - 2}
+              y={cursorY1 - 4}
+              width={4}
+              height={cursorY2 - cursorY1 + 8}
+              fill={cursorColor}
+              opacity={0.55}
+              rx={2}
+              style={{ pointerEvents: "none" }}
+            />
+            <rect
+              x={loopX2 - 8}
+              y={cursorY1 - 4}
+              width={16}
+              height={cursorY2 - cursorY1 + 8}
+              fill="transparent"
+              style={{ cursor: "ew-resize" }}
+              onPointerDown={(e) =>
+                onHandlePointerDown(e as unknown as PointerEvent, "right")
+              }
+              onPointerMove={(e) =>
+                onHandlePointerMove(e as unknown as PointerEvent)
+              }
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            />
+          </g>
         )}
       </svg>
     </div>

@@ -110,6 +110,7 @@ export function PracticeScreen({
           inkColor={theme.ink}
           loopRange={showLoop ? measureRange : null}
           loopColor={hexA(accent, 0.09)}
+          onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
           containerStyle={{
             position: "absolute",
             inset: 0,
