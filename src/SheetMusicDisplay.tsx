@@ -730,6 +730,8 @@ function Clef({
   inkColor: string;
 }) {
   const char = clef.sign === "G" ? G.gClef : G.fClef;
+  // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
+  // F clef baseline sits on the F line (4th line = 3 staffSpaces up).
   const y =
     clef.sign === "G"
       ? staffBottomY - staffSpace
