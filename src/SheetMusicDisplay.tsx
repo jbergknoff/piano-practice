@@ -292,13 +292,37 @@ export function SheetMusicDisplay({
       : null;
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollTargetRef = useRef<number | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (cursorX === null || !containerRef.current) {
       return;
     }
     const el = containerRef.current;
-    el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
+    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
+
+    if (scrollRafRef.current !== null) {
+      return; // animation loop already running
+    }
+
+    const step = () => {
+      const target = scrollTargetRef.current;
+      if (target === null || !containerRef.current) {
+        scrollRafRef.current = null;
+        return;
+      }
+      const diff = target - containerRef.current.scrollLeft;
+      if (Math.abs(diff) < 0.5) {
+        containerRef.current.scrollLeft = target;
+        scrollTargetRef.current = null;
+        scrollRafRef.current = null;
+        return;
+      }
+      containerRef.current.scrollLeft += diff * 0.12;
+      scrollRafRef.current = requestAnimationFrame(step);
+    };
+    scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
 
   // Pointer-drag to scroll (mouse and touch via pointer events).
