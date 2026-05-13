@@ -292,11 +292,12 @@ export function SheetMusicDisplay({
   const scrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (cursorX === null || !containerRef.current) {
+    if (!containerRef.current) {
       return;
     }
     const el = containerRef.current;
-    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
+    scrollTargetRef.current =
+      cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running
