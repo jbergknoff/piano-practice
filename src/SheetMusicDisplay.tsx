@@ -555,7 +555,7 @@ export function SheetMusicDisplay({
               width={16}
               height={cursorY2 - cursorY1 + 8}
               fill="transparent"
-              style={{ cursor: "ew-resize" }}
+              style={{ cursor: "ew-resize", touchAction: "none" }}
               onPointerDown={(e) =>
                 onHandlePointerDown(e as unknown as PointerEvent, "left")
               }
@@ -581,7 +581,7 @@ export function SheetMusicDisplay({
               width={16}
               height={cursorY2 - cursorY1 + 8}
               fill="transparent"
-              style={{ cursor: "ew-resize" }}
+              style={{ cursor: "ew-resize", touchAction: "none" }}
               onPointerDown={(e) =>
                 onHandlePointerDown(e as unknown as PointerEvent, "right")
               }
