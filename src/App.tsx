@@ -46,24 +46,6 @@ function StopIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
-function RestartIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 12a8 8 0 1 0 2.34-5.66" />
-      <path d="M4 4v4h4" />
-    </svg>
-  );
-}
 function LoopIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -291,12 +273,6 @@ export function App() {
     setCurrentBeat(0);
   }
 
-  function handleRestart() {
-    playerRef.current?.stop();
-    setIsPlaying(false);
-    setCurrentBeat(0);
-  }
-
   function handleBpmChange(newBpm: number) {
     setBpm(newBpm);
     playerRef.current?.setBpm(newBpm);
@@ -445,7 +421,6 @@ export function App() {
         selectedTracks={selectedTracks}
         onPlayPause={handlePlayPause}
         onStop={handleStop}
-        onRestart={handleRestart}
         onBpmChange={handleBpmChange}
         onLoopToggle={() => {
           setShowLoop((v) => {
@@ -819,7 +794,6 @@ interface PracticeScreenProps {
   selectedTracks: number[];
   onPlayPause: () => void;
   onStop: () => void;
-  onRestart: () => void;
   onBpmChange: (bpm: number) => void;
   onLoopToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
@@ -850,7 +824,6 @@ function PracticeScreen({
   selectedTracks,
   onPlayPause,
   onStop,
-  onRestart,
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
@@ -1068,14 +1041,6 @@ function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <button
-          type="button"
-          onClick={onRestart}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Restart"
-        >
-          <RestartIcon />
-        </button>
         <button
           type="button"
           onClick={onPlayPause}
