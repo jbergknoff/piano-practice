@@ -301,6 +301,44 @@ export function SheetMusicDisplay({
     el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
   }, [cursorX]);
 
+  // Pointer-drag to scroll (mouse and touch via pointer events).
+  const dragRef = useRef<{ startX: number; scrollLeft: number } | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
+      el.setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragRef.current) {
+        return;
+      }
+      el.scrollLeft =
+        dragRef.current.scrollLeft - (e.clientX - dragRef.current.startX);
+    };
+
+    const onPointerUp = () => {
+      dragRef.current = null;
+    };
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointerleave", onPointerUp);
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointerleave", onPointerUp);
+    };
+  }, []);
+
   const cursorY1 =
     layout.staffBottomYs.length > 0
       ? layout.staffBottomYs[0] - 4 * layout.staffSpace
@@ -330,6 +368,8 @@ export function SheetMusicDisplay({
       style={{
         overflowX: "auto",
         userSelect: "none",
+        touchAction: "pan-x",
+        cursor: "grab",
         ...(containerStyle as Record<string, string | number> | undefined),
       }}
     >
@@ -341,7 +381,12 @@ export function SheetMusicDisplay({
       <svg
         width={layout.totalWidth}
         height={layout.totalHeight}
-        style={{ display: "block", fontFamily: BRAVURA, fontSize: fontSize }}
+        style={{
+          display: "block",
+          fontFamily: BRAVURA,
+          fontSize: fontSize,
+          flexShrink: 0,
+        }}
         role="img"
         aria-label="Sheet music"
       >
