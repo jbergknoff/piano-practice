@@ -1,26 +1,35 @@
 import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { LivePianoInput } from "./LivePianoInput";
+import { LandingScreen } from "./components/LandingScreen";
+import { PracticeScreen } from "./components/PracticeScreen";
 import { MidiPlayer } from "./midi-player";
 import {
   type MidiConversionResult,
   type TrackInfo,
-  getMidiTracks,
   getMidiTempo,
+  getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
-import { PlaybackControls } from "./PlaybackControls";
-import { SheetMusicDisplay } from "./SheetMusicDisplay";
+import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import { useWaitMode } from "./use-wait-mode";
+import { useBluetooth } from "./useBluetooth";
+
+function prettyTitle(filename: string): string {
+  return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
 
 export function App() {
+  // File / MIDI state
   const [midiData, setMidiData] = useState<MidiData | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
+  // Transport state
   const [bpm, setBpm] = useState(120);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
@@ -29,6 +38,14 @@ export function App() {
     to: number;
   } | null>(null);
 
+  // UI state
+  const themeName: ThemeName = "cream";
+  const accent = ACCENT_COLORS[0];
+  const [showLoop, setShowLoop] = useState(false);
+
+  const theme = THEMES[themeName];
+
+  // Player + wait mode
   const playerRef = useRef<MidiPlayer | null>(null);
   const measureRangeRef = useRef(measureRange);
   useEffect(() => {
@@ -43,48 +60,10 @@ export function App() {
   }, [midiData, selectedTracks]);
 
   const waitMode = useWaitMode(musicxml, measureRange);
+  const bluetooth = useBluetooth(waitMode.onNoteEvent);
 
-  function handleFile(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setFileName(file.name);
-    setError(null);
-    setMidiData(null);
-    setTracks([]);
-    setSelectedTracks([]);
-    setIsPlaying(false);
-    setCurrentBeat(0);
-    setMeasureRange(null);
-
-    file.arrayBuffer().then((buffer) => {
-      try {
-        const parsed = parseMidi(new Uint8Array(buffer));
-        const trackList = getMidiTracks(parsed);
-        setMidiData(parsed);
-        setTracks(trackList);
-        setSelectedTracks(trackList.map((t) => t.index));
-        setBpm(getMidiTempo(parsed));
-      } catch (err) {
-        setError(String(err));
-      }
-    });
-  }
-
-  function toggleTrack(index: number) {
-    setSelectedTracks((prev) =>
-      prev.includes(index)
-        ? prev.filter((i) => i !== index)
-        : [...prev, index].sort((a, b) => a - b),
-    );
-  }
-
-  // Rebuild player whenever the conversion result changes.
-  // bpm and measureRange are intentionally excluded: they go through
-  // player.setBpm / player.loopRange without a full rebuild.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see comment above
+  // Rebuild player when conversion result changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange go through player methods
   useEffect(() => {
     playerRef.current?.dispose();
     playerRef.current = null;
@@ -100,7 +79,6 @@ export function App() {
           endBeat: range.to * musicxml.timeSigNum,
         };
       }
-      // Suppress position updates while wait mode is driving the cursor.
       player.onPositionUpdate = (beat) => {
         if (!waitMode.activeRef.current) {
           setCurrentBeat(beat);
@@ -119,8 +97,7 @@ export function App() {
     };
   }, [musicxml]);
 
-  // Keep the player's loop range in sync and scroll to the range start.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: waitMode.activeRef is a ref; reading .current is intentional
+  // biome-ignore lint/correctness/useExhaustiveDependencies: waitMode.activeRef is a ref
   useEffect(() => {
     const player = playerRef.current;
     if (!musicxml) {
@@ -176,15 +153,67 @@ export function App() {
 
   function handleToggleWaitMode() {
     if (!waitMode.active) {
-      // Pause audio before handing cursor control to the hook.
       playerRef.current?.pause();
       setIsPlaying(false);
     }
     waitMode.toggle(currentBeat);
   }
 
-  // In wait mode: amber highlight on the expected chord (from the hook).
-  // In playback mode: blue highlight on currently sounding notes.
+  function parseMidiFile(file: File) {
+    setFileName(file.name);
+    setFileError(null);
+    setMidiData(null);
+    setTracks([]);
+    setSelectedTracks([]);
+    setIsPlaying(false);
+    setCurrentBeat(0);
+    setMeasureRange(null);
+    setShowLoop(false);
+
+    file.arrayBuffer().then((buffer) => {
+      try {
+        const parsed = parseMidi(new Uint8Array(buffer));
+        const trackList = getMidiTracks(parsed);
+        setMidiData(parsed);
+        setTracks(trackList);
+        setSelectedTracks(trackList.map((t) => t.index));
+        setBpm(getMidiTempo(parsed));
+      } catch (err) {
+        setFileError(String(err));
+      }
+    });
+  }
+
+  function handleFileInput(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) {
+      parseMidiFile(file);
+    }
+  }
+
+  function handleFileDrop(e: DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      parseMidiFile(file);
+    }
+  }
+
+  function handleGoToLanding() {
+    playerRef.current?.stop();
+    playerRef.current?.dispose();
+    playerRef.current = null;
+    setMidiData(null);
+    setFileName(null);
+    setTracks([]);
+    setSelectedTracks([]);
+    setIsPlaying(false);
+    setCurrentBeat(0);
+    setMeasureRange(null);
+    setShowLoop(false);
+  }
+
+  // Note colors
   const noteColors = useMemo(() => {
     if (waitMode.active) {
       return waitMode.noteColors;
@@ -200,61 +229,87 @@ export function App() {
       ) {
         colors[
           `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-        ] = "#1565c0";
+        ] = accent;
       }
     }
     return colors;
-  }, [waitMode.active, waitMode.noteColors, musicxml, currentBeat]);
+  }, [waitMode.active, waitMode.noteColors, musicxml, currentBeat, accent]);
 
   const playbackBeat =
     waitMode.cursorBeat ?? (currentBeat > 0 ? currentBeat : undefined);
 
-  return (
-    <div>
-      <h1>MIDI Inspector</h1>
-      <input type="file" accept=".mid,.midi" onChange={handleFile} />
-      {fileName && <p>File: {fileName}</p>}
-      {error && <p style="color: red">{error}</p>}
-      {tracks.length > 0 && (
-        <div>
-          {tracks.map((t) => (
-            <label key={t.index} style={{ marginRight: "1em" }}>
-              <input
-                type="checkbox"
-                checked={selectedTracks.includes(t.index)}
-                onChange={() => toggleTrack(t.index)}
-              />{" "}
-              {t.name} ({t.noteCount} notes)
-            </label>
-          ))}
-        </div>
-      )}
-      {musicxml && (
-        <PlaybackControls
-          isPlaying={isPlaying}
-          bpm={bpm}
-          currentBeat={playbackBeat ?? 0}
-          totalBeats={musicxml.totalBeats}
-          timeSigNum={musicxml.timeSigNum}
-          waitMode={waitMode.active}
-          measureRange={measureRange}
-          onPlayPause={handlePlayPause}
-          onStop={handleStop}
-          onBpmChange={handleBpmChange}
-          onToggleWaitMode={handleToggleWaitMode}
-          onMeasureRangeChange={setMeasureRange}
-        />
-      )}
-      {musicxml && (
-        <SheetMusicDisplay
-          musicxml={musicxml.musicxml}
-          noteColors={noteColors}
-          playbackBeat={playbackBeat}
-          cursorColor={waitMode.wrongNoteFlash ? "#c62828" : undefined}
-        />
-      )}
+  const totalMeasures =
+    musicxml && musicxml.totalBeats > 0
+      ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum)
+      : 0;
+  const currentMeasure =
+    musicxml && musicxml.totalBeats > 0
+      ? Math.min(
+          totalMeasures,
+          Math.floor((playbackBeat ?? 0) / musicxml.timeSigNum) + 1,
+        )
+      : 1;
 
-      <LivePianoInput onNoteEvent={waitMode.onNoteEvent} />
-    </div>
+  const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
+
+  const onTrackToggle = (idx: number) =>
+    setSelectedTracks((prev) =>
+      prev.includes(idx)
+        ? prev.filter((i) => i !== idx)
+        : [...prev, idx].sort((a, b) => a - b),
+    );
+
+  // Screen is derived from whether MIDI data has been loaded.
+  if (midiData === null) {
+    return (
+      <LandingScreen
+        theme={theme}
+        accent={accent}
+        fileError={fileError}
+        bluetooth={bluetooth}
+        onFile={handleFileInput}
+        onDrop={handleFileDrop}
+      />
+    );
+  }
+
+  return (
+    <PracticeScreen
+      theme={theme}
+      accent={accent}
+      pieceTitle={pieceTitle}
+      musicxml={musicxml}
+      noteColors={noteColors}
+      playbackBeat={playbackBeat}
+      cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
+      isPlaying={isPlaying}
+      bpm={bpm}
+      showLoop={showLoop}
+      measureRange={measureRange}
+      totalMeasures={totalMeasures}
+      currentMeasure={currentMeasure}
+      bluetooth={bluetooth}
+      waitMode={waitMode.active}
+      tracks={tracks}
+      selectedTracks={selectedTracks}
+      onPlayPause={handlePlayPause}
+      onStop={handleStop}
+      onBpmChange={handleBpmChange}
+      onLoopToggle={() => {
+        setShowLoop((v) => {
+          if (!v && musicxml) {
+            setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
+          }
+          if (v) {
+            setMeasureRange(null);
+          }
+          return !v;
+        });
+      }}
+      onMeasureRangeChange={setMeasureRange}
+      onToggleWaitMode={handleToggleWaitMode}
+      onTrackToggle={onTrackToggle}
+      onGoToLanding={handleGoToLanding}
+    />
   );
 }

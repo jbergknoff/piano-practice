@@ -74,11 +74,29 @@ export function resolveLayout(
   };
 }
 
+function firstEventHasAccidental(events: MeasureEvent[]): boolean {
+  if (events.length === 0 || isRest(events[0])) {
+    return false;
+  }
+  return (events[0] as ChordGroup).notes.some((n) => n.showAccidental);
+}
+
+function measureLeftPad(
+  events: MeasureEvent[],
+  isFirst: boolean,
+  staffSpace: number,
+): number {
+  if (!isFirst && firstEventHasAccidental(events)) {
+    return staffSpace * 2;
+  }
+  return MEASURE_PADDING_LEFT;
+}
+
 function measureWidth(
   measure: ParsedMeasure,
   isFirst: boolean,
   fifths: number,
-  _staffSpace: number,
+  staffSpace: number,
   noteUnitWidth: number,
 ): number {
   const hdrW = isFirst ? headerWidth(fifths) : 0;
@@ -87,7 +105,12 @@ function measureWidth(
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
     contentW += Math.max((dur / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
   }
-  return hdrW + MEASURE_PADDING_LEFT + contentW + MEASURE_PADDING_RIGHT;
+  return (
+    hdrW +
+    measureLeftPad(measure.events, isFirst, staffSpace) +
+    contentW +
+    MEASURE_PADDING_RIGHT
+  );
 }
 
 export function headerWidth(fifths: number): number {
@@ -164,10 +187,11 @@ export function eventXPositions(
   isFirstMeasure: boolean,
   fifths: number,
   noteUnitWidth: number,
+  staffSpace: number,
 ): number[] {
   const hdrW = isFirstMeasure ? headerWidth(fifths) : 0;
   const xs: number[] = [];
-  let x = measureX + hdrW + MEASURE_PADDING_LEFT;
+  let x = measureX + hdrW + measureLeftPad(events, isFirstMeasure, staffSpace);
   for (const event of events) {
     xs.push(x);
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;

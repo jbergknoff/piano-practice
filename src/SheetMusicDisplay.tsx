@@ -193,39 +193,35 @@ function computeCursorX(
     isFirst,
     fifths,
     layout.noteUnitWidth,
+    layout.staffSpace,
   );
 
   // Walk through measure events to find the X position for the current beat.
   // Duration in MusicXML divisions; 4 divisions = 1 quarter note.
   const divisionsPerBeat = DIVISIONS * (4 / timeSig.beatType);
   const targetDiv = beatInMeasure * divisionsPerBeat;
+  const barlineX = layout.measureXs[measureIndex];
+  const endBarlineX = barlineX + layout.measureWidths[measureIndex];
 
   let acc = 0;
   for (let i = 0; i < measure.events.length; i++) {
     const event = measure.events[i];
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
-    const eventWidth = Math.max(
-      (dur / DIVISIONS) * layout.noteUnitWidth,
-      MIN_EVENT_ADVANCE,
-    );
 
     if (acc + dur > targetDiv) {
       const frac = (targetDiv - acc) / dur;
-      if (i === 0) {
-        // Anchor the first event at the barline so the cursor arrives from the
-        // previous measure without a jump: at frac=0 the cursor is exactly on
-        // the barline; by frac=1 it has crossed the first event.
-        const barlineX = layout.measureXs[measureIndex];
-        return barlineX + frac * (eventXs[0] + eventWidth - barlineX);
-      }
-      return eventXs[i] + frac * eventWidth;
+      // Interpolate between adjacent anchors so the cursor is always continuous:
+      //   i=0  starts at barlineX (matches end of previous measure)
+      //   i>0  starts at eventXs[i]
+      //   all  end at the next note's X, or the closing barline for the last event
+      const x0 = i === 0 ? barlineX : eventXs[i];
+      const x1 = i + 1 < eventXs.length ? eventXs[i + 1] : endBarlineX;
+      return x0 + frac * (x1 - x0);
     }
     acc += dur;
   }
 
-  // Return the next barline so the end of this measure matches the start of
-  // the next (which also begins at the barline via the i===0 branch above).
-  return layout.measureXs[measureIndex] + layout.measureWidths[measureIndex];
+  return endBarlineX;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -240,6 +236,14 @@ interface SheetMusicDisplayProps {
   cursorColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
+  /** Color for staff lines, barlines, stems, and noteheads. Defaults to "black". */
+  inkColor?: string;
+  /** Extra style applied to the scroll container div. */
+  containerStyle?: Record<string, unknown>;
+  /** When set, draw a tinted background rect over this measure range (1-indexed, inclusive). */
+  loopRange?: { from: number; to: number } | null;
+  /** Fill color for the loop range highlight. */
+  loopColor?: string;
 }
 
 export function SheetMusicDisplay({
@@ -250,6 +254,10 @@ export function SheetMusicDisplay({
   playbackBeat,
   cursorColor = "#1976d2",
   glyphFontSize,
+  inkColor = "black",
+  containerStyle,
+  loopRange,
+  loopColor,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -280,14 +288,76 @@ export function SheetMusicDisplay({
       : null;
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollTargetRef = useRef<number | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (cursorX === null || !containerRef.current) {
       return;
     }
     const el = containerRef.current;
-    el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
+    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
+
+    if (scrollRafRef.current !== null) {
+      return; // animation loop already running
+    }
+
+    const step = () => {
+      const target = scrollTargetRef.current;
+      if (target === null || !containerRef.current) {
+        scrollRafRef.current = null;
+        return;
+      }
+      const diff = target - containerRef.current.scrollLeft;
+      if (Math.abs(diff) < 0.5) {
+        containerRef.current.scrollLeft = target;
+        scrollTargetRef.current = null;
+        scrollRafRef.current = null;
+        return;
+      }
+      containerRef.current.scrollLeft += diff * 0.12;
+      scrollRafRef.current = requestAnimationFrame(step);
+    };
+    scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
+
+  // Pointer-drag to scroll (mouse and touch via pointer events).
+  const dragRef = useRef<{ startX: number; scrollLeft: number } | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
+      el.setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragRef.current) {
+        return;
+      }
+      el.scrollLeft =
+        dragRef.current.scrollLeft - (e.clientX - dragRef.current.startX);
+    };
+
+    const onPointerUp = () => {
+      dragRef.current = null;
+    };
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointerleave", onPointerUp);
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointerleave", onPointerUp);
+    };
+  }, []);
 
   const cursorY1 =
     layout.staffBottomYs.length > 0
@@ -298,8 +368,31 @@ export function SheetMusicDisplay({
       ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
       : layout.totalHeight;
 
+  // Compute loop highlight rect bounds (measure indices are 1-indexed in loopRange).
+  let loopX1: number | null = null;
+  let loopX2: number | null = null;
+  if (loopRange) {
+    const fromIdx = loopRange.from - 1;
+    const toIdx = loopRange.to - 1;
+    if (fromIdx >= 0 && fromIdx < layout.measureXs.length) {
+      loopX1 = layout.measureXs[fromIdx];
+    }
+    if (toIdx >= 0 && toIdx < layout.measureXs.length) {
+      loopX2 = layout.measureXs[toIdx] + layout.measureWidths[toIdx];
+    }
+  }
+
   return (
-    <div ref={containerRef} style={{ overflowX: "auto", userSelect: "none" }}>
+    <div
+      ref={containerRef}
+      style={{
+        overflowX: "auto",
+        userSelect: "none",
+        touchAction: "pan-x",
+        cursor: "grab",
+        ...(containerStyle as Record<string, string | number> | undefined),
+      }}
+    >
       {/*
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
@@ -308,10 +401,26 @@ export function SheetMusicDisplay({
       <svg
         width={layout.totalWidth}
         height={layout.totalHeight}
-        style={{ display: "block", fontFamily: BRAVURA, fontSize: fontSize }}
+        style={{
+          display: "block",
+          fontFamily: BRAVURA,
+          fontSize: fontSize,
+          flexShrink: 0,
+        }}
         role="img"
         aria-label="Sheet music"
       >
+        {/* Loop range background */}
+        {loopX1 !== null && loopX2 !== null && loopColor && (
+          <rect
+            x={loopX1}
+            y={cursorY1 - 4}
+            width={loopX2 - loopX1}
+            height={cursorY2 - cursorY1 + 8}
+            fill={loopColor}
+            rx={8}
+          />
+        )}
         {score.parts.map((part, p) => (
           <Staff
             key={part.id}
@@ -321,6 +430,7 @@ export function SheetMusicDisplay({
             staffBottomY={layout.staffBottomYs[p]}
             noteColors={noteColors}
             visible={visibleParts ? visibleParts.has(part.id) : true}
+            inkColor={inkColor}
           />
         ))}
         {cursorX !== null && (
@@ -331,7 +441,7 @@ export function SheetMusicDisplay({
             y2={cursorY2 + 4}
             stroke={cursorColor}
             stroke-width="2"
-            stroke-opacity="0.75"
+            stroke-opacity="0.85"
           />
         )}
       </svg>
@@ -348,6 +458,7 @@ interface StaffProps {
   staffBottomY: number;
   noteColors: Record<string, string>;
   visible: boolean;
+  inkColor: string;
 }
 
 function Staff({
@@ -357,6 +468,7 @@ function Staff({
   staffBottomY,
   noteColors,
   visible,
+  inkColor,
 }: StaffProps) {
   const { staffSpace, totalWidth, measureXs, measureWidths } = layout;
   return (
@@ -365,6 +477,7 @@ function Staff({
         totalWidth={totalWidth}
         staffBottomY={staffBottomY}
         staffSpace={staffSpace}
+        inkColor={inkColor}
       />
       {part.measures.map((measure, m) => (
         <Measure
@@ -379,6 +492,7 @@ function Staff({
           staffBottomY={staffBottomY}
           layout={layout}
           noteColors={noteColors}
+          inkColor={inkColor}
         />
       ))}
       {/* Final barline at right edge of last measure */}
@@ -390,6 +504,7 @@ function Staff({
           }
           staffBottomY={staffBottomY}
           staffSpace={staffSpace}
+          inkColor={inkColor}
         />
       )}
     </g>
@@ -402,7 +517,13 @@ function StaffLines({
   totalWidth,
   staffBottomY,
   staffSpace,
-}: { totalWidth: number; staffBottomY: number; staffSpace: number }) {
+  inkColor,
+}: {
+  totalWidth: number;
+  staffBottomY: number;
+  staffSpace: number;
+  inkColor: string;
+}) {
   return (
     <g>
       {[0, 1, 2, 3, 4].map((i) => {
@@ -414,8 +535,9 @@ function StaffLines({
             x2={totalWidth}
             y1={y}
             y2={y}
-            stroke="black"
-            stroke-width="1"
+            stroke={inkColor}
+            stroke-width="0.8"
+            stroke-opacity="0.55"
           />
         );
       })}
@@ -429,15 +551,17 @@ function Barline({
   x,
   staffBottomY,
   staffSpace,
-}: { x: number; staffBottomY: number; staffSpace: number }) {
+  inkColor,
+}: { x: number; staffBottomY: number; staffSpace: number; inkColor: string }) {
   return (
     <line
       x1={x}
       x2={x}
       y1={staffBottomY - 4 * staffSpace}
       y2={staffBottomY}
-      stroke="black"
-      stroke-width="1.5"
+      stroke={inkColor}
+      stroke-width="0.9"
+      stroke-opacity="0.55"
     />
   );
 }
@@ -455,6 +579,7 @@ interface MeasureProps {
   staffBottomY: number;
   layout: ResolvedLayout;
   noteColors: Record<string, string>;
+  inkColor: string;
 }
 
 function Measure({
@@ -468,6 +593,7 @@ function Measure({
   staffBottomY,
   layout,
   noteColors,
+  inkColor,
 }: MeasureProps) {
   const { staffSpace, noteUnitWidth } = layout;
   const eventXs = eventXPositions(
@@ -476,6 +602,7 @@ function Measure({
     isFirstMeasure,
     keySig.fifths,
     noteUnitWidth,
+    staffSpace,
   );
 
   const hdrWidth = isFirstMeasure ? headerWidth(keySig.fifths) : 0;
@@ -507,7 +634,12 @@ function Measure({
 
   return (
     <g>
-      <Barline x={x} staffBottomY={staffBottomY} staffSpace={staffSpace} />
+      <Barline
+        x={x}
+        staffBottomY={staffBottomY}
+        staffSpace={staffSpace}
+        inkColor={inkColor}
+      />
       {isFirstMeasure && (
         <>
           <Clef
@@ -515,6 +647,7 @@ function Measure({
             x={clefX}
             staffBottomY={staffBottomY}
             staffSpace={staffSpace}
+            inkColor={inkColor}
           />
           <KeySig
             keySig={keySig}
@@ -522,12 +655,14 @@ function Measure({
             x={keySigX}
             staffBottomY={staffBottomY}
             staffSpace={staffSpace}
+            inkColor={inkColor}
           />
           <TimeSig
             timeSig={measure.timeSig ?? { beats: 4, beatType: 4 }}
             x={timeSigX}
             staffBottomY={staffBottomY}
             staffSpace={staffSpace}
+            inkColor={inkColor}
           />
         </>
       )}
@@ -548,6 +683,7 @@ function Measure({
                 x={ex}
                 staffBottomY={staffBottomY}
                 staffSpace={staffSpace}
+                inkColor={inkColor}
               />
             );
           }
@@ -564,11 +700,16 @@ function Measure({
               noteColors={noteColors}
               staffSpace={staffSpace}
               beamStemOverride={beamOverrideMap.get(ei)}
+              inkColor={inkColor}
             />
           );
         });
       })()}
-      <BeamLines beamGroups={beamGroups} staffSpace={staffSpace} />
+      <BeamLines
+        beamGroups={beamGroups}
+        staffSpace={staffSpace}
+        inkColor={inkColor}
+      />
     </g>
   );
 }
@@ -580,11 +721,13 @@ function Clef({
   x,
   staffBottomY,
   staffSpace,
+  inkColor,
 }: {
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
   staffSpace: number;
+  inkColor: string;
 }) {
   const char = clef.sign === "G" ? G.gClef : G.fClef;
   // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
@@ -594,7 +737,7 @@ function Clef({
       ? staffBottomY - staffSpace
       : staffBottomY - 3 * staffSpace;
   return (
-    <text x={x + 2} y={y}>
+    <text x={x + 2} y={y} fill={inkColor}>
       {char}
     </text>
   );
@@ -608,12 +751,14 @@ function KeySig({
   x,
   staffBottomY,
   staffSpace,
+  inkColor,
 }: {
   keySig: { fifths: number };
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
   staffSpace: number;
+  inkColor: string;
 }) {
   const { fifths } = keySig;
   if (fifths === 0) {
@@ -637,6 +782,7 @@ function KeySig({
             x={x + i * spacing}
             y={y}
             text-anchor="middle"
+            fill={inkColor}
           >
             {symbol}
           </text>
@@ -653,22 +799,24 @@ function TimeSig({
   x,
   staffBottomY,
   staffSpace,
+  inkColor,
 }: {
   timeSig: { beats: number; beatType: number };
   x: number;
   staffBottomY: number;
   staffSpace: number;
+  inkColor: string;
 }) {
   const centerX = x + 10;
   const fontSize = staffSpace * 2;
   return (
-    <g>
+    <g fill={inkColor}>
       <text
         x={centerX}
         y={staffBottomY - staffSpace * 3}
         font-size={fontSize}
-        font-family="serif"
-        font-weight="bold"
+        font-family="Fraunces, serif"
+        font-weight="700"
         text-anchor="middle"
         dominant-baseline="middle"
       >
@@ -678,8 +826,8 @@ function TimeSig({
         x={centerX}
         y={staffBottomY - staffSpace * 1}
         font-size={fontSize}
-        font-family="serif"
-        font-weight="bold"
+        font-family="Fraunces, serif"
+        font-weight="700"
         text-anchor="middle"
         dominant-baseline="middle"
       >
@@ -700,6 +848,7 @@ interface ChordGroupElProps {
   measureNumber: number;
   noteColors: Record<string, string>;
   staffSpace: number;
+  inkColor: string;
   /** When set, this note is part of a beam group: use the given stem direction
    *  and extend the stem to stemTipY instead of the default length. No flag
    *  is rendered — the beam line is drawn by BeamLines instead. */
@@ -735,6 +884,7 @@ function ChordGroupEl({
   measureNumber,
   noteColors,
   staffSpace,
+  inkColor,
   beamStemOverride,
 }: ChordGroupElProps) {
   const { type, notes, noteIndex, dot } = group;
@@ -771,7 +921,7 @@ function ChordGroupEl({
           x2={stemX}
           y1={stemY1}
           y2={stemY2}
-          stroke="black"
+          stroke={inkColor}
           stroke-width="1.2"
         />
       )}
@@ -783,13 +933,14 @@ function ChordGroupEl({
             stemDir={stemDir}
             stemX={stemX}
             stemTipY={stemY2}
+            inkColor={inkColor}
           />
         )}
       {notes.map((note, v) => {
         const ny = noteYs[v];
         const nx = x + xOffsets[v];
         const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
-        const color = noteColors[id] ?? "black";
+        const color = noteColors[id] ?? inkColor;
         return (
           <g key={id}>
             <Notehead
@@ -809,7 +960,7 @@ function ChordGroupEl({
                   x2={nx + nrx + 4}
                   y1={ly}
                   y2={ly}
-                  stroke="black"
+                  stroke={inkColor}
                   stroke-width="1"
                 />
               ),
@@ -836,11 +987,13 @@ function Flags({
   stemDir,
   stemX,
   stemTipY,
+  inkColor,
 }: {
   type: NoteType;
   stemDir: "up" | "down";
   stemX: number;
   stemTipY: number;
+  inkColor: string;
 }) {
   const char =
     stemDir === "up"
@@ -851,7 +1004,7 @@ function Flags({
         ? G.flag16thDown
         : G.flag8thDown;
   return (
-    <text x={stemX} y={stemTipY} text-anchor="start">
+    <text x={stemX} y={stemTipY} text-anchor="start" fill={inkColor}>
       {char}
     </text>
   );
@@ -902,9 +1055,11 @@ function Notehead({
 function BeamLines({
   beamGroups,
   staffSpace,
+  inkColor,
 }: {
   beamGroups: BeamGroupData[];
   staffSpace: number;
+  inkColor: string;
 }) {
   const beamThickness = staffSpace * 0.5;
   // Gap between primary and secondary beam: beam thickness + small clearance
@@ -930,7 +1085,7 @@ function BeamLines({
               x2={x2}
               y1={beamY}
               y2={beamY}
-              stroke="black"
+              stroke={inkColor}
               stroke-width={beamThickness}
             />
             {secSegments.map((seg) => (
@@ -940,7 +1095,7 @@ function BeamLines({
                 x2={seg.x2}
                 y1={beam2Y}
                 y2={beam2Y}
-                stroke="black"
+                stroke={inkColor}
                 stroke-width={beamThickness}
               />
             ))}
@@ -958,11 +1113,13 @@ function RestEl({
   x,
   staffBottomY,
   staffSpace,
+  inkColor,
 }: {
   rest: ParsedRest;
   x: number;
   staffBottomY: number;
   staffSpace: number;
+  inkColor: string;
 }) {
   const { type, fullMeasure } = rest;
   const effectiveType = fullMeasure ? "whole" : type;
@@ -979,7 +1136,12 @@ function RestEl({
             : G.rest16th;
 
   return (
-    <text x={x} y={staffBottomY - 2 * staffSpace} text-anchor="middle">
+    <text
+      x={x}
+      y={staffBottomY - 2 * staffSpace}
+      text-anchor="middle"
+      fill={inkColor}
+    >
       {char}
     </text>
   );
