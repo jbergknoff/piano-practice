@@ -199,33 +199,28 @@ function computeCursorX(
   // Duration in MusicXML divisions; 4 divisions = 1 quarter note.
   const divisionsPerBeat = DIVISIONS * (4 / timeSig.beatType);
   const targetDiv = beatInMeasure * divisionsPerBeat;
+  const barlineX = layout.measureXs[measureIndex];
+  const endBarlineX = barlineX + layout.measureWidths[measureIndex];
 
   let acc = 0;
   for (let i = 0; i < measure.events.length; i++) {
     const event = measure.events[i];
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
-    const eventWidth = Math.max(
-      (dur / DIVISIONS) * layout.noteUnitWidth,
-      MIN_EVENT_ADVANCE,
-    );
 
     if (acc + dur > targetDiv) {
       const frac = (targetDiv - acc) / dur;
-      if (i === 0) {
-        // Anchor the first event at the barline so the cursor arrives from the
-        // previous measure without a jump: at frac=0 the cursor is exactly on
-        // the barline; by frac=1 it has crossed the first event.
-        const barlineX = layout.measureXs[measureIndex];
-        return barlineX + frac * (eventXs[0] + eventWidth - barlineX);
-      }
-      return eventXs[i] + frac * eventWidth;
+      // Interpolate between adjacent anchors so the cursor is always continuous:
+      //   i=0  starts at barlineX (matches end of previous measure)
+      //   i>0  starts at eventXs[i]
+      //   all  end at the next note's X, or the closing barline for the last event
+      const x0 = i === 0 ? barlineX : eventXs[i];
+      const x1 = i + 1 < eventXs.length ? eventXs[i + 1] : endBarlineX;
+      return x0 + frac * (x1 - x0);
     }
     acc += dur;
   }
 
-  // Return the next barline so the end of this measure matches the start of
-  // the next (which also begins at the barline via the i===0 branch above).
-  return layout.measureXs[measureIndex] + layout.measureWidths[measureIndex];
+  return endBarlineX;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
