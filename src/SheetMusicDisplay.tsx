@@ -414,6 +414,12 @@ export function SheetMusicDisplay({
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      // Cancel any running auto-scroll so the manual drag always wins.
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
       dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
       el.setPointerCapture(e.pointerId);
     };
