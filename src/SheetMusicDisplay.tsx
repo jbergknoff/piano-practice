@@ -193,6 +193,7 @@ function computeCursorX(
     isFirst,
     fifths,
     layout.noteUnitWidth,
+    layout.staffSpace,
   );
 
   // Walk through measure events to find the X position for the current beat.
@@ -601,6 +602,7 @@ function Measure({
     isFirstMeasure,
     keySig.fifths,
     noteUnitWidth,
+    staffSpace,
   );
 
   const hdrWidth = isFirstMeasure ? headerWidth(keySig.fifths) : 0;

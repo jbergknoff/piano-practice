@@ -453,18 +453,18 @@ describe("eventXPositions", () => {
   const PADDING_LEFT = 14;
 
   test("empty event list returns empty array", () => {
-    expect(eventXPositions([], MEASURE_X, false, 0, NOTE_UNIT)).toEqual([]);
+    expect(eventXPositions([], MEASURE_X, false, 0, NOTE_UNIT, 10)).toEqual([]);
   });
 
   test("non-first measure: first event starts at measureX + padding", () => {
     const events = [chord([p("C", 4)])];
-    const xs = eventXPositions(events, MEASURE_X, false, 0, NOTE_UNIT);
+    const xs = eventXPositions(events, MEASURE_X, false, 0, NOTE_UNIT, 10);
     expect(xs[0]).toBe(MEASURE_X + PADDING_LEFT);
   });
 
   test("first measure: first event starts after header", () => {
     const events = [chord([p("C", 4)])];
-    const xs = eventXPositions(events, MEASURE_X, true, 0, NOTE_UNIT);
+    const xs = eventXPositions(events, MEASURE_X, true, 0, NOTE_UNIT, 10);
     // headerWidth(0) = 60
     expect(xs[0]).toBe(MEASURE_X + 60 + PADDING_LEFT);
   });
@@ -472,7 +472,7 @@ describe("eventXPositions", () => {
   test("quarter notes advance by noteUnitWidth each", () => {
     // Each quarter (duration=4): advance = max((4/4)*48, 18) = 48
     const events = [chord([p("C", 4)]), chord([p("D", 4)]), chord([p("E", 4)])];
-    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT);
+    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT, 10);
     expect(xs).toEqual([PADDING_LEFT, PADDING_LEFT + 48, PADDING_LEFT + 96]);
   });
 
@@ -483,13 +483,13 @@ describe("eventXPositions", () => {
       chord([p("D", 4)], "16th", 1),
       chord([p("E", 4)], "16th", 1),
     ];
-    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT);
+    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT, 10);
     expect(xs).toEqual([PADDING_LEFT, PADDING_LEFT + 18, PADDING_LEFT + 36]);
   });
 
   test("rest events advance by the same rules as chord events", () => {
     const events = [rest(4, "quarter"), chord([p("C", 4)])];
-    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT);
+    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT, 10);
     expect(xs[1] - xs[0]).toBe(48); // quarter rest = 48px advance
   });
 });
