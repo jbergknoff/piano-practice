@@ -365,6 +365,9 @@ export function SheetMusicDisplay({
     if (!loopRange) {
       return;
     }
+    // preventDefault stops the browser from starting a native pan gesture,
+    // which would fire pointercancel and kill the drag on touch devices.
+    e.preventDefault();
     e.stopPropagation();
     loopDragRef.current = { handle };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
