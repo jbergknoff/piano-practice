@@ -488,77 +488,100 @@ export function SheetMusicDisplay({
       }}
     >
       {/*
+        Wrapper gives a positioning context for the HTML handle overlays.
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
         (e.g. TimeSig) override via their own attributes.
       */}
-      <svg
-        ref={svgRef}
-        width={layout.totalWidth}
-        height={layout.totalHeight}
-        style={{
-          display: "block",
-          fontFamily: BRAVURA,
-          fontSize: fontSize,
-          flexShrink: 0,
-        }}
-        role="img"
-        aria-label="Sheet music"
+      <div
+        style={{ position: "relative", display: "inline-block", flexShrink: 0 }}
       >
-        {/* Loop range background */}
-        {loopX1 !== null && loopX2 !== null && loopColor && (
-          <rect
-            x={loopX1}
-            y={cursorY1 - 4}
-            width={loopX2 - loopX1}
-            height={cursorY2 - cursorY1 + 8}
-            fill={loopColor}
-            rx={8}
-          />
-        )}
-        {score.parts.map((part, p) => (
-          <Staff
-            key={part.id}
-            part={part}
-            partIndex={p}
-            layout={layout}
-            staffBottomY={layout.staffBottomYs[p]}
-            noteColors={noteColors}
-            visible={visibleParts ? visibleParts.has(part.id) : true}
-            inkColor={inkColor}
-          />
-        ))}
-        {cursorX !== null && (
-          <line
-            x1={cursorX}
-            x2={cursorX}
-            y1={cursorY1 - 4}
-            y2={cursorY2 + 4}
-            stroke={cursorColor}
-            stroke-width="2"
-            stroke-opacity="0.85"
-          />
-        )}
-        {/* Loop range drag handles — rendered last so they sit above all other content */}
-        {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
-          <g>
+        <svg
+          ref={svgRef}
+          width={layout.totalWidth}
+          height={layout.totalHeight}
+          style={{
+            display: "block",
+            fontFamily: BRAVURA,
+            fontSize: fontSize,
+          }}
+          role="img"
+          aria-label="Sheet music"
+        >
+          {/* Loop range background */}
+          {loopX1 !== null && loopX2 !== null && loopColor && (
             <rect
-              x={loopX1 - 2}
+              x={loopX1}
               y={cursorY1 - 4}
-              width={4}
+              width={loopX2 - loopX1}
               height={cursorY2 - cursorY1 + 8}
-              fill={cursorColor}
-              opacity={0.55}
-              rx={2}
-              style={{ pointerEvents: "none" }}
+              fill={loopColor}
+              rx={8}
             />
-            <rect
-              x={loopX1 - 8}
-              y={cursorY1 - 4}
-              width={16}
-              height={cursorY2 - cursorY1 + 8}
-              fill="transparent"
-              style={{ cursor: "ew-resize", touchAction: "none" }}
+          )}
+          {score.parts.map((part, p) => (
+            <Staff
+              key={part.id}
+              part={part}
+              partIndex={p}
+              layout={layout}
+              staffBottomY={layout.staffBottomYs[p]}
+              noteColors={noteColors}
+              visible={visibleParts ? visibleParts.has(part.id) : true}
+              inkColor={inkColor}
+            />
+          ))}
+          {cursorX !== null && (
+            <line
+              x1={cursorX}
+              x2={cursorX}
+              y1={cursorY1 - 4}
+              y2={cursorY2 + 4}
+              stroke={cursorColor}
+              stroke-width="2"
+              stroke-opacity="0.85"
+            />
+          )}
+          {/* Visible handle bars — SVG only, no pointer events */}
+          {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+            <g>
+              <rect
+                x={loopX1 - 2}
+                y={cursorY1 - 4}
+                width={4}
+                height={cursorY2 - cursorY1 + 8}
+                fill={cursorColor}
+                opacity={0.55}
+                rx={2}
+                style={{ pointerEvents: "none" }}
+              />
+              <rect
+                x={loopX2 - 2}
+                y={cursorY1 - 4}
+                width={4}
+                height={cursorY2 - cursorY1 + 8}
+                fill={cursorColor}
+                opacity={0.55}
+                rx={2}
+                style={{ pointerEvents: "none" }}
+              />
+            </g>
+          )}
+        </svg>
+        {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
+            HTML elements have reliable touch-action support unlike SVG elements. */}
+        {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+          <>
+            <div
+              style={{
+                position: "absolute",
+                top: cursorY1 - 4,
+                left: loopX1 - 8,
+                width: 16,
+                height: cursorY2 - cursorY1 + 8,
+                cursor: "ew-resize",
+                touchAction: "none",
+              }}
               onPointerDown={(e) =>
                 onHandlePointerDown(e as unknown as PointerEvent, "left")
               }
@@ -568,23 +591,16 @@ export function SheetMusicDisplay({
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
             />
-            <rect
-              x={loopX2 - 2}
-              y={cursorY1 - 4}
-              width={4}
-              height={cursorY2 - cursorY1 + 8}
-              fill={cursorColor}
-              opacity={0.55}
-              rx={2}
-              style={{ pointerEvents: "none" }}
-            />
-            <rect
-              x={loopX2 - 8}
-              y={cursorY1 - 4}
-              width={16}
-              height={cursorY2 - cursorY1 + 8}
-              fill="transparent"
-              style={{ cursor: "ew-resize", touchAction: "none" }}
+            <div
+              style={{
+                position: "absolute",
+                top: cursorY1 - 4,
+                left: loopX2 - 8,
+                width: 16,
+                height: cursorY2 - cursorY1 + 8,
+                cursor: "ew-resize",
+                touchAction: "none",
+              }}
               onPointerDown={(e) =>
                 onHandlePointerDown(e as unknown as PointerEvent, "right")
               }
@@ -594,9 +610,9 @@ export function SheetMusicDisplay({
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
             />
-          </g>
+          </>
         )}
-      </svg>
+      </div>
     </div>
   );
 }
