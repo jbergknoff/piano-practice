@@ -187,7 +187,6 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Settings drawer state
-  const [onMiss, setOnMiss] = useState<"wait" | "skip">("wait");
 
   const theme = THEMES[themeName];
 
@@ -392,6 +391,13 @@ export function App() {
   // Piece metadata from file name
   const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
 
+  const onTrackToggle = (idx: number) =>
+    setSelectedTracks((prev) =>
+      prev.includes(idx)
+        ? prev.filter((i) => i !== idx)
+        : [...prev, idx].sort((a, b) => a - b),
+    );
+
   if (screen === "landing") {
     return (
       <div style={{ width: "100%", height: "100%", position: "relative" }}>
@@ -402,98 +408,74 @@ export function App() {
           bluetooth={bluetooth}
           onFile={handleFileInput}
           onDrop={handleFileDrop}
-          onDrawerOpen={() => setDrawerOpen(true)}
         />
         <SettingsDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           theme={theme}
           accent={accent}
-          bpm={bpm}
-          showLoop={showLoop}
-          measureRange={measureRange}
-          totalMeasures={totalMeasures}
           tracks={tracks}
           selectedTracks={selectedTracks}
-          onMiss={onMiss}
           bluetooth={bluetooth}
-          onBpmChange={handleBpmChange}
-          onLoopToggle={() => {
-            setShowLoop((v) => {
-              if (!v && musicxml) {
-                setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
-              }
-              if (v) {
-                setMeasureRange(null);
-              }
-              return !v;
-            });
-          }}
-          onMeasureRangeChange={setMeasureRange}
-          onTrackToggle={(idx) =>
-            setSelectedTracks((prev) =>
-              prev.includes(idx)
-                ? prev.filter((i) => i !== idx)
-                : [...prev, idx].sort((a, b) => a - b),
-            )
-          }
-          onOnMissChange={setOnMiss}
+          onTrackToggle={onTrackToggle}
         />
       </div>
     );
   }
 
   return (
-    <PracticeScreen
-      theme={theme}
-      accent={accent}
-      pieceTitle={pieceTitle}
-      musicxml={musicxml}
-      noteColors={noteColors}
-      playbackBeat={playbackBeat}
-      cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
-      isPlaying={isPlaying}
-      bpm={bpm}
-      showLoop={showLoop}
-      measureRange={measureRange}
-      totalMeasures={totalMeasures}
-      currentMeasure={currentMeasure}
-      drawerOpen={drawerOpen}
-      bluetooth={bluetooth}
-      waitMode={waitMode.active}
-      tracks={tracks}
-      selectedTracks={selectedTracks}
-      // Settings
-      onMiss={onMiss}
-      onPlayPause={handlePlayPause}
-      onStop={handleStop}
-      onRestart={handleRestart}
-      onBpmChange={handleBpmChange}
-      onLoopToggle={() => {
-        setShowLoop((v) => {
-          if (!v && musicxml) {
-            setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
-          }
-          if (v) {
-            setMeasureRange(null);
-          }
-          return !v;
-        });
-      }}
-      onMeasureRangeChange={setMeasureRange}
-      onDrawerOpen={() => setDrawerOpen(true)}
-      onDrawerClose={() => setDrawerOpen(false)}
-      onToggleWaitMode={handleToggleWaitMode}
-      onTrackToggle={(idx) =>
-        setSelectedTracks((prev) =>
-          prev.includes(idx)
-            ? prev.filter((i) => i !== idx)
-            : [...prev, idx].sort((a, b) => a - b),
-        )
-      }
-      onOnMissChange={setOnMiss}
-      onGoToLanding={() => setScreen("landing")}
-    />
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      <PracticeScreen
+        theme={theme}
+        accent={accent}
+        pieceTitle={pieceTitle}
+        musicxml={musicxml}
+        noteColors={noteColors}
+        playbackBeat={playbackBeat}
+        cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
+        isPlaying={isPlaying}
+        bpm={bpm}
+        showLoop={showLoop}
+        measureRange={measureRange}
+        totalMeasures={totalMeasures}
+        currentMeasure={currentMeasure}
+        bluetooth={bluetooth}
+        waitMode={waitMode.active}
+        tracks={tracks}
+        selectedTracks={selectedTracks}
+        onPlayPause={handlePlayPause}
+        onStop={handleStop}
+        onRestart={handleRestart}
+        onBpmChange={handleBpmChange}
+        onLoopToggle={() => {
+          setShowLoop((v) => {
+            if (!v && musicxml) {
+              setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
+            }
+            if (v) {
+              setMeasureRange(null);
+            }
+            return !v;
+          });
+        }}
+        onMeasureRangeChange={setMeasureRange}
+        onDrawerOpen={() => setDrawerOpen(true)}
+        onDrawerClose={() => setDrawerOpen(false)}
+        onToggleWaitMode={handleToggleWaitMode}
+        onTrackToggle={onTrackToggle}
+        onGoToLanding={() => setScreen("landing")}
+      />
+      <SettingsDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        theme={theme}
+        accent={accent}
+        tracks={tracks}
+        selectedTracks={selectedTracks}
+        bluetooth={bluetooth}
+        onTrackToggle={onTrackToggle}
+      />
+    </div>
   );
 }
 
@@ -506,7 +488,6 @@ interface LandingScreenProps {
   bluetooth: ReturnType<typeof useBluetooth>;
   onFile: (e: Event) => void;
   onDrop: (e: DragEvent) => void;
-  onDrawerOpen: () => void;
 }
 
 function LandingScreen({
@@ -516,7 +497,6 @@ function LandingScreen({
   bluetooth,
   onFile,
   onDrop,
-  onDrawerOpen,
 }: LandingScreenProps) {
   const [hovering, setHovering] = useState(false);
   const connected = bluetooth.status === "connected";
@@ -613,17 +593,6 @@ function LandingScreen({
           />
         ))}
       </svg>
-
-      {/* Gear button — top left */}
-      <div style={{ position: "absolute", top: 22, left: 24, zIndex: 3 }}>
-        <button
-          type="button"
-          onClick={onDrawerOpen}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-        >
-          <GearIcon />
-        </button>
-      </div>
 
       {/* Connection badge + help — top right */}
       <div
@@ -844,12 +813,10 @@ interface PracticeScreenProps {
   measureRange: { from: number; to: number } | null;
   totalMeasures: number;
   currentMeasure: number;
-  drawerOpen: boolean;
   bluetooth: ReturnType<typeof useBluetooth>;
   waitMode: boolean;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  onMiss: "wait" | "skip";
   onPlayPause: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -860,7 +827,6 @@ interface PracticeScreenProps {
   onDrawerClose: () => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
-  onOnMissChange: (m: "wait" | "skip") => void;
   onGoToLanding: () => void;
 }
 
@@ -878,12 +844,10 @@ function PracticeScreen({
   measureRange,
   totalMeasures,
   currentMeasure,
-  drawerOpen,
   bluetooth,
   waitMode,
   tracks,
   selectedTracks,
-  onMiss,
   onPlayPause,
   onStop,
   onRestart,
@@ -894,7 +858,6 @@ function PracticeScreen({
   onDrawerClose,
   onToggleWaitMode,
   onTrackToggle,
-  onOnMissChange,
   onGoToLanding,
 }: PracticeScreenProps) {
   const progress = totalMeasures > 0 ? (currentMeasure - 1) / totalMeasures : 0;
@@ -1544,19 +1507,10 @@ interface SettingsDrawerProps {
   onClose: () => void;
   theme: ThemeTokens;
   accent: string;
-  bpm: number;
-  showLoop: boolean;
-  measureRange: { from: number; to: number } | null;
-  totalMeasures: number;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  onMiss: "wait" | "skip";
   bluetooth: ReturnType<typeof useBluetooth>;
-  onBpmChange: (bpm: number) => void;
-  onLoopToggle: () => void;
-  onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onTrackToggle: (idx: number) => void;
-  onOnMissChange: (m: "wait" | "skip") => void;
 }
 
 function SettingsDrawer({
@@ -1564,19 +1518,10 @@ function SettingsDrawer({
   onClose,
   theme,
   accent,
-  bpm,
-  showLoop,
-  measureRange,
-  totalMeasures,
   tracks,
   selectedTracks,
-  onMiss,
   bluetooth,
-  onBpmChange,
-  onLoopToggle,
-  onMeasureRangeChange,
   onTrackToggle,
-  onOnMissChange,
 }: SettingsDrawerProps) {
   const connected = bluetooth.status === "connected";
 
@@ -1658,73 +1603,6 @@ function SettingsDrawer({
           </button>
         </div>
 
-        {/* Tempo */}
-        <DrawerRow theme={theme} label="Tempo" hint={`${bpm} BPM`}>
-          <input
-            type="range"
-            min="40"
-            max="220"
-            value={bpm}
-            onInput={(e) =>
-              onBpmChange(Number.parseInt((e.target as HTMLInputElement).value))
-            }
-            style={{ width: "100%", accentColor: accent }}
-          />
-        </DrawerRow>
-
-        {/* Loop */}
-        <DrawerRow
-          theme={theme}
-          label="Loop section"
-          hint={
-            showLoop && measureRange
-              ? `Measures ${measureRange.from}–${measureRange.to}`
-              : "Off"
-          }
-        >
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Toggle
-              on={showLoop}
-              onChange={onLoopToggle}
-              accent={accent}
-              theme={theme}
-            />
-            {showLoop && measureRange && totalMeasures > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  alignItems: "center",
-                  marginLeft: 6,
-                  fontFamily: "'Geist Mono', monospace",
-                  fontSize: 12,
-                  color: theme.ink,
-                }}
-              >
-                <Stepper
-                  value={measureRange.from}
-                  min={1}
-                  max={measureRange.to}
-                  onChange={(v) =>
-                    onMeasureRangeChange({ from: v, to: measureRange.to })
-                  }
-                  theme={theme}
-                />
-                <span style={{ color: theme.inkFaint }}>–</span>
-                <Stepper
-                  value={measureRange.to}
-                  min={measureRange.from}
-                  max={totalMeasures}
-                  onChange={(v) =>
-                    onMeasureRangeChange({ from: measureRange.from, to: v })
-                  }
-                  theme={theme}
-                />
-              </div>
-            )}
-          </div>
-        </DrawerRow>
-
         {/* Tracks (if multiple) */}
         {tracks.length > 1 && (
           <DrawerRow theme={theme} label="Tracks" hint="">
@@ -1754,22 +1632,6 @@ function SettingsDrawer({
             </div>
           </DrawerRow>
         )}
-
-        {/* On miss */}
-        <DrawerRow
-          theme={theme}
-          label="If I miss a note"
-          hint={onMiss === "wait" ? "Wait for me" : "Skip it"}
-        >
-          <Segmented
-            options={["wait", "skip"]}
-            labels={["Wait", "Skip"]}
-            value={onMiss}
-            theme={theme}
-            accent={accent}
-            onChange={(v) => onOnMissChange(v as "wait" | "skip")}
-          />
-        </DrawerRow>
 
         {/* Footer — connection */}
         <div
