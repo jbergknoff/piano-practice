@@ -11,10 +11,10 @@ import {
   ChevronLeftIcon,
   FocusIcon,
   GearIcon,
-  MicIcon,
   PauseIcon,
+  PianoIcon,
   PlayIcon,
-  StopIcon,
+  ResetIcon,
 } from "./icons";
 
 interface PracticeScreenProps {
@@ -38,7 +38,7 @@ interface PracticeScreenProps {
   tracks: TrackInfo[];
   selectedTracks: number[];
   onPlayPause: () => void;
-  onStop: () => void;
+  onReset: () => void;
   onBpmChange: (bpm: number) => void;
   onFocusToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
@@ -251,7 +251,7 @@ export function PracticeScreen({
   tracks,
   selectedTracks,
   onPlayPause,
-  onStop,
+  onReset,
   onBpmChange,
   onFocusToggle,
   onMeasureRangeChange,
@@ -464,7 +464,7 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* BOTTOM LEFT: transport controls */}
+      {/* BOTTOM LEFT: wait mode + transport controls */}
       <div
         style={{
           position: "absolute",
@@ -476,52 +476,54 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <button
-          type="button"
-          onClick={onPlayPause}
-          disabled={waitMode}
-          style={{
-            ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            width: 52,
-            height: 52,
-            background: accent,
-            color: "#FFF7E5",
-            border: "none",
-            boxShadow: `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`,
-            opacity: waitMode ? 0.5 : 1,
-          }}
-          title={isPlaying ? "Pause" : "Play"}
-        >
-          {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
-        </button>
-        <button
-          type="button"
-          onClick={onStop}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Stop"
-        >
-          <StopIcon />
-        </button>
-
-        {/* Wait-mode toggle — styled as a chip */}
+        {/* Wait mode — primary button */}
         <button
           type="button"
           onClick={onToggleWaitMode}
           style={{
             ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            width: "auto",
-            padding: "0 12px",
-            background: waitMode ? hexA(accent, 0.18) : theme.panel,
-            color: waitMode ? accent : theme.inkSoft,
-            borderColor: waitMode ? hexA(accent, 0.35) : theme.border,
-            fontSize: 11,
-            letterSpacing: "0.04em",
-            gap: 6,
+            width: 52,
+            height: 52,
+            background: waitMode ? accent : theme.panel,
+            color: waitMode ? "#FFF7E5" : theme.inkSoft,
+            border: waitMode ? "none" : undefined,
+            boxShadow: waitMode
+              ? `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`
+              : undefined,
           }}
           title={waitMode ? "Disable wait mode" : "Enable wait mode"}
         >
-          <MicIcon size={12} />
-          <span>Wait</span>
+          <PianoIcon size={22} />
+        </button>
+
+        {/* Play/Pause — only shown outside wait mode */}
+        {!waitMode && (
+          <button
+            type="button"
+            onClick={onPlayPause}
+            style={{
+              ...(cornerBtnStyle(theme) as Record<string, string | number>),
+              width: 52,
+              height: 52,
+              background: accent,
+              color: "#FFF7E5",
+              border: "none",
+              boxShadow: `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`,
+            }}
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+          </button>
+        )}
+
+        {/* Reset — always shown */}
+        <button
+          type="button"
+          onClick={onReset}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          title="Reset to start"
+        >
+          <ResetIcon />
         </button>
       </div>
 

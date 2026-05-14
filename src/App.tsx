@@ -137,14 +137,19 @@ export function App() {
     }
   }
 
-  function handleStop() {
+  function handleReset() {
     if (waitMode.active) {
       waitMode.rewind();
       return;
     }
-    playerRef.current?.stop();
+    const startBeat =
+      showFocus && measureRange
+        ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
+        : 0;
+    playerRef.current?.pause();
+    playerRef.current?.seek(startBeat);
     setIsPlaying(false);
-    setCurrentBeat(0);
+    setCurrentBeat(startBeat);
   }
 
   function handleBpmChange(newBpm: number) {
@@ -319,7 +324,7 @@ export function App() {
       tracks={tracks}
       selectedTracks={selectedTracks}
       onPlayPause={handlePlayPause}
-      onStop={handleStop}
+      onReset={handleReset}
       onBpmChange={handleBpmChange}
       onFocusToggle={() => {
         setShowFocus((v) => {

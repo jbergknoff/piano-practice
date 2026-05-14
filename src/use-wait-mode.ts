@@ -91,11 +91,11 @@ export function useWaitMode(
   musicxml: MidiConversionResult | null,
   measureRange: { from: number; to: number } | null,
 ): WaitModeHandle {
-  const [active, setActive] = useState(false);
+  const [active, setActive] = useState(true);
   const [pointIndex, setPointIndex] = useState(0);
   const [wrongNoteFlash, setWrongNoteFlash] = useState(false);
 
-  const activeRef = useRef(false);
+  const activeRef = useRef(true);
   const pointIndexRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
@@ -146,11 +146,11 @@ export function useWaitMode(
     waitPointsRef.current = waitPoints;
   }, [waitPoints]);
 
-  // Reset all state whenever the piece changes.
+  // Reset all state whenever the piece changes; always start in wait mode.
   // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml is the trigger; ref mutations don't need to be listed
   useEffect(() => {
-    setActive(false);
-    activeRef.current = false;
+    setActive(true);
+    activeRef.current = true;
     setPointIndex(0);
     pointIndexRef.current = 0;
     setWrongNoteFlash(false);

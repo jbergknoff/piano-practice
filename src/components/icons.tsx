@@ -60,6 +60,63 @@ export function ChevronLeftIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+export function PianoIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="5" width="20" height="16" rx="2" />
+      <line x1="9" y1="21" x2="9" y2="5" />
+      <line x1="15" y1="21" x2="15" y2="5" />
+      <rect
+        x="5.5"
+        y="5"
+        width="5"
+        height="9"
+        rx="1"
+        fill="currentColor"
+        stroke="none"
+      />
+      <rect
+        x="13.5"
+        y="5"
+        width="5"
+        height="9"
+        rx="1"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
+  );
+}
+
+export function ResetIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+    </svg>
+  );
+}
+
 export function GearIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
