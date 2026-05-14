@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
@@ -56,6 +56,7 @@ function MeasureScrubber({
   totalBeats,
   timeSigNum,
   playbackBeat,
+  isPlaying,
   theme,
   accent,
   onViewChange,
@@ -65,13 +66,25 @@ function MeasureScrubber({
   totalBeats: number;
   timeSigNum: number;
   playbackBeat: number | undefined;
+  isPlaying: boolean;
   theme: ThemeTokens;
   accent: string;
   onViewChange: (beat: number | null) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
-  const [dragBeat, setDragBeat] = useState<number | null>(null);
+  // scrubBeat persists after drag ends so the handle stays put; cleared when
+  // playback starts so the handle resumes following the cursor.
+  const [scrubBeat, setScrubBeat] = useState<number | null>(null);
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
+
+  useEffect(() => {
+    if (isPlaying) {
+      setScrubBeat(null);
+      onViewChangeRef.current(null);
+    }
+  }, [isPlaying]);
 
   const playbackProgress =
     totalBeats > 0 && playbackBeat != null
@@ -79,13 +92,13 @@ function MeasureScrubber({
       : 0;
 
   const progress =
-    dragBeat !== null && totalBeats > 0
-      ? Math.min(1, dragBeat / totalBeats)
+    scrubBeat !== null && totalBeats > 0
+      ? Math.min(1, scrubBeat / totalBeats)
       : playbackProgress;
 
   const displayMeasure =
-    dragBeat !== null && timeSigNum > 0
-      ? Math.min(totalMeasures, Math.floor(dragBeat / timeSigNum) + 1)
+    scrubBeat !== null && timeSigNum > 0
+      ? Math.min(totalMeasures, Math.floor(scrubBeat / timeSigNum) + 1)
       : currentMeasure;
 
   function beatFromPointer(e: PointerEvent): number {
@@ -118,20 +131,20 @@ function MeasureScrubber({
           isDragging.current = true;
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           const beat = beatFromPointer(e as unknown as PointerEvent);
-          setDragBeat(beat);
+          setScrubBeat(beat);
           onViewChange(beat);
         }}
         onPointerMove={(e) => {
           if (isDragging.current) {
             const beat = beatFromPointer(e as unknown as PointerEvent);
-            setDragBeat(beat);
+            setScrubBeat(beat);
             onViewChange(beat);
           }
         }}
         onPointerUp={() => {
           isDragging.current = false;
-          setDragBeat(null);
-          onViewChange(null);
+          // scrubBeat is intentionally kept — handle stays at the browsed
+          // position until playback starts (cleared in the isPlaying effect).
         }}
         style={{
           width: 130,
@@ -414,6 +427,7 @@ export function PracticeScreen({
             totalBeats={totalBeats}
             timeSigNum={musicxml?.timeSigNum ?? 4}
             playbackBeat={playbackBeat}
+            isPlaying={isPlaying}
             theme={theme}
             accent={accent}
             onViewChange={(beat) => viewScrollRef.current?.(beat)}
