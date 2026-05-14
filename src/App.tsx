@@ -152,6 +152,14 @@ export function App() {
     playerRef.current?.setBpm(newBpm);
   }
 
+  function handleSeek(beat: number) {
+    if (waitMode.active) {
+      return;
+    }
+    playerRef.current?.seek(beat);
+    setCurrentBeat(beat);
+  }
+
   function handleToggleWaitMode() {
     if (!waitMode.active) {
       playerRef.current?.pause();
@@ -311,6 +319,7 @@ export function App() {
         });
       }}
       onMeasureRangeChange={setMeasureRange}
+      onSeek={handleSeek}
       onToggleWaitMode={handleToggleWaitMode}
       onTrackToggle={onTrackToggle}
       onGoToLanding={handleGoToLanding}

@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
@@ -42,7 +42,132 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
+  onSeek: (beat: number) => void;
   onGoToLanding: () => void;
+}
+
+function MeasureScrubber({
+  currentMeasure,
+  totalMeasures,
+  totalBeats,
+  playbackBeat,
+  theme,
+  accent,
+  onSeek,
+}: {
+  currentMeasure: number;
+  totalMeasures: number;
+  totalBeats: number;
+  playbackBeat: number | undefined;
+  theme: ThemeTokens;
+  accent: string;
+  onSeek: (beat: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  const progress =
+    totalBeats > 0 && playbackBeat != null
+      ? Math.min(1, playbackBeat / totalBeats)
+      : 0;
+
+  function seekFromPointer(e: PointerEvent) {
+    if (!trackRef.current) {
+      return;
+    }
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(
+      0,
+      Math.min(1, (e.clientX - rect.left) / rect.width),
+    );
+    onSeek(ratio * totalBeats);
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 5,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 9,
+          color: theme.inkSoft,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          userSelect: "none",
+        }}
+      >
+        M{currentMeasure} / {totalMeasures}
+      </span>
+      <div
+        ref={trackRef}
+        onPointerDown={(e) => {
+          isDragging.current = true;
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          seekFromPointer(e as unknown as PointerEvent);
+        }}
+        onPointerMove={(e) => {
+          if (isDragging.current) {
+            seekFromPointer(e as unknown as PointerEvent);
+          }
+        }}
+        onPointerUp={() => {
+          isDragging.current = false;
+        }}
+        style={{
+          width: 130,
+          height: 16,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          position: "relative",
+          touchAction: "none",
+        }}
+      >
+        {/* Track background */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            height: 3,
+            background: theme.border,
+            borderRadius: 2,
+          }}
+        />
+        {/* Filled portion */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            width: `${progress * 100}%`,
+            height: 3,
+            background: accent,
+            borderRadius: 2,
+          }}
+        />
+        {/* Thumb */}
+        <div
+          style={{
+            position: "absolute",
+            left: `${progress * 100}%`,
+            transform: "translateX(-50%)",
+            width: 12,
+            height: 12,
+            borderRadius: 6,
+            background: accent,
+            border: "2px solid white",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+            pointerEvents: "none",
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function PracticeScreen({
@@ -69,12 +194,13 @@ export function PracticeScreen({
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
+  onSeek,
   onToggleWaitMode,
   onTrackToggle,
   onGoToLanding,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const progress = totalMeasures > 0 ? (currentMeasure - 1) / totalMeasures : 0;
+  const totalBeats = musicxml?.totalBeats ?? 0;
 
   return (
     <div
@@ -223,44 +349,15 @@ export function PracticeScreen({
         )}
         <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
         {totalMeasures > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 4,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 9,
-                color: theme.inkSoft,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Measure {currentMeasure} / {totalMeasures}
-            </span>
-            <div
-              style={{
-                width: 120,
-                height: 3,
-                background: theme.border,
-                borderRadius: 2,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, progress * 100)}%`,
-                  height: "100%",
-                  background: accent,
-                  borderRadius: 2,
-                  transition: "width 0.4s ease",
-                }}
-              />
-            </div>
-          </div>
+          <MeasureScrubber
+            currentMeasure={currentMeasure}
+            totalMeasures={totalMeasures}
+            totalBeats={totalBeats}
+            playbackBeat={playbackBeat}
+            theme={theme}
+            accent={accent}
+            onSeek={onSeek}
+          />
         )}
         <button
           type="button"
