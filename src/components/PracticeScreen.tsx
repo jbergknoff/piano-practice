@@ -8,6 +8,7 @@ import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { SettingsDrawer } from "./SettingsDrawer";
 import {
+  ChevronLeftIcon,
   FocusIcon,
   GearIcon,
   MicIcon,
@@ -19,6 +20,7 @@ import {
 interface PracticeScreenProps {
   theme: ThemeTokens;
   accent: string;
+  fileName: string;
   pieceTitle: string;
   musicxml: MidiConversionResult | null;
   noteColors: Record<string, string>;
@@ -231,6 +233,7 @@ function MeasureScrubber({
 export function PracticeScreen({
   theme,
   accent,
+  fileName,
   pieceTitle,
   musicxml,
   noteColors,
@@ -258,6 +261,7 @@ export function PracticeScreen({
   onGoToLanding,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
   // Imperative handle into SheetMusicDisplay's scroll logic — calling this
   // bypasses Preact state entirely, so the view responds in the same frame as
   // the pointer event with no render-cycle lag.
@@ -362,11 +366,29 @@ export function PracticeScreen({
         }}
       />
 
-      {/* TOP LEFT: piece title */}
-      <div style={{ position: "absolute", top: 18, left: 22, zIndex: 2 }}>
+      {/* TOP LEFT: back button + piece title */}
+      <div
+        style={{
+          position: "absolute",
+          top: 18,
+          left: 22,
+          zIndex: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
         <button
           type="button"
           onClick={onGoToLanding}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          title="Back"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => setPieceInfoOpen(true)}
           style={{
             background: "none",
             border: "none",
@@ -647,6 +669,95 @@ export function PracticeScreen({
               >
                 {label}
               </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Piece info modal */}
+      {pieceInfoOpen && (
+        <>
+          <div
+            role="presentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 199,
+              background: "rgba(0,0,0,0.3)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+            }}
+            onClick={() => setPieceInfoOpen(false)}
+            onKeyDown={(e) => {
+              if ((e as unknown as KeyboardEvent).key === "Escape") {
+                setPieceInfoOpen(false);
+              }
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 200,
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 16,
+              backdropFilter: "blur(24px) saturate(160%)",
+              WebkitBackdropFilter: "blur(24px) saturate(160%)",
+              padding: "24px 28px",
+              boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+              minWidth: 280,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontStyle: "italic",
+                fontSize: 24,
+                color: theme.ink,
+                marginBottom: 20,
+              }}
+            >
+              {pieceTitle}
+            </div>
+            {(
+              [
+                ["File", fileName],
+                [
+                  "Tempo",
+                  `${baseBpm} BPM${bpm !== baseBpm ? ` (playing at ${bpm})` : ""}`,
+                ],
+                ["Time signature", musicxml ? `${musicxml.timeSigNum}/4` : "—"],
+                ["Tracks", String(tracks.length)],
+              ] as [string, string][]
+            ).map(([label, value]) => (
+              <div
+                key={label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  gap: 24,
+                  padding: "7px 0",
+                  borderTop: `0.5px solid ${theme.border}`,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: theme.inkSoft, whiteSpace: "nowrap" }}>
+                  {label}
+                </span>
+                <span
+                  style={{
+                    color: theme.ink,
+                    textAlign: "right",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {value}
+                </span>
+              </div>
             ))}
           </div>
         </>

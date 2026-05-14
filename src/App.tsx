@@ -301,6 +301,7 @@ export function App() {
     <PracticeScreen
       theme={theme}
       accent={accent}
+      fileName={fileName ?? ""}
       pieceTitle={pieceTitle}
       musicxml={musicxml}
       noteColors={noteColors}
