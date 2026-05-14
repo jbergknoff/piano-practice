@@ -60,7 +60,7 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
-  const waitMode = useWaitMode(musicxml, measureRange);
+  const waitMode = useWaitMode(musicxml, showFocus ? measureRange : null);
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
 
   // Rebuild player when conversion result changes.
@@ -105,7 +105,7 @@ export function App() {
       return;
     }
     const { timeSigNum } = musicxml;
-    if (measureRange) {
+    if (showFocus && measureRange) {
       const startBeat = (measureRange.from - 1) * timeSigNum;
       const endBeat = measureRange.to * timeSigNum;
       if (player) {
@@ -118,7 +118,7 @@ export function App() {
     } else if (player) {
       player.focusRange = null;
     }
-  }, [measureRange, musicxml]);
+  }, [showFocus, measureRange, musicxml]);
 
   async function handlePlayPause() {
     if (waitMode.active) {
@@ -322,11 +322,8 @@ export function App() {
       onBpmChange={handleBpmChange}
       onFocusToggle={() => {
         setShowFocus((v) => {
-          if (!v && musicxml) {
+          if (!v && musicxml && !measureRange) {
             setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
-          }
-          if (v) {
-            setMeasureRange(null);
           }
           return !v;
         });
