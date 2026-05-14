@@ -318,8 +318,10 @@ export function SheetMusicDisplay({
     }
     const el = containerRef.current;
 
-    scrollTargetRef.current =
-      cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
+    if (cursorX === null) {
+      return; // no cursor to follow — leave scroll position as-is
+    }
+    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running

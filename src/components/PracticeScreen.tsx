@@ -482,8 +482,11 @@ export function PracticeScreen({
           onClick={onToggleWaitMode}
           style={{
             ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            width: 52,
             height: 52,
+            width: "auto",
+            padding: "0 16px",
+            flexDirection: "column",
+            gap: 3,
             background: waitMode ? accent : theme.panel,
             color: waitMode ? "#FFF7E5" : theme.inkSoft,
             border: waitMode ? "none" : undefined,
@@ -491,9 +494,32 @@ export function PracticeScreen({
               ? `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`
               : undefined,
           }}
-          title={waitMode ? "Disable wait mode" : "Enable wait mode"}
+          title={
+            waitMode
+              ? "Wait for piano enabled. Click to disable."
+              : "Wait for piano disabled. Click to enable."
+          }
         >
-          <PianoIcon size={22} />
+          <PianoIcon size={20} />
+          <span
+            style={{ fontSize: 10, letterSpacing: "0.05em", fontWeight: 500 }}
+          >
+            Wait
+          </span>
+        </button>
+
+        {/* Reset — always shown */}
+        <button
+          type="button"
+          onClick={onReset}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          title={
+            showFocus && measureRange
+              ? "Return to start of selection. Click to reset."
+              : "Return to beginning. Click to reset."
+          }
+        >
+          <ResetIcon />
         </button>
 
         {/* Play/Pause — only shown outside wait mode */}
@@ -515,16 +541,6 @@ export function PracticeScreen({
             {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
           </button>
         )}
-
-        {/* Reset — always shown */}
-        <button
-          type="button"
-          onClick={onReset}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Reset to start"
-        >
-          <ResetIcon />
-        </button>
       </div>
 
       {/* BOTTOM RIGHT: focus toggle + BPM */}
