@@ -88,26 +88,18 @@ function MeasureScrubber({
     onSeek(ratio * totalBeats);
   }
 
+  const thumbPct = `${progress * 100}%`;
+
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        alignItems: "flex-end",
-        gap: 5,
+        gap: 2,
+        userSelect: "none",
       }}
     >
-      <span
-        style={{
-          fontSize: 9,
-          color: theme.inkSoft,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          userSelect: "none",
-        }}
-      >
-        M{currentMeasure} / {totalMeasures}
-      </span>
+      {/* Track + floating measure label + playhead */}
       <div
         ref={trackRef}
         onPointerDown={(e) => {
@@ -125,50 +117,81 @@ function MeasureScrubber({
         }}
         style={{
           width: 130,
-          height: 16,
-          display: "flex",
-          alignItems: "center",
+          height: 22,
           position: "relative",
           touchAction: "none",
         }}
       >
-        {/* Track background */}
+        {/* Track line */}
         <div
           style={{
             position: "absolute",
             left: 0,
             right: 0,
-            height: 3,
+            top: "50%",
+            height: 1.5,
             background: theme.border,
-            borderRadius: 2,
+            borderRadius: 1,
+            transform: "translateY(-50%)",
           }}
         />
-        {/* Filled portion */}
+        {/* Measure number floating above playhead */}
         <div
           style={{
             position: "absolute",
-            left: 0,
-            width: `${progress * 100}%`,
-            height: 3,
-            background: accent,
-            borderRadius: 2,
-          }}
-        />
-        {/* Thumb */}
-        <div
-          style={{
-            position: "absolute",
-            left: `${progress * 100}%`,
+            left: thumbPct,
+            top: 0,
             transform: "translateX(-50%)",
-            width: 12,
-            height: 12,
-            borderRadius: 6,
+            fontSize: 9,
+            color: theme.inkSoft,
+            letterSpacing: "0.06em",
+            lineHeight: 1,
+            pointerEvents: "none",
+          }}
+        >
+          {currentMeasure}
+        </div>
+        {/* Playhead bar */}
+        <div
+          style={{
+            position: "absolute",
+            left: thumbPct,
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 2,
+            height: 14,
             background: accent,
-            border: "2px solid white",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+            borderRadius: 1,
             pointerEvents: "none",
           }}
         />
+      </div>
+      {/* End labels */}
+      <div
+        style={{
+          width: 130,
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 8,
+            color: theme.inkFaint,
+            letterSpacing: "0.06em",
+          }}
+        >
+          1
+        </span>
+        <span
+          style={{
+            fontSize: 8,
+            color: theme.inkFaint,
+            letterSpacing: "0.06em",
+          }}
+        >
+          {totalMeasures}
+        </span>
       </div>
     </div>
   );
