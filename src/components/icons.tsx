@@ -23,7 +23,7 @@ export function StopIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function LoopIcon({ size = 16 }: { size?: number }) {
+export function FocusIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
       width={size}

@@ -241,11 +241,11 @@ interface SheetMusicDisplayProps {
   /** Extra style applied to the scroll container div. */
   containerStyle?: Record<string, unknown>;
   /** When set, draw a tinted background rect over this measure range (1-indexed, inclusive). */
-  loopRange?: { from: number; to: number } | null;
-  /** Fill color for the loop range highlight. */
-  loopColor?: string;
-  /** Called when the user finishes dragging a loop boundary handle. */
-  onLoopRangeChange?: (range: { from: number; to: number }) => void;
+  focusRange?: { from: number; to: number } | null;
+  /** Fill color for the focus range highlight. */
+  focusColor?: string;
+  /** Called when the user finishes dragging a focus boundary handle. */
+  onFocusRangeChange?: (range: { from: number; to: number }) => void;
   /** When provided, SheetMusicDisplay writes a scroll function into this ref.
    *  Calling ref.current(beat) immediately scrolls to that beat without touching
    *  playback; calling ref.current(null) releases scrub control back to cursor-following. */
@@ -269,9 +269,9 @@ export function SheetMusicDisplay({
   glyphFontSize,
   inkColor = "black",
   containerStyle,
-  loopRange,
-  loopColor,
-  onLoopRangeChange,
+  focusRange,
+  focusColor,
+  onFocusRangeChange,
   viewScrollRef,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
@@ -373,12 +373,12 @@ export function SheetMusicDisplay({
     };
   }, [score, layout]);
 
-  // Loop handle drag state — ref tracks the live value between renders, state
+  // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
   const svgRef = useRef<SVGSVGElement>(null);
-  const loopDragRef = useRef<{ handle: "left" | "right" } | null>(null);
-  const dragLoopRangeRef = useRef<{ from: number; to: number } | null>(null);
-  const [dragLoopRange, setDragLoopRange] = useState<{
+  const focusDragRef = useRef<{ handle: "left" | "right" } | null>(null);
+  const dragFocusRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const [dragFocusRange, setDragFocusRange] = useState<{
     from: number;
     to: number;
   } | null>(null);
@@ -410,27 +410,27 @@ export function SheetMusicDisplay({
   };
 
   const onHandlePointerDown = (e: PointerEvent, handle: "left" | "right") => {
-    if (!loopRange) {
+    if (!focusRange) {
       return;
     }
     // preventDefault stops the browser from starting a native pan gesture,
     // which would fire pointercancel and kill the drag on touch devices.
     e.preventDefault();
     e.stopPropagation();
-    loopDragRef.current = { handle };
+    focusDragRef.current = { handle };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    dragLoopRangeRef.current = { ...loopRange };
-    setDragLoopRange({ ...loopRange });
+    dragFocusRangeRef.current = { ...focusRange };
+    setDragFocusRange({ ...focusRange });
   };
 
   const onHandlePointerMove = (e: PointerEvent) => {
-    const drag = loopDragRef.current;
-    if (!drag || !loopRange) {
+    const drag = focusDragRef.current;
+    if (!drag || !focusRange) {
       return;
     }
     const svgX =
       e.clientX - (svgRef.current?.getBoundingClientRect().left ?? 0);
-    const current = dragLoopRangeRef.current ?? loopRange;
+    const current = dragFocusRangeRef.current ?? focusRange;
     const next =
       drag.handle === "left"
         ? {
@@ -441,18 +441,18 @@ export function SheetMusicDisplay({
             from: current.from,
             to: Math.max(snapToMeasureEnd(svgX), current.from),
           };
-    dragLoopRangeRef.current = next;
-    setDragLoopRange(next);
+    dragFocusRangeRef.current = next;
+    setDragFocusRange(next);
   };
 
   const onHandlePointerUp = () => {
-    const range = dragLoopRangeRef.current;
-    if (range && onLoopRangeChange) {
-      onLoopRangeChange(range);
+    const range = dragFocusRangeRef.current;
+    if (range && onFocusRangeChange) {
+      onFocusRangeChange(range);
     }
-    loopDragRef.current = null;
-    dragLoopRangeRef.current = null;
-    setDragLoopRange(null);
+    focusDragRef.current = null;
+    dragFocusRangeRef.current = null;
+    setDragFocusRange(null);
   };
 
   // Pointer-drag to scroll (mouse and touch via pointer events).
@@ -508,19 +508,19 @@ export function SheetMusicDisplay({
       ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
       : layout.totalHeight;
 
-  // Compute loop highlight rect bounds (measure indices are 1-indexed in loopRange).
-  // Use dragLoopRange during an active handle drag for live visual feedback.
-  const displayedLoopRange = dragLoopRange ?? loopRange;
-  let loopX1: number | null = null;
-  let loopX2: number | null = null;
-  if (displayedLoopRange) {
-    const fromIdx = displayedLoopRange.from - 1;
-    const toIdx = displayedLoopRange.to - 1;
+  // Compute focus highlight rect bounds (measure indices are 1-indexed in focusRange).
+  // Use dragFocusRange during an active handle drag for live visual feedback.
+  const displayedFocusRange = dragFocusRange ?? focusRange;
+  let focusX1: number | null = null;
+  let focusX2: number | null = null;
+  if (displayedFocusRange) {
+    const fromIdx = displayedFocusRange.from - 1;
+    const toIdx = displayedFocusRange.to - 1;
     if (fromIdx >= 0 && fromIdx < layout.measureXs.length) {
-      loopX1 = layout.measureXs[fromIdx];
+      focusX1 = layout.measureXs[fromIdx];
     }
     if (toIdx >= 0 && toIdx < layout.measureXs.length) {
-      loopX2 = layout.measureXs[toIdx] + layout.measureWidths[toIdx];
+      focusX2 = layout.measureXs[toIdx] + layout.measureWidths[toIdx];
     }
   }
 
@@ -531,7 +531,7 @@ export function SheetMusicDisplay({
         overflowX: "auto",
         userSelect: "none",
         touchAction: "pan-x",
-        cursor: dragLoopRange ? "ew-resize" : "grab",
+        cursor: dragFocusRange ? "ew-resize" : "grab",
         ...(containerStyle as Record<string, string | number> | undefined),
       }}
       onContextMenu={(e) => {
@@ -589,14 +589,14 @@ export function SheetMusicDisplay({
           role="img"
           aria-label="Sheet music"
         >
-          {/* Loop range background */}
-          {loopX1 !== null && loopX2 !== null && loopColor && (
+          {/* Focus range background */}
+          {focusX1 !== null && focusX2 !== null && focusColor && (
             <rect
-              x={loopX1}
+              x={focusX1}
               y={cursorY1 - 4}
-              width={loopX2 - loopX1}
+              width={focusX2 - focusX1}
               height={cursorY2 - cursorY1 + 8}
-              fill={loopColor}
+              fill={focusColor}
               rx={8}
             />
           )}
@@ -624,9 +624,9 @@ export function SheetMusicDisplay({
             />
           )}
           {/* Visible handle bars — SVG only, no pointer events */}
-          {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+          {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>
-              {([loopX1, loopX2] as const).map((x) => {
+              {([focusX1, focusX2] as const).map((x) => {
                 const midY = (cursorY1 + cursorY2) / 2;
                 return (
                   <g key={x}>
@@ -685,13 +685,13 @@ export function SheetMusicDisplay({
         </svg>
         {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
             HTML elements have reliable touch-action support unlike SVG elements. */}
-        {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+        {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
           <>
             <div
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: loopX1 - 14,
+                left: focusX1 - 14,
                 width: 28,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
@@ -710,7 +710,7 @@ export function SheetMusicDisplay({
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: loopX2 - 14,
+                left: focusX2 - 14,
                 width: 28,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",

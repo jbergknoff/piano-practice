@@ -146,7 +146,7 @@ export function PlaybackControls({
 
       {totalMeasures > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ fontSize: "14px", whiteSpace: "nowrap" }}>Loop:</span>
+          <span style={{ fontSize: "14px", whiteSpace: "nowrap" }}>Focus:</span>
           <input
             type="number"
             min={1}
@@ -155,7 +155,7 @@ export function PlaybackControls({
             placeholder="1"
             onInput={handleFromInput}
             style={{ width: "46px", fontSize: "14px", textAlign: "center" }}
-            aria-label="Loop from measure"
+            aria-label="Focus from measure"
           />
           <span style={{ fontSize: "14px" }}>–</span>
           <input
@@ -166,7 +166,7 @@ export function PlaybackControls({
             placeholder={String(totalMeasures)}
             onInput={handleToInput}
             style={{ width: "46px", fontSize: "14px", textAlign: "center" }}
-            aria-label="Loop to measure"
+            aria-label="Focus to measure"
           />
           {measureRange && (
             <button
@@ -183,7 +183,7 @@ export function PlaybackControls({
                 lineHeight: 1,
                 padding: 0,
               }}
-              aria-label="Clear loop range"
+              aria-label="Clear focus range"
             >
               ×
             </button>

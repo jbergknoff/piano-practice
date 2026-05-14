@@ -301,7 +301,7 @@ export function useWaitMode(
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
         if (measureRangeRef.current) {
-          // Loop back to the start of the range.
+          // Restart from the start of the focus range.
           pointIndexRef.current = first;
           setPointIndex(first);
         } else {

@@ -42,7 +42,7 @@ export function App() {
   // UI state
   const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
-  const [showLoop, setShowLoop] = useState(false);
+  const [showFocus, setShowFocus] = useState(false);
 
   const theme = THEMES[themeName];
 
@@ -75,7 +75,7 @@ export function App() {
       const player = new MidiPlayer(musicxml.notes, musicxml.totalBeats, bpm);
       const range = measureRangeRef.current;
       if (range) {
-        player.loopRange = {
+        player.focusRange = {
           startBeat: (range.from - 1) * musicxml.timeSigNum,
           endBeat: range.to * musicxml.timeSigNum,
         };
@@ -109,14 +109,14 @@ export function App() {
       const startBeat = (measureRange.from - 1) * timeSigNum;
       const endBeat = measureRange.to * timeSigNum;
       if (player) {
-        player.loopRange = { startBeat, endBeat };
+        player.focusRange = { startBeat, endBeat };
         player.seek(startBeat);
       }
       if (!waitMode.activeRef.current) {
         setCurrentBeat(startBeat);
       }
     } else if (player) {
-      player.loopRange = null;
+      player.focusRange = null;
     }
   }, [measureRange, musicxml]);
 
@@ -153,12 +153,12 @@ export function App() {
   }
 
   function handleContextMenuAction(
-    action: "loop" | "seek",
+    action: "focus" | "seek",
     measureNumber: number,
     beat: number,
   ) {
-    if (action === "loop") {
-      setShowLoop(true);
+    if (action === "focus") {
+      setShowFocus(true);
       setMeasureRange({ from: measureNumber, to: measureNumber });
     } else {
       handleSeek(beat);
@@ -190,7 +190,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setShowLoop(false);
+    setShowFocus(false);
 
     file.arrayBuffer().then((buffer) => {
       try {
@@ -234,7 +234,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setShowLoop(false);
+    setShowFocus(false);
   }
 
   // Note colors
@@ -309,7 +309,7 @@ export function App() {
       isPlaying={isPlaying}
       bpm={bpm}
       baseBpm={baseBpm}
-      showLoop={showLoop}
+      showFocus={showFocus}
       measureRange={measureRange}
       totalMeasures={totalMeasures}
       currentMeasure={currentMeasure}
@@ -320,8 +320,8 @@ export function App() {
       onPlayPause={handlePlayPause}
       onStop={handleStop}
       onBpmChange={handleBpmChange}
-      onLoopToggle={() => {
-        setShowLoop((v) => {
+      onFocusToggle={() => {
+        setShowFocus((v) => {
           if (!v && musicxml) {
             setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
           }

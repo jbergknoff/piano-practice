@@ -8,8 +8,8 @@ import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { SettingsDrawer } from "./SettingsDrawer";
 import {
+  FocusIcon,
   GearIcon,
-  LoopIcon,
   MicIcon,
   PauseIcon,
   PlayIcon,
@@ -27,7 +27,7 @@ interface PracticeScreenProps {
   isPlaying: boolean;
   bpm: number;
   baseBpm: number;
-  showLoop: boolean;
+  showFocus: boolean;
   measureRange: { from: number; to: number } | null;
   totalMeasures: number;
   currentMeasure: number;
@@ -38,12 +38,12 @@ interface PracticeScreenProps {
   onPlayPause: () => void;
   onStop: () => void;
   onBpmChange: (bpm: number) => void;
-  onLoopToggle: () => void;
+  onFocusToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
   onContextMenuAction: (
-    action: "loop" | "seek",
+    action: "focus" | "seek",
     measureNumber: number,
     beat: number,
   ) => void;
@@ -239,7 +239,7 @@ export function PracticeScreen({
   isPlaying,
   bpm,
   baseBpm,
-  showLoop,
+  showFocus,
   measureRange,
   totalMeasures,
   currentMeasure,
@@ -250,7 +250,7 @@ export function PracticeScreen({
   onPlayPause,
   onStop,
   onBpmChange,
-  onLoopToggle,
+  onFocusToggle,
   onMeasureRangeChange,
   onContextMenuAction,
   onToggleWaitMode,
@@ -302,9 +302,9 @@ export function PracticeScreen({
           playbackBeat={playbackBeat}
           cursorColor={cursorColor}
           inkColor={theme.ink}
-          loopRange={showLoop ? measureRange : null}
-          loopColor={hexA(accent, 0.09)}
-          onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
+          focusRange={showFocus ? measureRange : null}
+          focusColor={hexA(accent, 0.09)}
+          onFocusRangeChange={showFocus ? onMeasureRangeChange : undefined}
           viewScrollRef={viewScrollRef}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
@@ -503,7 +503,7 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* BOTTOM RIGHT: loop toggle + BPM */}
+      {/* BOTTOM RIGHT: focus toggle + BPM */}
       <div
         style={{
           position: "absolute",
@@ -517,16 +517,16 @@ export function PracticeScreen({
       >
         <button
           type="button"
-          onClick={onLoopToggle}
+          onClick={onFocusToggle}
           style={{
             ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            background: showLoop ? hexA(accent, 0.18) : theme.panel,
-            color: showLoop ? accent : theme.ink,
-            borderColor: showLoop ? hexA(accent, 0.35) : theme.border,
+            background: showFocus ? hexA(accent, 0.18) : theme.panel,
+            color: showFocus ? accent : theme.ink,
+            borderColor: showFocus ? hexA(accent, 0.35) : theme.border,
           }}
-          title="Loop section"
+          title="Focus section"
         >
-          <LoopIcon />
+          <FocusIcon />
         </button>
 
         {/* Tempo panel */}
@@ -615,11 +615,11 @@ export function PracticeScreen({
             {(
               [
                 {
-                  label: `Loop measure ${contextMenu.measureNumber}`,
-                  action: "loop" as const,
+                  label: `Focus measure ${contextMenu.measureNumber}`,
+                  action: "focus" as const,
                 },
                 { label: "Jump here", action: "seek" as const },
-              ] as { label: string; action: "loop" | "seek" }[]
+              ] as { label: string; action: "focus" | "seek" }[]
             ).map(({ label, action }) => (
               <button
                 key={action}
