@@ -42,8 +42,6 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
-  viewBeat: number | null;
-  onViewChange: (beat: number | null) => void;
   onContextMenuAction: (
     action: "loop" | "seek",
     measureNumber: number,
@@ -241,14 +239,16 @@ export function PracticeScreen({
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
-  viewBeat,
-  onViewChange,
   onContextMenuAction,
   onToggleWaitMode,
   onTrackToggle,
   onGoToLanding,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Imperative handle into SheetMusicDisplay's scroll logic — calling this
+  // bypasses Preact state entirely, so the view responds in the same frame as
+  // the pointer event with no render-cycle lag.
+  const viewScrollRef = useRef<((beat: number | null) => void) | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
     clientY: number;
@@ -292,7 +292,7 @@ export function PracticeScreen({
           loopRange={showLoop ? measureRange : null}
           loopColor={hexA(accent, 0.09)}
           onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
-          viewBeat={viewBeat ?? undefined}
+          viewScrollRef={viewScrollRef}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
@@ -416,7 +416,7 @@ export function PracticeScreen({
             playbackBeat={playbackBeat}
             theme={theme}
             accent={accent}
-            onViewChange={onViewChange}
+            onViewChange={(beat) => viewScrollRef.current?.(beat)}
           />
         )}
         <button

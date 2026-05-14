@@ -246,8 +246,10 @@ interface SheetMusicDisplayProps {
   loopColor?: string;
   /** Called when the user finishes dragging a loop boundary handle. */
   onLoopRangeChange?: (range: { from: number; to: number }) => void;
-  /** When set, the view scrolls to this beat position without moving the playback cursor. */
-  viewBeat?: number;
+  /** When provided, SheetMusicDisplay writes a scroll function into this ref.
+   *  Calling ref.current(beat) immediately scrolls to that beat without touching
+   *  playback; calling ref.current(null) releases scrub control back to cursor-following. */
+  viewScrollRef?: { current: ((beat: number | null) => void) | null };
   /** Called on right-click or long-press with the measure and beat at that position. */
   onSheetContextMenu?: (info: {
     measureNumber: number;
@@ -270,7 +272,7 @@ export function SheetMusicDisplay({
   loopRange,
   loopColor,
   onLoopRangeChange,
-  viewBeat,
+  viewScrollRef,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -301,34 +303,21 @@ export function SheetMusicDisplay({
       ? computeCursorX(playbackBeat, score, layout)
       : null;
 
-  const viewX =
-    viewBeat !== undefined ? computeCursorX(viewBeat, score, layout) : null;
-
-  const scrollX = viewX ?? cursorX;
-
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTargetRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
+  const isScrubbingRef = useRef(false);
 
+  // Smooth cursor-following animation — suppressed while the scrubber has control.
   useEffect(() => {
+    if (isScrubbingRef.current) {
+      return;
+    }
     if (!containerRef.current) {
       return;
     }
     const el = containerRef.current;
 
-    if (viewX !== null) {
-      // While scrubbing: cancel any running animation and jump immediately so
-      // the view tracks the scrubber without lag or competing animation.
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      el.scrollLeft = Math.max(0, viewX - el.clientWidth / 2);
-      return;
-    }
-
-    // Not scrubbing: smooth-follow the playback cursor.
     scrollTargetRef.current =
       cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
 
@@ -353,7 +342,36 @@ export function SheetMusicDisplay({
       scrollRafRef.current = requestAnimationFrame(step);
     };
     scrollRafRef.current = requestAnimationFrame(step);
-  }, [viewX, cursorX]);
+  }, [cursorX]);
+
+  // Populate the imperative scroll ref so the scrubber can drive the view
+  // synchronously without going through Preact state.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable; score/layout are the only values captured that can change
+  useEffect(() => {
+    if (!viewScrollRef) {
+      return;
+    }
+    viewScrollRef.current = (beat: number | null) => {
+      const el = containerRef.current;
+      if (!el) {
+        return;
+      }
+      if (beat === null) {
+        isScrubbingRef.current = false;
+        return;
+      }
+      isScrubbingRef.current = true;
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
+      const x = computeCursorX(beat, score, layout);
+      if (x !== null) {
+        el.scrollLeft = Math.max(0, x - el.clientWidth / 2);
+      }
+    };
+  }, [score, layout]);
 
   // Loop handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
