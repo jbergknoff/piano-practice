@@ -85,9 +85,9 @@ export function App() {
           setCurrentBeat(beat);
         }
       };
-      player.onEnd = () => {
+      player.onEnd = (beat) => {
         setIsPlaying(false);
-        setCurrentBeat(0);
+        setCurrentBeat(beat);
       };
       playerRef.current = player;
     }
