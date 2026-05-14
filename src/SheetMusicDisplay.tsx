@@ -544,27 +544,61 @@ export function SheetMusicDisplay({
           )}
           {/* Visible handle bars — SVG only, no pointer events */}
           {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
-            <g>
-              <rect
-                x={loopX1 - 2}
-                y={cursorY1 - 4}
-                width={4}
-                height={cursorY2 - cursorY1 + 8}
-                fill={cursorColor}
-                opacity={0.55}
-                rx={2}
-                style={{ pointerEvents: "none" }}
-              />
-              <rect
-                x={loopX2 - 2}
-                y={cursorY1 - 4}
-                width={4}
-                height={cursorY2 - cursorY1 + 8}
-                fill={cursorColor}
-                opacity={0.55}
-                rx={2}
-                style={{ pointerEvents: "none" }}
-              />
+            <g style={{ pointerEvents: "none" }}>
+              {([loopX1, loopX2] as const).map((x) => {
+                const midY = (cursorY1 + cursorY2) / 2;
+                return (
+                  <g key={x}>
+                    {/* Thin edge line */}
+                    <rect
+                      x={x - 1}
+                      y={cursorY1 - 4}
+                      width={2}
+                      height={cursorY2 - cursorY1 + 8}
+                      fill={cursorColor}
+                      opacity={0.35}
+                    />
+                    {/* Pill thumb */}
+                    <rect
+                      x={x - 6}
+                      y={midY - 18}
+                      width={12}
+                      height={36}
+                      rx={6}
+                      fill={cursorColor}
+                      opacity={0.9}
+                    />
+                    {/* Grip lines */}
+                    <line
+                      x1={x - 3}
+                      y1={midY - 6}
+                      x2={x + 3}
+                      y2={midY - 6}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={x - 3}
+                      y1={midY}
+                      x2={x + 3}
+                      y2={midY}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={x - 3}
+                      y1={midY + 6}
+                      x2={x + 3}
+                      y2={midY + 6}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </g>
+                );
+              })}
             </g>
           )}
         </svg>
@@ -576,8 +610,8 @@ export function SheetMusicDisplay({
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: loopX1 - 8,
-                width: 16,
+                left: loopX1 - 14,
+                width: 28,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
                 touchAction: "none",
@@ -595,8 +629,8 @@ export function SheetMusicDisplay({
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: loopX2 - 8,
-                width: 16,
+                left: loopX2 - 14,
+                width: 28,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
                 touchAction: "none",
