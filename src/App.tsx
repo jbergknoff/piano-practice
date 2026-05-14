@@ -152,6 +152,27 @@ export function App() {
     playerRef.current?.setBpm(newBpm);
   }
 
+  function handleContextMenuAction(
+    action: "loop" | "seek",
+    measureNumber: number,
+    beat: number,
+  ) {
+    if (action === "loop") {
+      setShowLoop(true);
+      setMeasureRange({ from: measureNumber, to: measureNumber });
+    } else {
+      handleSeek(beat);
+    }
+  }
+
+  function handleSeek(beat: number) {
+    if (waitMode.active) {
+      return;
+    }
+    playerRef.current?.seek(beat);
+    setCurrentBeat(beat);
+  }
+
   function handleToggleWaitMode() {
     if (!waitMode.active) {
       playerRef.current?.pause();
@@ -311,6 +332,7 @@ export function App() {
         });
       }}
       onMeasureRangeChange={setMeasureRange}
+      onContextMenuAction={handleContextMenuAction}
       onToggleWaitMode={handleToggleWaitMode}
       onTrackToggle={onTrackToggle}
       onGoToLanding={handleGoToLanding}

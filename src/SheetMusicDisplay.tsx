@@ -246,6 +246,17 @@ interface SheetMusicDisplayProps {
   loopColor?: string;
   /** Called when the user finishes dragging a loop boundary handle. */
   onLoopRangeChange?: (range: { from: number; to: number }) => void;
+  /** When provided, SheetMusicDisplay writes a scroll function into this ref.
+   *  Calling ref.current(beat) immediately scrolls to that beat without touching
+   *  playback; calling ref.current(null) releases scrub control back to cursor-following. */
+  viewScrollRef?: { current: ((beat: number | null) => void) | null };
+  /** Called on right-click or long-press with the measure and beat at that position. */
+  onSheetContextMenu?: (info: {
+    measureNumber: number;
+    beat: number;
+    clientX: number;
+    clientY: number;
+  }) => void;
 }
 
 export function SheetMusicDisplay({
@@ -261,6 +272,8 @@ export function SheetMusicDisplay({
   loopRange,
   loopColor,
   onLoopRangeChange,
+  viewScrollRef,
+  onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -293,12 +306,18 @@ export function SheetMusicDisplay({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTargetRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
+  const isScrubbingRef = useRef(false);
 
+  // Smooth cursor-following animation — suppressed while the scrubber has control.
   useEffect(() => {
+    if (isScrubbingRef.current) {
+      return;
+    }
     if (!containerRef.current) {
       return;
     }
     const el = containerRef.current;
+
     scrollTargetRef.current =
       cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
 
@@ -324,6 +343,35 @@ export function SheetMusicDisplay({
     };
     scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
+
+  // Populate the imperative scroll ref so the scrubber can drive the view
+  // synchronously without going through Preact state.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable; score/layout are the only values captured that can change
+  useEffect(() => {
+    if (!viewScrollRef) {
+      return;
+    }
+    viewScrollRef.current = (beat: number | null) => {
+      const el = containerRef.current;
+      if (!el) {
+        return;
+      }
+      if (beat === null) {
+        isScrubbingRef.current = false;
+        return;
+      }
+      isScrubbingRef.current = true;
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
+      const x = computeCursorX(beat, score, layout);
+      if (x !== null) {
+        el.scrollLeft = Math.max(0, x - el.clientWidth / 2);
+      }
+    };
+  }, [score, layout]);
 
   // Loop handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -485,6 +533,39 @@ export function SheetMusicDisplay({
         touchAction: "pan-x",
         cursor: dragLoopRange ? "ew-resize" : "grab",
         ...(containerStyle as Record<string, string | number> | undefined),
+      }}
+      onContextMenu={(e) => {
+        if (!onSheetContextMenu) {
+          return;
+        }
+        e.preventDefault();
+        dragRef.current = null;
+        const containerEl = containerRef.current;
+        if (!containerEl) {
+          return;
+        }
+        const me = e as unknown as MouseEvent;
+        const svgX =
+          me.clientX -
+          containerEl.getBoundingClientRect().left +
+          containerEl.scrollLeft;
+        let measureIndex = 0;
+        for (let i = 0; i < layout.measureXs.length; i++) {
+          if (layout.measureXs[i] <= svgX) {
+            measureIndex = i;
+          }
+        }
+        const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
+        const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
+        const measureX = layout.measureXs[measureIndex];
+        const measureW = layout.measureWidths[measureIndex];
+        const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
+        onSheetContextMenu({
+          measureNumber: measureIndex + 1,
+          beat: (measureIndex + frac) * beatsPerMeasure,
+          clientX: me.clientX,
+          clientY: me.clientY,
+        });
       }}
     >
       {/*

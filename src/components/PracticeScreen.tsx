@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
@@ -42,7 +42,190 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
+  onContextMenuAction: (
+    action: "loop" | "seek",
+    measureNumber: number,
+    beat: number,
+  ) => void;
   onGoToLanding: () => void;
+}
+
+function MeasureScrubber({
+  currentMeasure,
+  totalMeasures,
+  totalBeats,
+  timeSigNum,
+  playbackBeat,
+  isPlaying,
+  theme,
+  accent,
+  onViewChange,
+}: {
+  currentMeasure: number;
+  totalMeasures: number;
+  totalBeats: number;
+  timeSigNum: number;
+  playbackBeat: number | undefined;
+  isPlaying: boolean;
+  theme: ThemeTokens;
+  accent: string;
+  onViewChange: (beat: number | null) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  // scrubBeat persists after drag ends so the handle stays put; cleared when
+  // playback starts so the handle resumes following the cursor.
+  const [scrubBeat, setScrubBeat] = useState<number | null>(null);
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
+
+  useEffect(() => {
+    if (isPlaying) {
+      setScrubBeat(null);
+      onViewChangeRef.current(null);
+    }
+  }, [isPlaying]);
+
+  const playbackProgress =
+    totalBeats > 0 && playbackBeat != null
+      ? Math.min(1, playbackBeat / totalBeats)
+      : 0;
+
+  const progress =
+    scrubBeat !== null && totalBeats > 0
+      ? Math.min(1, scrubBeat / totalBeats)
+      : playbackProgress;
+
+  const displayMeasure =
+    scrubBeat !== null && timeSigNum > 0
+      ? Math.min(totalMeasures, Math.floor(scrubBeat / timeSigNum) + 1)
+      : currentMeasure;
+
+  function beatFromPointer(e: PointerEvent): number {
+    if (!trackRef.current) {
+      return 0;
+    }
+    const rect = trackRef.current.getBoundingClientRect();
+    const ratio = Math.max(
+      0,
+      Math.min(1, (e.clientX - rect.left) / rect.width),
+    );
+    return ratio * totalBeats;
+  }
+
+  const thumbPct = `${progress * 100}%`;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        userSelect: "none",
+      }}
+    >
+      {/* Track + floating measure label + playhead */}
+      <div
+        ref={trackRef}
+        onPointerDown={(e) => {
+          isDragging.current = true;
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          const beat = beatFromPointer(e as unknown as PointerEvent);
+          setScrubBeat(beat);
+          onViewChange(beat);
+        }}
+        onPointerMove={(e) => {
+          if (isDragging.current) {
+            const beat = beatFromPointer(e as unknown as PointerEvent);
+            setScrubBeat(beat);
+            onViewChange(beat);
+          }
+        }}
+        onPointerUp={() => {
+          isDragging.current = false;
+          // scrubBeat is intentionally kept — handle stays at the browsed
+          // position until playback starts (cleared in the isPlaying effect).
+        }}
+        style={{
+          width: 130,
+          height: 22,
+          position: "relative",
+          touchAction: "none",
+        }}
+      >
+        {/* Track line */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "50%",
+            height: 1.5,
+            background: theme.border,
+            borderRadius: 1,
+            transform: "translateY(-50%)",
+          }}
+        />
+        {/* Measure number floating above playhead */}
+        <div
+          style={{
+            position: "absolute",
+            left: thumbPct,
+            bottom: "calc(50% + 9px)",
+            transform: "translateX(-50%)",
+            fontSize: 9,
+            color: theme.ink,
+            letterSpacing: "0.06em",
+            lineHeight: 1,
+            pointerEvents: "none",
+          }}
+        >
+          {displayMeasure}
+        </div>
+        {/* Playhead bar */}
+        <div
+          style={{
+            position: "absolute",
+            left: thumbPct,
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 2,
+            height: 14,
+            background: accent,
+            borderRadius: 1,
+            pointerEvents: "none",
+          }}
+        />
+      </div>
+      {/* End labels */}
+      <div
+        style={{
+          width: 130,
+          display: "flex",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 8,
+            color: theme.inkFaint,
+            letterSpacing: "0.06em",
+          }}
+        >
+          1
+        </span>
+        <span
+          style={{
+            fontSize: 8,
+            color: theme.inkFaint,
+            letterSpacing: "0.06em",
+          }}
+        >
+          {totalMeasures}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function PracticeScreen({
@@ -69,12 +252,23 @@ export function PracticeScreen({
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
+  onContextMenuAction,
   onToggleWaitMode,
   onTrackToggle,
   onGoToLanding,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const progress = totalMeasures > 0 ? (currentMeasure - 1) / totalMeasures : 0;
+  // Imperative handle into SheetMusicDisplay's scroll logic — calling this
+  // bypasses Preact state entirely, so the view responds in the same frame as
+  // the pointer event with no render-cycle lag.
+  const viewScrollRef = useRef<((beat: number | null) => void) | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    clientX: number;
+    clientY: number;
+    measureNumber: number;
+    beat: number;
+  } | null>(null);
+  const totalBeats = musicxml?.totalBeats ?? 0;
 
   return (
     <div
@@ -111,6 +305,10 @@ export function PracticeScreen({
           loopRange={showLoop ? measureRange : null}
           loopColor={hexA(accent, 0.09)}
           onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
+          viewScrollRef={viewScrollRef}
+          onSheetContextMenu={(info) => {
+            setContextMenu(info);
+          }}
           containerStyle={{
             position: "absolute",
             inset: 0,
@@ -223,44 +421,17 @@ export function PracticeScreen({
         )}
         <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
         {totalMeasures > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 4,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 9,
-                color: theme.inkSoft,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Measure {currentMeasure} / {totalMeasures}
-            </span>
-            <div
-              style={{
-                width: 120,
-                height: 3,
-                background: theme.border,
-                borderRadius: 2,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, progress * 100)}%`,
-                  height: "100%",
-                  background: accent,
-                  borderRadius: 2,
-                  transition: "width 0.4s ease",
-                }}
-              />
-            </div>
-          </div>
+          <MeasureScrubber
+            currentMeasure={currentMeasure}
+            totalMeasures={totalMeasures}
+            totalBeats={totalBeats}
+            timeSigNum={musicxml?.timeSigNum ?? 4}
+            playbackBeat={playbackBeat}
+            isPlaying={isPlaying}
+            theme={theme}
+            accent={accent}
+            onViewChange={(beat) => viewScrollRef.current?.(beat)}
+          />
         )}
         <button
           type="button"
@@ -409,6 +580,77 @@ export function PracticeScreen({
         @keyframes bar3 { 0%,100% { height: 8px } 50% { height: 14px } }
         @keyframes bar4 { 0%,100% { height: 3px } 50% { height: 9px } }
       `}</style>
+
+      {/* Context menu (right-click / long-press on sheet music) */}
+      {contextMenu && (
+        <>
+          <div
+            role="presentation"
+            style={{ position: "fixed", inset: 0, zIndex: 99 }}
+            onClick={() => setContextMenu(null)}
+            onKeyDown={(e) => {
+              if ((e as unknown as KeyboardEvent).key === "Escape") {
+                setContextMenu(null);
+              }
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: contextMenu.clientX + 4,
+              top: contextMenu.clientY + 4,
+              zIndex: 100,
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 12,
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+              padding: 4,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+              display: "flex",
+              flexDirection: "column",
+              minWidth: 180,
+            }}
+          >
+            {(
+              [
+                {
+                  label: `Loop measure ${contextMenu.measureNumber}`,
+                  action: "loop" as const,
+                },
+                { label: "Jump here", action: "seek" as const },
+              ] as { label: string; action: "loop" | "seek" }[]
+            ).map(({ label, action }) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => {
+                  onContextMenuAction(
+                    action,
+                    contextMenu.measureNumber,
+                    contextMenu.beat,
+                  );
+                  setContextMenu(null);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "8px 12px",
+                  textAlign: "left",
+                  fontSize: 13,
+                  color: theme.ink,
+                  borderRadius: 8,
+                  fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+                  width: "100%",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <SettingsDrawer
         open={drawerOpen}
