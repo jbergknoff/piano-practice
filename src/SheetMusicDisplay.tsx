@@ -246,6 +246,13 @@ interface SheetMusicDisplayProps {
   loopColor?: string;
   /** Called when the user finishes dragging a loop boundary handle. */
   onLoopRangeChange?: (range: { from: number; to: number }) => void;
+  /** Called on right-click or long-press with the measure and beat at that position. */
+  onSheetContextMenu?: (info: {
+    measureNumber: number;
+    beat: number;
+    clientX: number;
+    clientY: number;
+  }) => void;
 }
 
 export function SheetMusicDisplay({
@@ -261,6 +268,7 @@ export function SheetMusicDisplay({
   loopRange,
   loopColor,
   onLoopRangeChange,
+  onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -485,6 +493,39 @@ export function SheetMusicDisplay({
         touchAction: "pan-x",
         cursor: dragLoopRange ? "ew-resize" : "grab",
         ...(containerStyle as Record<string, string | number> | undefined),
+      }}
+      onContextMenu={(e) => {
+        if (!onSheetContextMenu) {
+          return;
+        }
+        e.preventDefault();
+        dragRef.current = null;
+        const containerEl = containerRef.current;
+        if (!containerEl) {
+          return;
+        }
+        const me = e as unknown as MouseEvent;
+        const svgX =
+          me.clientX -
+          containerEl.getBoundingClientRect().left +
+          containerEl.scrollLeft;
+        let measureIndex = 0;
+        for (let i = 0; i < layout.measureXs.length; i++) {
+          if (layout.measureXs[i] <= svgX) {
+            measureIndex = i;
+          }
+        }
+        const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
+        const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
+        const measureX = layout.measureXs[measureIndex];
+        const measureW = layout.measureWidths[measureIndex];
+        const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
+        onSheetContextMenu({
+          measureNumber: measureIndex + 1,
+          beat: (measureIndex + frac) * beatsPerMeasure,
+          clientX: me.clientX,
+          clientY: me.clientY,
+        });
       }}
     >
       {/*

@@ -43,6 +43,11 @@ interface PracticeScreenProps {
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
   onSeek: (beat: number) => void;
+  onContextMenuAction: (
+    action: "loop" | "seek",
+    measureNumber: number,
+    beat: number,
+  ) => void;
   onGoToLanding: () => void;
 }
 
@@ -121,7 +126,6 @@ function MeasureScrubber({
         style={{
           width: 130,
           height: 16,
-          cursor: "pointer",
           display: "flex",
           alignItems: "center",
           position: "relative",
@@ -195,11 +199,18 @@ export function PracticeScreen({
   onLoopToggle,
   onMeasureRangeChange,
   onSeek,
+  onContextMenuAction,
   onToggleWaitMode,
   onTrackToggle,
   onGoToLanding,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    clientX: number;
+    clientY: number;
+    measureNumber: number;
+    beat: number;
+  } | null>(null);
   const totalBeats = musicxml?.totalBeats ?? 0;
 
   return (
@@ -237,6 +248,9 @@ export function PracticeScreen({
           loopRange={showLoop ? measureRange : null}
           loopColor={hexA(accent, 0.09)}
           onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
+          onSheetContextMenu={(info) => {
+            setContextMenu(info);
+          }}
           containerStyle={{
             position: "absolute",
             inset: 0,
@@ -506,6 +520,77 @@ export function PracticeScreen({
         @keyframes bar3 { 0%,100% { height: 8px } 50% { height: 14px } }
         @keyframes bar4 { 0%,100% { height: 3px } 50% { height: 9px } }
       `}</style>
+
+      {/* Context menu (right-click / long-press on sheet music) */}
+      {contextMenu && (
+        <>
+          <div
+            role="presentation"
+            style={{ position: "fixed", inset: 0, zIndex: 99 }}
+            onClick={() => setContextMenu(null)}
+            onKeyDown={(e) => {
+              if ((e as unknown as KeyboardEvent).key === "Escape") {
+                setContextMenu(null);
+              }
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: contextMenu.clientX + 4,
+              top: contextMenu.clientY + 4,
+              zIndex: 100,
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 12,
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+              padding: 4,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+              display: "flex",
+              flexDirection: "column",
+              minWidth: 180,
+            }}
+          >
+            {(
+              [
+                {
+                  label: `Loop measure ${contextMenu.measureNumber}`,
+                  action: "loop" as const,
+                },
+                { label: "Jump here", action: "seek" as const },
+              ] as { label: string; action: "loop" | "seek" }[]
+            ).map(({ label, action }) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => {
+                  onContextMenuAction(
+                    action,
+                    contextMenu.measureNumber,
+                    contextMenu.beat,
+                  );
+                  setContextMenu(null);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "8px 12px",
+                  textAlign: "left",
+                  fontSize: 13,
+                  color: theme.ink,
+                  borderRadius: 8,
+                  fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+                  width: "100%",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <SettingsDrawer
         open={drawerOpen}
