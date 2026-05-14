@@ -31,6 +31,7 @@ export function App() {
 
   // Transport state
   const [bpm, setBpm] = useState(120);
+  const [baseBpm, setBaseBpm] = useState(120);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
   const [measureRange, setMeasureRange] = useState<{
@@ -177,7 +178,9 @@ export function App() {
         setMidiData(parsed);
         setTracks(trackList);
         setSelectedTracks(trackList.map((t) => t.index));
-        setBpm(getMidiTempo(parsed));
+        const tempo = getMidiTempo(parsed);
+        setBpm(tempo);
+        setBaseBpm(tempo);
       } catch (err) {
         setFileError(String(err));
       }
@@ -284,6 +287,7 @@ export function App() {
       cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
       isPlaying={isPlaying}
       bpm={bpm}
+      baseBpm={baseBpm}
       showLoop={showLoop}
       measureRange={measureRange}
       totalMeasures={totalMeasures}

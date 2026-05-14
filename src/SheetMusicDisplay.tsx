@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   DIVISIONS,
@@ -244,6 +244,8 @@ interface SheetMusicDisplayProps {
   loopRange?: { from: number; to: number } | null;
   /** Fill color for the loop range highlight. */
   loopColor?: string;
+  /** Called when the user finishes dragging a loop boundary handle. */
+  onLoopRangeChange?: (range: { from: number; to: number }) => void;
 }
 
 export function SheetMusicDisplay({
@@ -258,6 +260,7 @@ export function SheetMusicDisplay({
   containerStyle,
   loopRange,
   loopColor,
+  onLoopRangeChange,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -292,11 +295,12 @@ export function SheetMusicDisplay({
   const scrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (cursorX === null || !containerRef.current) {
+    if (!containerRef.current) {
       return;
     }
     const el = containerRef.current;
-    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
+    scrollTargetRef.current =
+      cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running
@@ -321,6 +325,88 @@ export function SheetMusicDisplay({
     scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
 
+  // Loop handle drag state — ref tracks the live value between renders, state
+  // drives visual feedback.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const loopDragRef = useRef<{ handle: "left" | "right" } | null>(null);
+  const dragLoopRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const [dragLoopRange, setDragLoopRange] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+
+  const snapToMeasureStart = (svgX: number): number => {
+    let best = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < layout.measureXs.length; i++) {
+      const d = Math.abs(layout.measureXs[i] - svgX);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best + 1;
+  };
+
+  const snapToMeasureEnd = (svgX: number): number => {
+    let best = 0;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < layout.measureXs.length; i++) {
+      const d = Math.abs(layout.measureXs[i] + layout.measureWidths[i] - svgX);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best + 1;
+  };
+
+  const onHandlePointerDown = (e: PointerEvent, handle: "left" | "right") => {
+    if (!loopRange) {
+      return;
+    }
+    // preventDefault stops the browser from starting a native pan gesture,
+    // which would fire pointercancel and kill the drag on touch devices.
+    e.preventDefault();
+    e.stopPropagation();
+    loopDragRef.current = { handle };
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    dragLoopRangeRef.current = { ...loopRange };
+    setDragLoopRange({ ...loopRange });
+  };
+
+  const onHandlePointerMove = (e: PointerEvent) => {
+    const drag = loopDragRef.current;
+    if (!drag || !loopRange) {
+      return;
+    }
+    const svgX =
+      e.clientX - (svgRef.current?.getBoundingClientRect().left ?? 0);
+    const current = dragLoopRangeRef.current ?? loopRange;
+    const next =
+      drag.handle === "left"
+        ? {
+            from: Math.min(snapToMeasureStart(svgX), current.to),
+            to: current.to,
+          }
+        : {
+            from: current.from,
+            to: Math.max(snapToMeasureEnd(svgX), current.from),
+          };
+    dragLoopRangeRef.current = next;
+    setDragLoopRange(next);
+  };
+
+  const onHandlePointerUp = () => {
+    const range = dragLoopRangeRef.current;
+    if (range && onLoopRangeChange) {
+      onLoopRangeChange(range);
+    }
+    loopDragRef.current = null;
+    dragLoopRangeRef.current = null;
+    setDragLoopRange(null);
+  };
+
   // Pointer-drag to scroll (mouse and touch via pointer events).
   const dragRef = useRef<{ startX: number; scrollLeft: number } | null>(null);
 
@@ -331,6 +417,12 @@ export function SheetMusicDisplay({
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      // Cancel any running auto-scroll so the manual drag always wins.
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
       dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
       el.setPointerCapture(e.pointerId);
     };
@@ -369,11 +461,13 @@ export function SheetMusicDisplay({
       : layout.totalHeight;
 
   // Compute loop highlight rect bounds (measure indices are 1-indexed in loopRange).
+  // Use dragLoopRange during an active handle drag for live visual feedback.
+  const displayedLoopRange = dragLoopRange ?? loopRange;
   let loopX1: number | null = null;
   let loopX2: number | null = null;
-  if (loopRange) {
-    const fromIdx = loopRange.from - 1;
-    const toIdx = loopRange.to - 1;
+  if (displayedLoopRange) {
+    const fromIdx = displayedLoopRange.from - 1;
+    const toIdx = displayedLoopRange.to - 1;
     if (fromIdx >= 0 && fromIdx < layout.measureXs.length) {
       loopX1 = layout.measureXs[fromIdx];
     }
@@ -389,62 +483,170 @@ export function SheetMusicDisplay({
         overflowX: "auto",
         userSelect: "none",
         touchAction: "pan-x",
-        cursor: "grab",
+        cursor: dragLoopRange ? "ew-resize" : "grab",
         ...(containerStyle as Record<string, string | number> | undefined),
       }}
     >
       {/*
+        Wrapper gives a positioning context for the HTML handle overlays.
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
         (e.g. TimeSig) override via their own attributes.
       */}
-      <svg
-        width={layout.totalWidth}
-        height={layout.totalHeight}
-        style={{
-          display: "block",
-          fontFamily: BRAVURA,
-          fontSize: fontSize,
-          flexShrink: 0,
-        }}
-        role="img"
-        aria-label="Sheet music"
+      <div
+        style={{ position: "relative", display: "inline-block", flexShrink: 0 }}
       >
-        {/* Loop range background */}
-        {loopX1 !== null && loopX2 !== null && loopColor && (
-          <rect
-            x={loopX1}
-            y={cursorY1 - 4}
-            width={loopX2 - loopX1}
-            height={cursorY2 - cursorY1 + 8}
-            fill={loopColor}
-            rx={8}
-          />
+        <svg
+          ref={svgRef}
+          width={layout.totalWidth}
+          height={layout.totalHeight}
+          style={{
+            display: "block",
+            fontFamily: BRAVURA,
+            fontSize: fontSize,
+          }}
+          role="img"
+          aria-label="Sheet music"
+        >
+          {/* Loop range background */}
+          {loopX1 !== null && loopX2 !== null && loopColor && (
+            <rect
+              x={loopX1}
+              y={cursorY1 - 4}
+              width={loopX2 - loopX1}
+              height={cursorY2 - cursorY1 + 8}
+              fill={loopColor}
+              rx={8}
+            />
+          )}
+          {score.parts.map((part, p) => (
+            <Staff
+              key={part.id}
+              part={part}
+              partIndex={p}
+              layout={layout}
+              staffBottomY={layout.staffBottomYs[p]}
+              noteColors={noteColors}
+              visible={visibleParts ? visibleParts.has(part.id) : true}
+              inkColor={inkColor}
+            />
+          ))}
+          {cursorX !== null && (
+            <line
+              x1={cursorX}
+              x2={cursorX}
+              y1={cursorY1 - 4}
+              y2={cursorY2 + 4}
+              stroke={cursorColor}
+              stroke-width="2"
+              stroke-opacity="0.85"
+            />
+          )}
+          {/* Visible handle bars — SVG only, no pointer events */}
+          {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+            <g style={{ pointerEvents: "none" }}>
+              {([loopX1, loopX2] as const).map((x) => {
+                const midY = (cursorY1 + cursorY2) / 2;
+                return (
+                  <g key={x}>
+                    {/* Thin edge line */}
+                    <rect
+                      x={x - 1}
+                      y={cursorY1 - 4}
+                      width={2}
+                      height={cursorY2 - cursorY1 + 8}
+                      fill={cursorColor}
+                      opacity={0.35}
+                    />
+                    {/* Pill thumb */}
+                    <rect
+                      x={x - 6}
+                      y={midY - 18}
+                      width={12}
+                      height={36}
+                      rx={6}
+                      fill={cursorColor}
+                      opacity={0.9}
+                    />
+                    {/* Grip lines */}
+                    <line
+                      x1={x - 3}
+                      y1={midY - 6}
+                      x2={x + 3}
+                      y2={midY - 6}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={x - 3}
+                      y1={midY}
+                      x2={x + 3}
+                      y2={midY}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={x - 3}
+                      y1={midY + 6}
+                      x2={x + 3}
+                      y2={midY + 6}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
+        </svg>
+        {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
+            HTML elements have reliable touch-action support unlike SVG elements. */}
+        {loopX1 !== null && loopX2 !== null && onLoopRangeChange && (
+          <>
+            <div
+              style={{
+                position: "absolute",
+                top: cursorY1 - 4,
+                left: loopX1 - 14,
+                width: 28,
+                height: cursorY2 - cursorY1 + 8,
+                cursor: "ew-resize",
+                touchAction: "none",
+              }}
+              onPointerDown={(e) =>
+                onHandlePointerDown(e as unknown as PointerEvent, "left")
+              }
+              onPointerMove={(e) =>
+                onHandlePointerMove(e as unknown as PointerEvent)
+              }
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: cursorY1 - 4,
+                left: loopX2 - 14,
+                width: 28,
+                height: cursorY2 - cursorY1 + 8,
+                cursor: "ew-resize",
+                touchAction: "none",
+              }}
+              onPointerDown={(e) =>
+                onHandlePointerDown(e as unknown as PointerEvent, "right")
+              }
+              onPointerMove={(e) =>
+                onHandlePointerMove(e as unknown as PointerEvent)
+              }
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            />
+          </>
         )}
-        {score.parts.map((part, p) => (
-          <Staff
-            key={part.id}
-            part={part}
-            partIndex={p}
-            layout={layout}
-            staffBottomY={layout.staffBottomYs[p]}
-            noteColors={noteColors}
-            visible={visibleParts ? visibleParts.has(part.id) : true}
-            inkColor={inkColor}
-          />
-        ))}
-        {cursorX !== null && (
-          <line
-            x1={cursorX}
-            x2={cursorX}
-            y1={cursorY1 - 4}
-            y2={cursorY2 + 4}
-            stroke={cursorColor}
-            stroke-width="2"
-            stroke-opacity="0.85"
-          />
-        )}
-      </svg>
+      </div>
     </div>
   );
 }

@@ -51,7 +51,7 @@ export class MidiPlayer {
     }
     await this.audioCtx.resume();
 
-    const fromBeat = this._state === "paused" ? this.resumeBeat : 0;
+    const fromBeat = this.resumeBeat;
     this.startSchedule(fromBeat);
     this._state = "playing";
   }

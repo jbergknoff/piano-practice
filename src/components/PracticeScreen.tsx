@@ -11,10 +11,8 @@ import {
   GearIcon,
   LoopIcon,
   MicIcon,
-  MinusIcon,
   PauseIcon,
   PlayIcon,
-  PlusIcon,
   StopIcon,
 } from "./icons";
 
@@ -28,6 +26,7 @@ interface PracticeScreenProps {
   cursorColor: string;
   isPlaying: boolean;
   bpm: number;
+  baseBpm: number;
   showLoop: boolean;
   measureRange: { from: number; to: number } | null;
   totalMeasures: number;
@@ -56,6 +55,7 @@ export function PracticeScreen({
   cursorColor,
   isPlaying,
   bpm,
+  baseBpm,
   showLoop,
   measureRange,
   totalMeasures,
@@ -110,6 +110,7 @@ export function PracticeScreen({
           inkColor={theme.ink}
           loopRange={showLoop ? measureRange : null}
           loopColor={hexA(accent, 0.09)}
+          onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
           containerStyle={{
             position: "absolute",
             inset: 0,
@@ -357,10 +358,10 @@ export function PracticeScreen({
           <LoopIcon />
         </button>
 
-        {/* BPM panel */}
+        {/* Tempo panel */}
         <div
           style={{
-            padding: "8px 6px 8px 14px",
+            padding: "6px 8px",
             background: theme.panel,
             border: `0.5px solid ${theme.border}`,
             borderRadius: 12,
@@ -372,52 +373,32 @@ export function PracticeScreen({
             boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
           }}
         >
-          <button
-            type="button"
-            onClick={() => onBpmChange(Math.max(40, bpm - 4))}
-            style={miniBtnStyle(theme) as Record<string, string | number>}
-          >
-            <MinusIcon />
-          </button>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              minWidth: 52,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: "'Geist Mono', monospace",
-                fontSize: 18,
-                fontWeight: 500,
-                lineHeight: 1,
-                color: theme.ink,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {bpm}
-            </span>
-            <span
-              style={{
-                fontSize: 8,
-                color: theme.inkSoft,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                marginTop: 2,
-              }}
-            >
-              BPM
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => onBpmChange(Math.min(220, bpm + 4))}
-            style={miniBtnStyle(theme) as Record<string, string | number>}
-          >
-            <PlusIcon />
-          </button>
+          {([25, 50, 75, 100] as const).map((pct) => {
+            const targetBpm = Math.round((baseBpm * pct) / 100);
+            const active = bpm === targetBpm;
+            return (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => onBpmChange(targetBpm)}
+                style={{
+                  ...(miniBtnStyle(theme) as Record<string, string | number>),
+                  padding: "0 10px",
+                  minWidth: 44,
+                  background: active ? hexA(accent, 0.15) : undefined,
+                  border: active
+                    ? `0.5px solid ${hexA(accent, 0.5)}`
+                    : undefined,
+                  color: active ? accent : theme.ink,
+                  fontWeight: active ? 600 : 400,
+                  fontSize: 13,
+                }}
+                aria-pressed={active}
+              >
+                {pct}%
+              </button>
+            );
+          })}
         </div>
       </div>
 
