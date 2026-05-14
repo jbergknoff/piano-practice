@@ -315,8 +315,22 @@ export function SheetMusicDisplay({
       return;
     }
     const el = containerRef.current;
+
+    if (viewX !== null) {
+      // While scrubbing: cancel any running animation and jump immediately so
+      // the view tracks the scrubber without lag or competing animation.
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
+      el.scrollLeft = Math.max(0, viewX - el.clientWidth / 2);
+      return;
+    }
+
+    // Not scrubbing: smooth-follow the playback cursor.
     scrollTargetRef.current =
-      scrollX === null ? 0 : Math.max(0, scrollX - el.clientWidth / 2);
+      cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running
@@ -339,7 +353,7 @@ export function SheetMusicDisplay({
       scrollRafRef.current = requestAnimationFrame(step);
     };
     scrollRafRef.current = requestAnimationFrame(step);
-  }, [scrollX]);
+  }, [viewX, cursorX]);
 
   // Loop handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
