@@ -152,6 +152,12 @@ export function App() {
     playerRef.current?.setBpm(newBpm);
   }
 
+  const [viewBeat, setViewBeat] = useState<number | null>(null);
+
+  function handleViewChange(beat: number | null) {
+    setViewBeat(beat);
+  }
+
   function handleContextMenuAction(
     action: "loop" | "seek",
     measureNumber: number,
@@ -332,7 +338,8 @@ export function App() {
         });
       }}
       onMeasureRangeChange={setMeasureRange}
-      onSeek={handleSeek}
+      viewBeat={viewBeat}
+      onViewChange={handleViewChange}
       onContextMenuAction={handleContextMenuAction}
       onToggleWaitMode={handleToggleWaitMode}
       onTrackToggle={onTrackToggle}

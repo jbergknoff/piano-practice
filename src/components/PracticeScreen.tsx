@@ -42,7 +42,8 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
-  onSeek: (beat: number) => void;
+  viewBeat: number | null;
+  onViewChange: (beat: number | null) => void;
   onContextMenuAction: (
     action: "loop" | "seek",
     measureNumber: number,
@@ -55,37 +56,50 @@ function MeasureScrubber({
   currentMeasure,
   totalMeasures,
   totalBeats,
+  timeSigNum,
   playbackBeat,
   theme,
   accent,
-  onSeek,
+  onViewChange,
 }: {
   currentMeasure: number;
   totalMeasures: number;
   totalBeats: number;
+  timeSigNum: number;
   playbackBeat: number | undefined;
   theme: ThemeTokens;
   accent: string;
-  onSeek: (beat: number) => void;
+  onViewChange: (beat: number | null) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+  const [dragBeat, setDragBeat] = useState<number | null>(null);
 
-  const progress =
+  const playbackProgress =
     totalBeats > 0 && playbackBeat != null
       ? Math.min(1, playbackBeat / totalBeats)
       : 0;
 
-  function seekFromPointer(e: PointerEvent) {
+  const progress =
+    dragBeat !== null && totalBeats > 0
+      ? Math.min(1, dragBeat / totalBeats)
+      : playbackProgress;
+
+  const displayMeasure =
+    dragBeat !== null && timeSigNum > 0
+      ? Math.min(totalMeasures, Math.floor(dragBeat / timeSigNum) + 1)
+      : currentMeasure;
+
+  function beatFromPointer(e: PointerEvent): number {
     if (!trackRef.current) {
-      return;
+      return 0;
     }
     const rect = trackRef.current.getBoundingClientRect();
     const ratio = Math.max(
       0,
       Math.min(1, (e.clientX - rect.left) / rect.width),
     );
-    onSeek(ratio * totalBeats);
+    return ratio * totalBeats;
   }
 
   const thumbPct = `${progress * 100}%`;
@@ -105,15 +119,21 @@ function MeasureScrubber({
         onPointerDown={(e) => {
           isDragging.current = true;
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-          seekFromPointer(e as unknown as PointerEvent);
+          const beat = beatFromPointer(e as unknown as PointerEvent);
+          setDragBeat(beat);
+          onViewChange(beat);
         }}
         onPointerMove={(e) => {
           if (isDragging.current) {
-            seekFromPointer(e as unknown as PointerEvent);
+            const beat = beatFromPointer(e as unknown as PointerEvent);
+            setDragBeat(beat);
+            onViewChange(beat);
           }
         }}
         onPointerUp={() => {
           isDragging.current = false;
+          setDragBeat(null);
+          onViewChange(null);
         }}
         style={{
           width: 130,
@@ -140,16 +160,16 @@ function MeasureScrubber({
           style={{
             position: "absolute",
             left: thumbPct,
-            top: 0,
+            bottom: "calc(50% + 9px)",
             transform: "translateX(-50%)",
             fontSize: 9,
-            color: theme.inkSoft,
+            color: theme.ink,
             letterSpacing: "0.06em",
             lineHeight: 1,
             pointerEvents: "none",
           }}
         >
-          {currentMeasure}
+          {displayMeasure}
         </div>
         {/* Playhead bar */}
         <div
@@ -221,7 +241,8 @@ export function PracticeScreen({
   onBpmChange,
   onLoopToggle,
   onMeasureRangeChange,
-  onSeek,
+  viewBeat,
+  onViewChange,
   onContextMenuAction,
   onToggleWaitMode,
   onTrackToggle,
@@ -271,6 +292,7 @@ export function PracticeScreen({
           loopRange={showLoop ? measureRange : null}
           loopColor={hexA(accent, 0.09)}
           onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
+          viewBeat={viewBeat ?? undefined}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
@@ -390,10 +412,11 @@ export function PracticeScreen({
             currentMeasure={currentMeasure}
             totalMeasures={totalMeasures}
             totalBeats={totalBeats}
+            timeSigNum={musicxml?.timeSigNum ?? 4}
             playbackBeat={playbackBeat}
             theme={theme}
             accent={accent}
-            onSeek={onSeek}
+            onViewChange={onViewChange}
           />
         )}
         <button

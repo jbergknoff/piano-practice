@@ -246,6 +246,8 @@ interface SheetMusicDisplayProps {
   loopColor?: string;
   /** Called when the user finishes dragging a loop boundary handle. */
   onLoopRangeChange?: (range: { from: number; to: number }) => void;
+  /** When set, the view scrolls to this beat position without moving the playback cursor. */
+  viewBeat?: number;
   /** Called on right-click or long-press with the measure and beat at that position. */
   onSheetContextMenu?: (info: {
     measureNumber: number;
@@ -268,6 +270,7 @@ export function SheetMusicDisplay({
   loopRange,
   loopColor,
   onLoopRangeChange,
+  viewBeat,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -298,6 +301,11 @@ export function SheetMusicDisplay({
       ? computeCursorX(playbackBeat, score, layout)
       : null;
 
+  const viewX =
+    viewBeat !== undefined ? computeCursorX(viewBeat, score, layout) : null;
+
+  const scrollX = viewX ?? cursorX;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTargetRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
@@ -308,7 +316,7 @@ export function SheetMusicDisplay({
     }
     const el = containerRef.current;
     scrollTargetRef.current =
-      cursorX === null ? 0 : Math.max(0, cursorX - el.clientWidth / 2);
+      scrollX === null ? 0 : Math.max(0, scrollX - el.clientWidth / 2);
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running
@@ -331,7 +339,7 @@ export function SheetMusicDisplay({
       scrollRafRef.current = requestAnimationFrame(step);
     };
     scrollRafRef.current = requestAnimationFrame(step);
-  }, [cursorX]);
+  }, [scrollX]);
 
   // Loop handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
