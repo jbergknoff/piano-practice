@@ -31,15 +31,13 @@ export function FocusIcon({ size = 16 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.7"
+      stroke-width="1.8"
       stroke-linecap="round"
       stroke-linejoin="round"
       aria-hidden="true"
     >
-      <path d="M17 4l4 4-4 4" />
-      <path d="M3 12V10a4 4 0 014-4h14" />
-      <path d="M7 20l-4-4 4-4" />
-      <path d="M21 12v2a4 4 0 01-4 4H3" />
+      <path d="M9 5H6v14h3" />
+      <path d="M15 5h3v14h-3" />
     </svg>
   );
 }
