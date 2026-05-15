@@ -75,7 +75,7 @@ export function useBluetooth(
 
   function sendNote(note: number, velocity: number, durationMs: number) {
     const char = charRef.current;
-    if (!char) return;
+    if (!char) { return; }
     try {
       char.writeValueWithoutResponse(buildBLEMIDINote(note, velocity));
       setTimeout(() => {

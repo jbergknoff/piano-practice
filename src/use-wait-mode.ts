@@ -66,7 +66,6 @@ function rangeBounds(
   return { first, end };
 }
 
-
 export function useWaitMode(
   musicxml: MidiConversionResult | null,
   measureRange: { from: number; to: number } | null,

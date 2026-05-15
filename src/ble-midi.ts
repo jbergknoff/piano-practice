@@ -47,7 +47,6 @@ export function buildBLEMIDINote(
   return new Uint8Array([0x80, 0x80, status, note & 0x7f, velocity & 0x7f]);
 }
 
-
 //
 // We implement this inline rather than using an off-the-shelf library because
 // the only widely-referenced JS BLE MIDI library (skratchdot/ble-midi) has not
