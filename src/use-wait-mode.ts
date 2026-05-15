@@ -257,8 +257,7 @@ export function useWaitMode(
     );
     let idx = first;
     for (let i = first; i < end; i++) {
-      if (points[i].beat >= beat) {
-        idx = i;
+      if (points[i].beat > beat) {
         break;
       }
       idx = i;

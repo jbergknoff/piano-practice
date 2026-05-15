@@ -683,7 +683,7 @@ export function PracticeScreen({
                   action: "focus" as const,
                 },
                 {
-                  label: `Move cursor to measure ${contextMenu.measureNumber}`,
+                  label: "Move cursor to here",
                   action: "seek" as const,
                 },
               ] as { label: string; action: "focus" | "seek" }[]
