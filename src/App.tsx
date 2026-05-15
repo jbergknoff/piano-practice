@@ -18,7 +18,9 @@ import { useBluetooth } from "./useBluetooth";
 import {
   hashFileBytes,
   loadFileHistory,
+  loadRecentFile,
   saveFileHistory,
+  saveRecentFile,
 } from "./use-file-history";
 
 function prettyTitle(filename: string): string {
@@ -93,6 +95,17 @@ export function App() {
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;
   useWakeLock(musicxml !== null);
+
+  // On startup, reload the most recently opened file automatically.
+  useEffect(() => {
+    const recent = loadRecentFile();
+    if (!recent) {
+      return;
+    }
+    parseMidiFile(
+      new File([recent.bytes], recent.name, { type: "audio/midi" }),
+    );
+  }, []);
 
   // Persist session state keyed by file hash so it can be restored next load.
   useEffect(() => {
@@ -270,6 +283,7 @@ export function App() {
       const bytes = new Uint8Array(buffer);
       const hash = await hashFileBytes(bytes);
       setFileHash(hash);
+      saveRecentFile(file.name, bytes);
 
       const parsed = parseMidi(bytes);
       const trackList = getMidiTracks(parsed);
