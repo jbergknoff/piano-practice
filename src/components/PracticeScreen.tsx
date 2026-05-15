@@ -8,17 +8,19 @@ import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { SettingsDrawer } from "./SettingsDrawer";
 import {
+  ChevronLeftIcon,
+  FocusIcon,
   GearIcon,
-  LoopIcon,
-  MicIcon,
   PauseIcon,
+  PianoIcon,
   PlayIcon,
-  StopIcon,
+  ResetIcon,
 } from "./icons";
 
 interface PracticeScreenProps {
   theme: ThemeTokens;
   accent: string;
+  fileName: string;
   pieceTitle: string;
   musicxml: MidiConversionResult | null;
   noteColors: Record<string, string>;
@@ -27,7 +29,7 @@ interface PracticeScreenProps {
   isPlaying: boolean;
   bpm: number;
   baseBpm: number;
-  showLoop: boolean;
+  showFocus: boolean;
   measureRange: { from: number; to: number } | null;
   totalMeasures: number;
   currentMeasure: number;
@@ -36,14 +38,14 @@ interface PracticeScreenProps {
   tracks: TrackInfo[];
   selectedTracks: number[];
   onPlayPause: () => void;
-  onStop: () => void;
+  onReset: () => void;
   onBpmChange: (bpm: number) => void;
-  onLoopToggle: () => void;
+  onFocusToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onToggleWaitMode: () => void;
   onTrackToggle: (idx: number) => void;
   onContextMenuAction: (
-    action: "loop" | "seek",
+    action: "focus" | "seek",
     measureNumber: number,
     beat: number,
   ) => void;
@@ -208,7 +210,7 @@ function MeasureScrubber({
         <span
           style={{
             fontSize: 8,
-            color: theme.inkFaint,
+            color: theme.ink,
             letterSpacing: "0.06em",
           }}
         >
@@ -217,7 +219,7 @@ function MeasureScrubber({
         <span
           style={{
             fontSize: 8,
-            color: theme.inkFaint,
+            color: theme.ink,
             letterSpacing: "0.06em",
           }}
         >
@@ -231,6 +233,7 @@ function MeasureScrubber({
 export function PracticeScreen({
   theme,
   accent,
+  fileName,
   pieceTitle,
   musicxml,
   noteColors,
@@ -239,7 +242,7 @@ export function PracticeScreen({
   isPlaying,
   bpm,
   baseBpm,
-  showLoop,
+  showFocus,
   measureRange,
   totalMeasures,
   currentMeasure,
@@ -248,9 +251,9 @@ export function PracticeScreen({
   tracks,
   selectedTracks,
   onPlayPause,
-  onStop,
+  onReset,
   onBpmChange,
-  onLoopToggle,
+  onFocusToggle,
   onMeasureRangeChange,
   onContextMenuAction,
   onToggleWaitMode,
@@ -258,10 +261,26 @@ export function PracticeScreen({
   onGoToLanding,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
   // Imperative handle into SheetMusicDisplay's scroll logic — calling this
   // bypasses Preact state entirely, so the view responds in the same frame as
   // the pointer event with no render-cycle lag.
   const viewScrollRef = useRef<((beat: number | null) => void) | null>(null);
+
+  // When wait mode is enabled, snap the sheet to the cursor position so it's
+  // in view. Calling viewScrollRef with the beat then immediately with null
+  // performs an instant scroll and releases scrub-lock so cursor-following resumes.
+  const playbackBeatRef = useRef(playbackBeat);
+  useEffect(() => {
+    playbackBeatRef.current = playbackBeat;
+  });
+  useEffect(() => {
+    if (waitMode && playbackBeatRef.current !== undefined) {
+      viewScrollRef.current?.(playbackBeatRef.current);
+      viewScrollRef.current?.(null);
+    }
+  }, [waitMode]);
+
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
     clientY: number;
@@ -302,9 +321,9 @@ export function PracticeScreen({
           playbackBeat={playbackBeat}
           cursorColor={cursorColor}
           inkColor={theme.ink}
-          loopRange={showLoop ? measureRange : null}
-          loopColor={hexA(accent, 0.09)}
-          onLoopRangeChange={showLoop ? onMeasureRangeChange : undefined}
+          focusRange={showFocus ? measureRange : null}
+          focusColor={hexA(accent, 0.09)}
+          onFocusRangeChange={showFocus ? onMeasureRangeChange : undefined}
           viewScrollRef={viewScrollRef}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
@@ -362,11 +381,29 @@ export function PracticeScreen({
         }}
       />
 
-      {/* TOP LEFT: piece title */}
-      <div style={{ position: "absolute", top: 18, left: 22, zIndex: 2 }}>
+      {/* TOP LEFT: back button + piece title */}
+      <div
+        style={{
+          position: "absolute",
+          top: 18,
+          left: 22,
+          zIndex: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
         <button
           type="button"
           onClick={onGoToLanding}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          title="Back"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => setPieceInfoOpen(true)}
           style={{
             background: "none",
             border: "none",
@@ -442,7 +479,7 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* BOTTOM LEFT: transport controls */}
+      {/* BOTTOM LEFT: wait mode + transport controls */}
       <div
         style={{
           position: "absolute",
@@ -454,56 +491,66 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <button
-          type="button"
-          onClick={onPlayPause}
-          disabled={waitMode}
-          style={{
-            ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            width: 52,
-            height: 52,
-            background: accent,
-            color: "#FFF7E5",
-            border: "none",
-            boxShadow: `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`,
-            opacity: waitMode ? 0.5 : 1,
-          }}
-          title={isPlaying ? "Pause" : "Play"}
-        >
-          {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
-        </button>
-        <button
-          type="button"
-          onClick={onStop}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Stop"
-        >
-          <StopIcon />
-        </button>
-
-        {/* Wait-mode toggle — styled as a chip */}
+        {/* Wait mode — primary button */}
         <button
           type="button"
           onClick={onToggleWaitMode}
           style={{
             ...(cornerBtnStyle(theme) as Record<string, string | number>),
+            height: 52,
             width: "auto",
-            padding: "0 12px",
-            background: waitMode ? hexA(accent, 0.18) : theme.panel,
-            color: waitMode ? accent : theme.inkSoft,
-            borderColor: waitMode ? hexA(accent, 0.35) : theme.border,
-            fontSize: 11,
-            letterSpacing: "0.04em",
-            gap: 6,
+            padding: "0 16px",
+            flexDirection: "column",
+            gap: 3,
+            background: waitMode ? accent : theme.panel,
+            color: waitMode ? "#FFF7E5" : theme.inkSoft,
+            border: waitMode ? "none" : "none",
+            boxShadow: waitMode
+              ? `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`
+              : undefined,
           }}
-          title={waitMode ? "Disable wait mode" : "Enable wait mode"}
+          title={
+            waitMode
+              ? "Wait for piano enabled. Click to disable."
+              : "Wait for piano disabled. Click to enable."
+          }
         >
-          <MicIcon size={12} />
-          <span>Wait</span>
+          <PianoIcon size={20} />
+          <span
+            style={{ fontSize: 10, letterSpacing: "0.05em", fontWeight: 500 }}
+          >
+            Wait
+          </span>
         </button>
+
+        {/* Reset — always shown */}
+        <button
+          type="button"
+          onClick={onReset}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          title={
+            showFocus && measureRange
+              ? "Return to start of selection. Click to reset."
+              : "Return to beginning. Click to reset."
+          }
+        >
+          <ResetIcon />
+        </button>
+
+        {/* Play/Pause — only shown outside wait mode */}
+        {!waitMode && (
+          <button
+            type="button"
+            onClick={onPlayPause}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+          </button>
+        )}
       </div>
 
-      {/* BOTTOM RIGHT: loop toggle + BPM */}
+      {/* BOTTOM RIGHT: focus toggle + BPM */}
       <div
         style={{
           position: "absolute",
@@ -517,16 +564,16 @@ export function PracticeScreen({
       >
         <button
           type="button"
-          onClick={onLoopToggle}
+          onClick={onFocusToggle}
           style={{
             ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            background: showLoop ? hexA(accent, 0.18) : theme.panel,
-            color: showLoop ? accent : theme.ink,
-            borderColor: showLoop ? hexA(accent, 0.35) : theme.border,
+            background: showFocus ? hexA(accent, 0.18) : theme.panel,
+            color: showFocus ? accent : theme.ink,
+            borderColor: showFocus ? hexA(accent, 0.35) : theme.border,
           }}
-          title="Loop section"
+          title="Focus section"
         >
-          <LoopIcon />
+          <FocusIcon />
         </button>
 
         {/* Tempo panel */}
@@ -544,6 +591,18 @@ export function PracticeScreen({
             boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
           }}
         >
+          <span
+            style={{
+              fontSize: 10,
+              color: theme.inkSoft,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              padding: "0 6px 0 2px",
+              userSelect: "none",
+            }}
+          >
+            BPM
+          </span>
           {([25, 50, 75, 100] as const).map((pct) => {
             const targetBpm = Math.round((baseBpm * pct) / 100);
             const active = bpm === targetBpm;
@@ -556,17 +615,18 @@ export function PracticeScreen({
                   ...(miniBtnStyle(theme) as Record<string, string | number>),
                   padding: "0 10px",
                   minWidth: 44,
-                  background: active ? hexA(accent, 0.15) : undefined,
-                  border: active
-                    ? `0.5px solid ${hexA(accent, 0.5)}`
-                    : undefined,
-                  color: active ? accent : theme.ink,
+                  background: active ? accent : undefined,
+                  border: active ? "none" : undefined,
+                  color: active ? "#FFF7E5" : theme.ink,
                   fontWeight: active ? 600 : 400,
                   fontSize: 13,
+                  boxShadow: active
+                    ? `0 2px 8px ${hexA(accent, 0.35)}`
+                    : undefined,
                 }}
                 aria-pressed={active}
               >
-                {pct}%
+                {targetBpm}
               </button>
             );
           })}
@@ -615,11 +675,11 @@ export function PracticeScreen({
             {(
               [
                 {
-                  label: `Loop measure ${contextMenu.measureNumber}`,
-                  action: "loop" as const,
+                  label: `Focus measure ${contextMenu.measureNumber}`,
+                  action: "focus" as const,
                 },
                 { label: "Jump here", action: "seek" as const },
-              ] as { label: string; action: "loop" | "seek" }[]
+              ] as { label: string; action: "focus" | "seek" }[]
             ).map(({ label, action }) => (
               <button
                 key={action}
@@ -647,6 +707,95 @@ export function PracticeScreen({
               >
                 {label}
               </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Piece info modal */}
+      {pieceInfoOpen && (
+        <>
+          <div
+            role="presentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 199,
+              background: "rgba(0,0,0,0.3)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+            }}
+            onClick={() => setPieceInfoOpen(false)}
+            onKeyDown={(e) => {
+              if ((e as unknown as KeyboardEvent).key === "Escape") {
+                setPieceInfoOpen(false);
+              }
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 200,
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 16,
+              backdropFilter: "blur(24px) saturate(160%)",
+              WebkitBackdropFilter: "blur(24px) saturate(160%)",
+              padding: "24px 28px",
+              boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+              minWidth: 280,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontStyle: "italic",
+                fontSize: 24,
+                color: theme.ink,
+                marginBottom: 20,
+              }}
+            >
+              {pieceTitle}
+            </div>
+            {(
+              [
+                ["File", fileName],
+                [
+                  "Tempo",
+                  `${baseBpm} BPM${bpm !== baseBpm ? ` (playing at ${bpm})` : ""}`,
+                ],
+                ["Time signature", musicxml ? `${musicxml.timeSigNum}/4` : "—"],
+                ["Tracks", String(tracks.length)],
+              ] as [string, string][]
+            ).map(([label, value]) => (
+              <div
+                key={label}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  gap: 24,
+                  padding: "7px 0",
+                  borderTop: `0.5px solid ${theme.border}`,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: theme.inkSoft, whiteSpace: "nowrap" }}>
+                  {label}
+                </span>
+                <span
+                  style={{
+                    color: theme.ink,
+                    textAlign: "right",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {value}
+                </span>
+              </div>
             ))}
           </div>
         </>

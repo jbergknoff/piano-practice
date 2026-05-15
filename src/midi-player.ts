@@ -27,9 +27,9 @@ export class MidiPlayer {
   private _state: "stopped" | "playing" | "paused" = "stopped";
 
   onPositionUpdate?: (beat: number) => void;
-  onEnd?: () => void;
-  /** When set, the player loops back to startBeat once beat reaches endBeat. */
-  loopRange: { startBeat: number; endBeat: number } | null = null;
+  onEnd?: (beat: number) => void;
+  /** When set, the player restarts from startBeat once beat reaches endBeat. */
+  focusRange: { startBeat: number; endBeat: number } | null = null;
 
   constructor(notes: PlaybackNote[], totalBeats: number, bpm = 120) {
     this.notes = notes;
@@ -275,11 +275,14 @@ export class MidiPlayer {
 
       const beat = this.elapsedBeat();
 
-      // Loop range takes priority: restart before the end-of-piece check fires.
-      if (this.loopRange && beat >= this.loopRange.endBeat) {
+      // Focus range: stop and return cursor to range start.
+      if (this.focusRange && beat >= this.focusRange.endBeat) {
         this.cancelAll();
         this.stopTick();
-        this.startSchedule(this.loopRange.startBeat);
+        this._state = "stopped";
+        this.resumeBeat = this.focusRange.startBeat;
+        this.onPositionUpdate?.(this.focusRange.startBeat);
+        this.onEnd?.(this.focusRange.startBeat);
         return;
       }
 
@@ -291,7 +294,7 @@ export class MidiPlayer {
         this._state = "stopped";
         this.resumeBeat = 0;
         this.onPositionUpdate?.(0);
-        this.onEnd?.();
+        this.onEnd?.(0);
         return;
       }
 

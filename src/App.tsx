@@ -42,7 +42,7 @@ export function App() {
   // UI state
   const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
-  const [showLoop, setShowLoop] = useState(false);
+  const [showFocus, setShowFocus] = useState(false);
 
   const theme = THEMES[themeName];
 
@@ -60,7 +60,7 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
-  const waitMode = useWaitMode(musicxml, measureRange);
+  const waitMode = useWaitMode(musicxml, showFocus ? measureRange : null);
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
 
   // Rebuild player when conversion result changes.
@@ -75,7 +75,7 @@ export function App() {
       const player = new MidiPlayer(musicxml.notes, musicxml.totalBeats, bpm);
       const range = measureRangeRef.current;
       if (range) {
-        player.loopRange = {
+        player.focusRange = {
           startBeat: (range.from - 1) * musicxml.timeSigNum,
           endBeat: range.to * musicxml.timeSigNum,
         };
@@ -85,9 +85,9 @@ export function App() {
           setCurrentBeat(beat);
         }
       };
-      player.onEnd = () => {
+      player.onEnd = (beat) => {
         setIsPlaying(false);
-        setCurrentBeat(0);
+        setCurrentBeat(beat);
       };
       playerRef.current = player;
     }
@@ -105,20 +105,20 @@ export function App() {
       return;
     }
     const { timeSigNum } = musicxml;
-    if (measureRange) {
+    if (showFocus && measureRange) {
       const startBeat = (measureRange.from - 1) * timeSigNum;
       const endBeat = measureRange.to * timeSigNum;
       if (player) {
-        player.loopRange = { startBeat, endBeat };
+        player.focusRange = { startBeat, endBeat };
         player.seek(startBeat);
       }
       if (!waitMode.activeRef.current) {
         setCurrentBeat(startBeat);
       }
     } else if (player) {
-      player.loopRange = null;
+      player.focusRange = null;
     }
-  }, [measureRange, musicxml]);
+  }, [showFocus, measureRange, musicxml]);
 
   async function handlePlayPause() {
     if (waitMode.active) {
@@ -137,14 +137,19 @@ export function App() {
     }
   }
 
-  function handleStop() {
+  function handleReset() {
     if (waitMode.active) {
       waitMode.rewind();
       return;
     }
-    playerRef.current?.stop();
+    const startBeat =
+      showFocus && measureRange
+        ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
+        : 0;
+    playerRef.current?.pause();
+    playerRef.current?.seek(startBeat);
     setIsPlaying(false);
-    setCurrentBeat(0);
+    setCurrentBeat(startBeat);
   }
 
   function handleBpmChange(newBpm: number) {
@@ -153,12 +158,12 @@ export function App() {
   }
 
   function handleContextMenuAction(
-    action: "loop" | "seek",
+    action: "focus" | "seek",
     measureNumber: number,
     beat: number,
   ) {
-    if (action === "loop") {
-      setShowLoop(true);
+    if (action === "focus") {
+      setShowFocus(true);
       setMeasureRange({ from: measureNumber, to: measureNumber });
     } else {
       handleSeek(beat);
@@ -190,7 +195,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setShowLoop(false);
+    setShowFocus(false);
 
     file.arrayBuffer().then((buffer) => {
       try {
@@ -234,7 +239,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setShowLoop(false);
+    setShowFocus(false);
   }
 
   // Note colors
@@ -301,6 +306,7 @@ export function App() {
     <PracticeScreen
       theme={theme}
       accent={accent}
+      fileName={fileName ?? ""}
       pieceTitle={pieceTitle}
       musicxml={musicxml}
       noteColors={noteColors}
@@ -309,7 +315,7 @@ export function App() {
       isPlaying={isPlaying}
       bpm={bpm}
       baseBpm={baseBpm}
-      showLoop={showLoop}
+      showFocus={showFocus}
       measureRange={measureRange}
       totalMeasures={totalMeasures}
       currentMeasure={currentMeasure}
@@ -318,15 +324,12 @@ export function App() {
       tracks={tracks}
       selectedTracks={selectedTracks}
       onPlayPause={handlePlayPause}
-      onStop={handleStop}
+      onReset={handleReset}
       onBpmChange={handleBpmChange}
-      onLoopToggle={() => {
-        setShowLoop((v) => {
-          if (!v && musicxml) {
+      onFocusToggle={() => {
+        setShowFocus((v) => {
+          if (!v && musicxml && !measureRange) {
             setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
-          }
-          if (v) {
-            setMeasureRange(null);
           }
           return !v;
         });
