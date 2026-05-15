@@ -17,6 +17,21 @@ import {
   ResetIcon,
 } from "./icons";
 
+function usePortrait() {
+  const [portrait, setPortrait] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(orientation: portrait)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: portrait)");
+    const handler = (e: MediaQueryListEvent) => setPortrait(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return portrait;
+}
+
 interface PracticeScreenProps {
   theme: ThemeTokens;
   accent: string;
@@ -264,6 +279,7 @@ export function PracticeScreen({
   noteSensitivityMilliseconds,
   onSensitivityChange,
 }: PracticeScreenProps) {
+  const portrait = usePortrait();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
   // Imperative handle into SheetMusicDisplay's scroll logic — calling this
@@ -337,7 +353,7 @@ export function PracticeScreen({
             inset: 0,
             overflowX: "auto",
             overflowY: "hidden",
-            padding: "56px 60px 64px",
+            padding: portrait ? "56px 60px 140px" : "56px 60px 64px",
             display: "flex",
             alignItems: "center",
           }}
@@ -364,7 +380,7 @@ export function PracticeScreen({
           position: "absolute",
           left: 0,
           top: 50,
-          bottom: 56,
+          bottom: portrait ? 140 : 56,
           width: 50,
           pointerEvents: "none",
           background: `linear-gradient(90deg, ${theme.bg} 0%, transparent 100%)`,
@@ -377,7 +393,7 @@ export function PracticeScreen({
           position: "absolute",
           right: 0,
           top: 50,
-          bottom: 56,
+          bottom: portrait ? 140 : 56,
           width: 50,
           pointerEvents: "none",
           background: `linear-gradient(270deg, ${theme.bg} 0%, transparent 100%)`,
@@ -424,6 +440,14 @@ export function PracticeScreen({
               lineHeight: 1,
               letterSpacing: "-0.01em",
               color: theme.ink,
+              ...(portrait
+                ? {
+                    maxWidth: 130,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }
+                : {}),
             }}
           >
             {pieceTitle}
@@ -544,7 +568,7 @@ export function PracticeScreen({
       <div
         style={{
           position: "absolute",
-          bottom: 20,
+          bottom: portrait ? 84 : 20,
           right: 22,
           display: "flex",
           alignItems: "center",
@@ -603,8 +627,8 @@ export function PracticeScreen({
                 onClick={() => onBpmChange(targetBpm)}
                 style={{
                   ...(miniBtnStyle(theme) as Record<string, string | number>),
-                  padding: "0 10px",
-                  minWidth: 44,
+                  padding: portrait ? "0 6px" : "0 10px",
+                  minWidth: portrait ? 36 : 44,
                   background: active ? accent : undefined,
                   border: active ? "none" : undefined,
                   color: active ? "#FFF7E5" : theme.ink,
