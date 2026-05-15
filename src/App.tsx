@@ -3,6 +3,7 @@ import { parseMidi } from "midi-file";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
 import { PracticeScreen } from "./components/PracticeScreen";
+import { WaitModeResultModal } from "./components/WaitModeResultModal";
 import { useWakeLock } from "./useWakeLock";
 import { MidiPlayer } from "./midi-player";
 import {
@@ -17,9 +18,12 @@ import { useWaitMode } from "./use-wait-mode";
 import { useBluetooth } from "./useBluetooth";
 import {
   type FileHistory,
+  type WaitModeAttempt,
   hashFileBytes,
+  loadAttemptHistory,
   loadFileHistory,
   loadRecentFile,
+  saveAttempt,
   saveFileHistory,
   saveRecentFile,
 } from "./use-file-history";
@@ -59,6 +63,11 @@ export function App() {
   const [showFocus, setShowFocus] = useState(false);
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
+  const [completionModal, setCompletionModal] = useState<{
+    history: WaitModeAttempt[];
+    selectionLabel: string;
+    expectedDurationMs: number;
+  } | null>(null);
 
   const theme = THEMES[themeName];
 
@@ -69,12 +78,32 @@ export function App() {
     measureRangeRef.current = measureRange;
   }, [measureRange]);
 
+  const showFocusRef = useRef(showFocus);
+  useEffect(() => {
+    showFocusRef.current = showFocus;
+  }, [showFocus]);
+
+  const bpmRef = useRef(bpm);
+  useEffect(() => {
+    bpmRef.current = bpm;
+  }, [bpm]);
+
+  const fileHashRef = useRef(fileHash);
+  useEffect(() => {
+    fileHashRef.current = fileHash;
+  }, [fileHash]);
+
   const musicxml = useMemo<MidiConversionResult | null>(() => {
     if (!midiData || selectedTracks.length === 0) {
       return null;
     }
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
+
+  const musicxmlRef = useRef(musicxml);
+  useEffect(() => {
+    musicxmlRef.current = musicxml;
+  }, [musicxml]);
 
   // Ref breaks the dependency cycle: waitMode needs bluetooth.sendNote, but
   // bluetooth needs waitMode.onNoteEvent. The callback is only ever invoked
@@ -88,12 +117,59 @@ export function App() {
         channel?: number,
       ) => void
     >();
+
+  function handleWaitModeComplete(stats: {
+    wrongNotes: number;
+    elapsedMs: number;
+  }) {
+    const hash = fileHashRef.current;
+    const mx = musicxmlRef.current;
+    if (!hash || !mx) {
+      return;
+    }
+    const range = measureRangeRef.current;
+    const focusActive = showFocusRef.current;
+    const currentBpm = bpmRef.current;
+
+    const selectionKey =
+      focusActive && range ? `m${range.from}-m${range.to}` : "full";
+
+    const selectionBeats =
+      focusActive && range
+        ? (range.to - range.from + 1) * mx.timeSigNum
+        : mx.totalBeats;
+
+    const expectedDurationMs = (selectionBeats / currentBpm) * 60_000;
+
+    const attempt: WaitModeAttempt = {
+      timestamp: Date.now(),
+      wrongNotes: stats.wrongNotes,
+      elapsedMs: stats.elapsedMs,
+    };
+    saveAttempt(hash, selectionKey, attempt);
+    const allAttempts = loadAttemptHistory(hash)[selectionKey] ?? [];
+
+    const selectionLabel =
+      focusActive && range
+        ? range.from === range.to
+          ? `Measure ${range.from}`
+          : `Measures ${range.from}–${range.to}`
+        : "Full piece";
+
+    setCompletionModal({
+      history: allAttempts,
+      selectionLabel,
+      expectedDurationMs,
+    });
+  }
+
   const waitMode = useWaitMode(
     musicxml,
     showFocus ? measureRange : null,
     noteSensitivityMilliseconds,
     // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
     () => sendNoteRef.current?.(42, 55, 80, 9),
+    handleWaitModeComplete,
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;
@@ -446,44 +522,56 @@ export function App() {
   }
 
   return (
-    <PracticeScreen
-      theme={theme}
-      accent={accent}
-      fileName={fileName ?? ""}
-      pieceTitle={pieceTitle}
-      musicxml={musicxml}
-      noteColors={noteColors}
-      playbackBeat={playbackBeat}
-      cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
-      isPlaying={isPlaying}
-      bpm={bpm}
-      baseBpm={baseBpm}
-      showFocus={showFocus}
-      measureRange={measureRange}
-      totalMeasures={totalMeasures}
-      currentMeasure={currentMeasure}
-      bluetooth={bluetooth}
-      waitMode={waitMode.active}
-      tracks={tracks}
-      selectedTracks={selectedTracks}
-      onPlayPause={handlePlayPause}
-      onReset={handleReset}
-      onBpmChange={handleBpmChange}
-      onFocusToggle={() => {
-        setShowFocus((v) => {
-          if (!v && musicxml && !measureRange) {
-            setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
-          }
-          return !v;
-        });
-      }}
-      onMeasureRangeChange={setMeasureRange}
-      onContextMenuAction={handleContextMenuAction}
-      onToggleWaitMode={handleToggleWaitMode}
-      onTrackToggle={onTrackToggle}
-      onGoToLanding={handleGoToLanding}
-      noteSensitivityMilliseconds={noteSensitivityMilliseconds}
-      onSensitivityChange={setNoteSensitivityMilliseconds}
-    />
+    <>
+      <PracticeScreen
+        theme={theme}
+        accent={accent}
+        fileName={fileName ?? ""}
+        pieceTitle={pieceTitle}
+        musicxml={musicxml}
+        noteColors={noteColors}
+        playbackBeat={playbackBeat}
+        cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
+        isPlaying={isPlaying}
+        bpm={bpm}
+        baseBpm={baseBpm}
+        showFocus={showFocus}
+        measureRange={measureRange}
+        totalMeasures={totalMeasures}
+        currentMeasure={currentMeasure}
+        bluetooth={bluetooth}
+        waitMode={waitMode.active}
+        tracks={tracks}
+        selectedTracks={selectedTracks}
+        onPlayPause={handlePlayPause}
+        onReset={handleReset}
+        onBpmChange={handleBpmChange}
+        onFocusToggle={() => {
+          setShowFocus((v) => {
+            if (!v && musicxml && !measureRange) {
+              setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
+            }
+            return !v;
+          });
+        }}
+        onMeasureRangeChange={setMeasureRange}
+        onContextMenuAction={handleContextMenuAction}
+        onToggleWaitMode={handleToggleWaitMode}
+        onTrackToggle={onTrackToggle}
+        onGoToLanding={handleGoToLanding}
+        noteSensitivityMilliseconds={noteSensitivityMilliseconds}
+        onSensitivityChange={setNoteSensitivityMilliseconds}
+      />
+      {completionModal && (
+        <WaitModeResultModal
+          theme={theme}
+          accent={accent}
+          selectionLabel={completionModal.selectionLabel}
+          history={completionModal.history}
+          expectedDurationMs={completionModal.expectedDurationMs}
+          onClose={() => setCompletionModal(null)}
+        />
+      )}
+    </>
   );
 }
