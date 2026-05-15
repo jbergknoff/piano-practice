@@ -210,7 +210,7 @@ function MeasureScrubber({
         <span
           style={{
             fontSize: 8,
-            color: theme.inkFaint,
+            color: theme.ink,
             letterSpacing: "0.06em",
           }}
         >
@@ -219,7 +219,7 @@ function MeasureScrubber({
         <span
           style={{
             fontSize: 8,
-            color: theme.inkFaint,
+            color: theme.ink,
             letterSpacing: "0.06em",
           }}
         >
@@ -591,6 +591,18 @@ export function PracticeScreen({
             boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
           }}
         >
+          <span
+            style={{
+              fontSize: 10,
+              color: theme.inkSoft,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              padding: "0 6px 0 2px",
+              userSelect: "none",
+            }}
+          >
+            BPM
+          </span>
           {([25, 50, 75, 100] as const).map((pct) => {
             const targetBpm = Math.round((baseBpm * pct) / 100);
             const active = bpm === targetBpm;
@@ -603,17 +615,18 @@ export function PracticeScreen({
                   ...(miniBtnStyle(theme) as Record<string, string | number>),
                   padding: "0 10px",
                   minWidth: 44,
-                  background: active ? hexA(accent, 0.15) : undefined,
-                  border: active
-                    ? `0.5px solid ${hexA(accent, 0.5)}`
-                    : undefined,
-                  color: active ? accent : theme.ink,
+                  background: active ? accent : undefined,
+                  border: active ? "none" : undefined,
+                  color: active ? "#FFF7E5" : theme.ink,
                   fontWeight: active ? 600 : 400,
                   fontSize: 13,
+                  boxShadow: active
+                    ? `0 2px 8px ${hexA(accent, 0.35)}`
+                    : undefined,
                 }}
                 aria-pressed={active}
               >
-                {pct}%
+                {targetBpm}
               </button>
             );
           })}
