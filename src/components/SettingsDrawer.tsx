@@ -11,6 +11,16 @@ interface SettingsDrawerProps {
   selectedTracks: number[];
   bluetooth: ReturnType<typeof useBluetooth>;
   onTrackToggle: (idx: number) => void;
+  noteSensitivityMilliseconds: number;
+  onSensitivityChange: (ms: number) => void;
+}
+
+function sensitivityLabel(ms: number): string {
+  if (ms === 0) return "Strict";
+  if (ms <= 100) return "Low";
+  if (ms <= 250) return "Normal";
+  if (ms <= 400) return "High";
+  return "Lenient";
 }
 
 export function SettingsDrawer({
@@ -22,6 +32,8 @@ export function SettingsDrawer({
   selectedTracks,
   bluetooth,
   onTrackToggle,
+  noteSensitivityMilliseconds,
+  onSensitivityChange,
 }: SettingsDrawerProps) {
   const connected = bluetooth.status === "connected";
 
@@ -132,6 +144,37 @@ export function SettingsDrawer({
             </div>
           </DrawerRow>
         )}
+
+        {/* Note sensitivity slider */}
+        <DrawerRow
+          theme={theme}
+          label="Note sensitivity"
+          hint={sensitivityLabel(noteSensitivityMilliseconds)}
+        >
+          <input
+            type="range"
+            min={0}
+            max={500}
+            step={25}
+            value={noteSensitivityMilliseconds}
+            onInput={(e) =>
+              onSensitivityChange(Number((e.target as HTMLInputElement).value))
+            }
+            style={{ width: "100%", accentColor: accent }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 10,
+              color: theme.inkSoft,
+              marginTop: -2,
+            }}
+          >
+            <span>Strict</span>
+            <span>Lenient</span>
+          </div>
+        </DrawerRow>
 
         {/* Footer — connection */}
         <div
