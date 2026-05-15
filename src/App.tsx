@@ -43,7 +43,8 @@ export function App() {
   const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
   const [showFocus, setShowFocus] = useState(false);
-  const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] = useState(150);
+  const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
+    useState(150);
 
   const theme = THEMES[themeName];
 
@@ -61,7 +62,11 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
-  const waitMode = useWaitMode(musicxml, showFocus ? measureRange : null, noteSensitivityMilliseconds);
+  const waitMode = useWaitMode(
+    musicxml,
+    showFocus ? measureRange : null,
+    noteSensitivityMilliseconds,
+  );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
 
   // Rebuild player when conversion result changes.

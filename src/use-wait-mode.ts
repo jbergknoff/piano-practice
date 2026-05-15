@@ -284,7 +284,8 @@ export function useWaitMode(
     // advance (catches lingering "note on" events from the previous beat).
     if (
       !expected.has(noteNumber) &&
-      Date.now() - lastAdvanceTimeRef.current < noteSensitivityMillisecondsRef.current
+      Date.now() - lastAdvanceTimeRef.current <
+        noteSensitivityMillisecondsRef.current
     ) {
       return;
     }
