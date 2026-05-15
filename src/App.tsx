@@ -15,6 +15,11 @@ import {
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import { useWaitMode } from "./use-wait-mode";
 import { useBluetooth } from "./useBluetooth";
+import {
+  hashFileBytes,
+  loadFileHistory,
+  saveFileHistory,
+} from "./use-file-history";
 
 function prettyTitle(filename: string): string {
   return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");
@@ -29,6 +34,9 @@ export function App() {
   const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  // Beat to seek to once the player is created after a file load with saved history.
+  const pendingSeekRef = useRef<number>(0);
 
   // Transport state
   const [bpm, setBpm] = useState(120);
@@ -86,6 +94,34 @@ export function App() {
   sendNoteRef.current = bluetooth.sendNote;
   useWakeLock(musicxml !== null);
 
+  // Persist session state keyed by file hash so it can be restored next load.
+  useEffect(() => {
+    if (!fileHash || !midiData) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      saveFileHistory(fileHash, {
+        bpmRatio: bpm / baseBpm,
+        measureRange,
+        showFocus,
+        selectedTrackIndices: selectedTracks,
+        currentBeat,
+        noteSensitivityMilliseconds,
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [
+    fileHash,
+    midiData,
+    bpm,
+    baseBpm,
+    measureRange,
+    showFocus,
+    selectedTracks,
+    currentBeat,
+    noteSensitivityMilliseconds,
+  ]);
+
   // Rebuild player when conversion result changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange go through player methods
   useEffect(() => {
@@ -102,6 +138,12 @@ export function App() {
           startBeat: (range.from - 1) * musicxml.timeSigNum,
           endBeat: range.to * musicxml.timeSigNum,
         };
+      }
+      const seekBeat = pendingSeekRef.current;
+      pendingSeekRef.current = 0;
+      if (seekBeat > 0) {
+        player.seek(seekBeat);
+        setCurrentBeat(seekBeat);
       }
       player.onPositionUpdate = (beat) => {
         if (!waitMode.activeRef.current) {
@@ -210,7 +252,7 @@ export function App() {
     waitMode.toggle(currentBeat);
   }
 
-  function parseMidiFile(file: File) {
+  async function parseMidiFile(file: File) {
     setFileName(file.name);
     setFileError(null);
     setMidiData(null);
@@ -220,21 +262,43 @@ export function App() {
     setCurrentBeat(0);
     setMeasureRange(null);
     setShowFocus(false);
+    setFileHash(null);
+    pendingSeekRef.current = 0;
 
-    file.arrayBuffer().then((buffer) => {
-      try {
-        const parsed = parseMidi(new Uint8Array(buffer));
-        const trackList = getMidiTracks(parsed);
-        setMidiData(parsed);
-        setTracks(trackList);
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const hash = await hashFileBytes(bytes);
+      setFileHash(hash);
+
+      const parsed = parseMidi(bytes);
+      const trackList = getMidiTracks(parsed);
+      const tempo = getMidiTempo(parsed);
+      const history = loadFileHistory(hash);
+
+      setMidiData(parsed);
+      setTracks(trackList);
+      setBaseBpm(tempo);
+
+      if (history) {
+        const validTracks = history.selectedTrackIndices.filter(
+          (i) => i < trackList.length,
+        );
+        setSelectedTracks(
+          validTracks.length > 0 ? validTracks : trackList.map((t) => t.index),
+        );
+        setBpm(Math.round(tempo * history.bpmRatio));
+        setMeasureRange(history.measureRange);
+        setShowFocus(history.showFocus);
+        setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
+        pendingSeekRef.current = history.currentBeat;
+      } else {
         setSelectedTracks(trackList.map((t) => t.index));
-        const tempo = getMidiTempo(parsed);
         setBpm(tempo);
-        setBaseBpm(tempo);
-      } catch (err) {
-        setFileError(String(err));
       }
-    });
+    } catch (err) {
+      setFileError(String(err));
+    }
   }
 
   function handleFileInput(e: Event) {
@@ -258,6 +322,7 @@ export function App() {
     playerRef.current = null;
     setMidiData(null);
     setFileName(null);
+    setFileHash(null);
     setTracks([]);
     setSelectedTracks([]);
     setIsPlaying(false);
