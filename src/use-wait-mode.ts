@@ -322,15 +322,9 @@ export function useWaitMode(
       lastAdvanceTimeRef.current = Date.now();
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
-        if (measureRangeRef.current) {
-          // Restart from the start of the focus range.
-          pointIndexRef.current = first;
-          setPointIndex(first);
-        } else {
-          // No range: end of piece — deactivate.
-          setActive(false);
-          activeRef.current = false;
-        }
+        // Restart from the beginning of the active range (or piece).
+        pointIndexRef.current = first;
+        setPointIndex(first);
       } else {
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
