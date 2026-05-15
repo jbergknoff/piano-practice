@@ -50,6 +50,8 @@ interface PracticeScreenProps {
     beat: number,
   ) => void;
   onGoToLanding: () => void;
+  noteSensitivityMilliseconds: number;
+  onSensitivityChange: (ms: number) => void;
 }
 
 function MeasureScrubber({
@@ -259,6 +261,8 @@ export function PracticeScreen({
   onToggleWaitMode,
   onTrackToggle,
   onGoToLanding,
+  noteSensitivityMilliseconds,
+  onSensitivityChange,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
@@ -810,6 +814,8 @@ export function PracticeScreen({
         selectedTracks={selectedTracks}
         bluetooth={bluetooth}
         onTrackToggle={onTrackToggle}
+        noteSensitivityMilliseconds={noteSensitivityMilliseconds}
+        onSensitivityChange={onSensitivityChange}
       />
     </div>
   );

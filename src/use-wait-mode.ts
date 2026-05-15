@@ -90,6 +90,7 @@ function playWrongNoteSound(): void {
 export function useWaitMode(
   musicxml: MidiConversionResult | null,
   measureRange: { from: number; to: number } | null,
+  noteSensitivityMilliseconds = 150,
 ): WaitModeHandle {
   const [active, setActive] = useState(true);
   const [pointIndex, setPointIndex] = useState(0);
@@ -102,6 +103,7 @@ export function useWaitMode(
   const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measureRangeRef = useRef(measureRange);
   const timeSigNumRef = useRef(musicxml?.timeSigNum ?? 4);
+  const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
 
   useEffect(() => {
     activeRef.current = active;
@@ -118,6 +120,10 @@ export function useWaitMode(
   useEffect(() => {
     timeSigNumRef.current = musicxml?.timeSigNum ?? 4;
   }, [musicxml]);
+
+  useEffect(() => {
+    noteSensitivityMillisecondsRef.current = noteSensitivityMilliseconds;
+  }, [noteSensitivityMilliseconds]);
 
   // One entry per unique startBeat; note numbers deduplicated across parts.
   const waitPoints = useMemo<WaitPoint[]>(() => {
@@ -273,6 +279,16 @@ export function useWaitMode(
     }
 
     const expected = points[idx].noteNumbers;
+
+    // Silently ignore wrong notes within the grace period after a successful
+    // advance (catches lingering "note on" events from the previous beat).
+    if (
+      !expected.has(noteNumber) &&
+      Date.now() - lastAdvanceTimeRef.current <
+        noteSensitivityMillisecondsRef.current
+    ) {
+      return;
+    }
 
     // Wrong note: the pressed key is not in the expected chord at all.
     if (!expected.has(noteNumber)) {
