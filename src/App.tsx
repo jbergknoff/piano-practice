@@ -63,12 +63,18 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
+  // Ref breaks the dependency cycle: waitMode needs bluetooth.sendNote, but
+  // bluetooth needs waitMode.onNoteEvent. The callback is only ever invoked
+  // during async user interaction, so the ref is always current by then.
+  const sendNoteRef = useRef<(note: number, velocity: number, durationMs: number) => void>();
   const waitMode = useWaitMode(
     musicxml,
     showFocus ? measureRange : null,
     noteSensitivityMilliseconds,
+    () => sendNoteRef.current?.(36, 100, 250),
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
+  sendNoteRef.current = bluetooth.sendNote;
   useWakeLock(musicxml !== null);
 
   // Rebuild player when conversion result changes.
