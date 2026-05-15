@@ -39,6 +39,8 @@ export interface WaitModeHandle {
   toggle: (currentBeat: number) => void;
   /** Rewind to the first wait point of the current range. */
   rewind: () => void;
+  /** Jump the wait-mode cursor to the first wait point at or after the given beat. */
+  seekToBeat: (beat: number) => void;
 }
 
 /** Returns the first wait-point index inside the range and the exclusive end index. */
@@ -246,6 +248,27 @@ export function useWaitMode(
     setActive(true);
   }
 
+  function seekToBeat(beat: number) {
+    const points = waitPointsRef.current;
+    const { first, end } = rangeBounds(
+      points,
+      measureRangeRef.current,
+      timeSigNumRef.current,
+    );
+    let idx = first;
+    for (let i = first; i < end; i++) {
+      if (points[i].beat >= beat) {
+        idx = i;
+        break;
+      }
+      idx = i;
+    }
+    setPointIndex(idx);
+    pointIndexRef.current = idx;
+    heldNotesRef.current.clear();
+    lastAdvanceTimeRef.current = 0;
+  }
+
   function rewind() {
     const { first } = rangeBounds(
       waitPointsRef.current,
@@ -341,5 +364,6 @@ export function useWaitMode(
     onNoteEvent,
     toggle,
     rewind,
+    seekToBeat,
   };
 }

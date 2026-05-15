@@ -178,6 +178,7 @@ export function App() {
 
   function handleSeek(beat: number) {
     if (waitMode.active) {
+      waitMode.seekToBeat(beat);
       return;
     }
     playerRef.current?.seek(beat);
