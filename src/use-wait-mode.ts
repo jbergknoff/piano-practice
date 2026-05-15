@@ -66,34 +66,6 @@ function rangeBounds(
   return { first, end };
 }
 
-/** Soft two-note descending chime played on a wrong note. */
-function playWrongNoteSound(): void {
-  try {
-    const ctx = new AudioContext();
-    // Two sine tones a minor third apart, staggered to give a gentle "ding-dong" drop.
-    const notes = [
-      { freq: 523.25, startDelay: 0, duration: 0.35 },    // C5
-      { freq: 440.0, startDelay: 0.18, duration: 0.35 },  // A4 (minor third below)
-    ];
-    for (const { freq, startDelay, duration } of notes) {
-      const gain = ctx.createGain();
-      const t0 = ctx.currentTime + startDelay;
-      gain.gain.setValueAtTime(0, t0);
-      gain.gain.linearRampToValueAtTime(0.18, t0 + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
-      gain.connect(ctx.destination);
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      osc.start(t0);
-      osc.stop(t0 + duration);
-    }
-    setTimeout(() => ctx.close(), 700);
-  } catch {
-    // Silently ignore if Web Audio is unavailable.
-  }
-}
 
 export function useWaitMode(
   musicxml: MidiConversionResult | null,
@@ -326,7 +298,6 @@ export function useWaitMode(
 
     // Wrong note: the pressed key is not in the expected chord at all.
     if (!expected.has(noteNumber)) {
-      playWrongNoteSound();
       onWrongNoteRef.current?.();
       setWrongNoteFlash(true);
       if (wrongNoteTimerRef.current !== null) {
