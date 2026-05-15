@@ -489,7 +489,7 @@ export function PracticeScreen({
             gap: 3,
             background: waitMode ? accent : theme.panel,
             color: waitMode ? "#FFF7E5" : theme.inkSoft,
-            border: waitMode ? "none" : undefined,
+            border: waitMode ? "none" : "none",
             boxShadow: waitMode
               ? `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`
               : undefined,
@@ -527,15 +527,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onPlayPause}
-            style={{
-              ...(cornerBtnStyle(theme) as Record<string, string | number>),
-              width: 52,
-              height: 52,
-              background: accent,
-              color: "#FFF7E5",
-              border: "none",
-              boxShadow: `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`,
-            }}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
             title={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
