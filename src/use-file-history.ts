@@ -44,6 +44,48 @@ export function saveFileHistory(hash: string, history: FileHistory): void {
   }
 }
 
+export interface WaitModeAttempt {
+  timestamp: number;
+  wrongNotes: number;
+  elapsedMs: number;
+}
+
+type AttemptHistory = Record<string, WaitModeAttempt[]>;
+
+const ATTEMPTS_PREFIX = "piano-practice:attempts:";
+const MAX_ATTEMPTS_PER_SELECTION = 50;
+
+export function loadAttemptHistory(hash: string): AttemptHistory {
+  try {
+    const raw = localStorage.getItem(ATTEMPTS_PREFIX + hash);
+    if (!raw) {
+      return {};
+    }
+    return JSON.parse(raw) as AttemptHistory;
+  } catch {
+    return {};
+  }
+}
+
+export function saveAttempt(
+  hash: string,
+  selectionKey: string,
+  attempt: WaitModeAttempt,
+): void {
+  try {
+    const history = loadAttemptHistory(hash);
+    const list = history[selectionKey] ?? [];
+    list.push(attempt);
+    if (list.length > MAX_ATTEMPTS_PER_SELECTION) {
+      list.splice(0, list.length - MAX_ATTEMPTS_PER_SELECTION);
+    }
+    history[selectionKey] = list;
+    localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
+  } catch {
+    // ignore (private mode, quota exceeded, etc.)
+  }
+}
+
 const RECENT_FILE_KEY = "piano-practice:recent-file";
 
 export function saveRecentFile(name: string, bytes: Uint8Array): void {

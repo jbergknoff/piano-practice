@@ -71,6 +71,7 @@ export function useWaitMode(
   measureRange: { from: number; to: number } | null,
   noteSensitivityMilliseconds = 150,
   onWrongNote?: () => void,
+  onComplete?: (stats: { wrongNotes: number; elapsedMs: number }) => void,
 ): WaitModeHandle {
   const [active, setActive] = useState(true);
   const [pointIndex, setPointIndex] = useState(0);
@@ -81,14 +82,21 @@ export function useWaitMode(
   const heldNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
   const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrongNoteCountRef = useRef(0);
+  const attemptStartTimeRef = useRef<number | null>(null);
   const measureRangeRef = useRef(measureRange);
   const timeSigNumRef = useRef(musicxml?.timeSigNum ?? 4);
   const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
   const onWrongNoteRef = useRef(onWrongNote);
+  const onCompleteRef = useRef(onComplete);
 
   useEffect(() => {
     onWrongNoteRef.current = onWrongNote;
   }, [onWrongNote]);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -147,6 +155,8 @@ export function useWaitMode(
     setWrongNoteFlash(false);
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    wrongNoteCountRef.current = 0;
+    attemptStartTimeRef.current = null;
     if (wrongNoteTimerRef.current !== null) {
       clearTimeout(wrongNoteTimerRef.current);
       wrongNoteTimerRef.current = null;
@@ -168,6 +178,8 @@ export function useWaitMode(
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    wrongNoteCountRef.current = 0;
+    attemptStartTimeRef.current = null;
   }, [measureRange]);
 
   const cursorBeat =
@@ -222,6 +234,8 @@ export function useWaitMode(
     pointIndexRef.current = startIdx;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    wrongNoteCountRef.current = 0;
+    attemptStartTimeRef.current = null;
     setActive(true);
   }
 
@@ -255,6 +269,8 @@ export function useWaitMode(
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    wrongNoteCountRef.current = 0;
+    attemptStartTimeRef.current = null;
   }
 
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
@@ -266,6 +282,10 @@ export function useWaitMode(
     const held = heldNotesRef.current;
     if (kind === "on") {
       held.add(noteNumber);
+      // Start timing on the first key press of this attempt.
+      if (attemptStartTimeRef.current === null) {
+        attemptStartTimeRef.current = Date.now();
+      }
     } else {
       held.delete(noteNumber);
       return; // only check for a match when a new note is pressed
@@ -297,6 +317,7 @@ export function useWaitMode(
 
     // Wrong note: the pressed key is not in the expected chord at all.
     if (!expected.has(noteNumber)) {
+      wrongNoteCountRef.current += 1;
       onWrongNoteRef.current?.();
       setWrongNoteFlash(true);
       if (wrongNoteTimerRef.current !== null) {
@@ -321,7 +342,17 @@ export function useWaitMode(
       lastAdvanceTimeRef.current = Date.now();
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
+        // Attempt complete — fire callback before resetting.
+        const startTime = attemptStartTimeRef.current;
+        if (startTime !== null) {
+          onCompleteRef.current?.({
+            wrongNotes: wrongNoteCountRef.current,
+            elapsedMs: Date.now() - startTime,
+          });
+        }
         // Restart from the beginning of the active range (or piece).
+        wrongNoteCountRef.current = 0;
+        attemptStartTimeRef.current = null;
         pointIndexRef.current = first;
         setPointIndex(first);
       } else {
