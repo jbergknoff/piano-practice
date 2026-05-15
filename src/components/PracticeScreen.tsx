@@ -266,6 +266,21 @@ export function PracticeScreen({
   // bypasses Preact state entirely, so the view responds in the same frame as
   // the pointer event with no render-cycle lag.
   const viewScrollRef = useRef<((beat: number | null) => void) | null>(null);
+
+  // When wait mode is enabled, snap the sheet to the cursor position so it's
+  // in view. Calling viewScrollRef with the beat then immediately with null
+  // performs an instant scroll and releases scrub-lock so cursor-following resumes.
+  const playbackBeatRef = useRef(playbackBeat);
+  useEffect(() => {
+    playbackBeatRef.current = playbackBeat;
+  });
+  useEffect(() => {
+    if (waitMode && playbackBeatRef.current !== undefined) {
+      viewScrollRef.current?.(playbackBeatRef.current);
+      viewScrollRef.current?.(null);
+    }
+  }, [waitMode]);
+
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
     clientY: number;
@@ -375,7 +390,7 @@ export function PracticeScreen({
           zIndex: 2,
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: 16,
         }}
       >
         <button
