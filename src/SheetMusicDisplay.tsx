@@ -553,7 +553,8 @@ export function SheetMusicDisplay({
         const svgX =
           me.clientX -
           containerEl.getBoundingClientRect().left +
-          containerEl.scrollLeft;
+          containerEl.scrollLeft -
+          Number.parseFloat(getComputedStyle(containerEl).paddingLeft);
         let measureIndex = 0;
         for (let i = 0; i < layout.measureXs.length; i++) {
           if (layout.measureXs[i] <= svgX) {
