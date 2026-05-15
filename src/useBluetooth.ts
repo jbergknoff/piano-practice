@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   BLE_MIDI_CHARACTERISTIC,
   BLE_MIDI_SERVICE,
+  buildBLEMIDINote,
   parseBLEMIDI,
 } from "./ble-midi";
 
@@ -12,6 +13,13 @@ export interface BluetoothState {
   deviceName: string | null;
   error: string | null;
   connect: () => Promise<void>;
+  /** Send a note to the connected device. No-op when not connected. */
+  sendNote: (
+    note: number,
+    velocity: number,
+    durationMs: number,
+    channel?: number,
+  ) => void;
 }
 
 export function useBluetooth(
@@ -21,6 +29,7 @@ export function useBluetooth(
   const [deviceName, setDeviceName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const onNoteEventRef = useRef(onNoteEvent);
+  const charRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null);
 
   useEffect(() => {
     onNoteEventRef.current = onNoteEvent;
@@ -44,6 +53,7 @@ export function useBluetooth(
       const server = await device.gatt.connect();
       const service = await server.getPrimaryService(BLE_MIDI_SERVICE);
       const char = await service.getCharacteristic(BLE_MIDI_CHARACTERISTIC);
+      charRef.current = char;
       await char.startNotifications();
       char.addEventListener("characteristicvaluechanged", (e) => {
         const val = (e.target as BluetoothRemoteGATTCharacteristic).value;
@@ -56,6 +66,7 @@ export function useBluetooth(
         }
       });
       device.addEventListener("gattserverdisconnected", () => {
+        charRef.current = null;
         setStatus("idle");
         setDeviceName(null);
       });
@@ -67,5 +78,27 @@ export function useBluetooth(
     }
   }
 
-  return { status, deviceName, error, connect };
+  function sendNote(
+    note: number,
+    velocity: number,
+    durationMs: number,
+    channel = 0,
+  ) {
+    const char = charRef.current;
+    if (!char) {
+      return;
+    }
+    try {
+      char.writeValueWithoutResponse(buildBLEMIDINote(note, velocity, channel));
+      setTimeout(() => {
+        try {
+          charRef.current?.writeValueWithoutResponse(
+            buildBLEMIDINote(note, 0, channel),
+          );
+        } catch {}
+      }, durationMs);
+    } catch {}
+  }
+
+  return { status, deviceName, error, connect, sendNote };
 }

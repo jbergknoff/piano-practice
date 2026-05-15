@@ -39,6 +39,8 @@ export interface WaitModeHandle {
   toggle: (currentBeat: number) => void;
   /** Rewind to the first wait point of the current range. */
   rewind: () => void;
+  /** Jump the wait-mode cursor to the first wait point at or after the given beat. */
+  seekToBeat: (beat: number) => void;
 }
 
 /** Returns the first wait-point index inside the range and the exclusive end index. */
@@ -64,33 +66,11 @@ function rangeBounds(
   return { first, end };
 }
 
-/** Brief dissonant buzz played on a wrong note. */
-function playWrongNoteSound(): void {
-  try {
-    const ctx = new AudioContext();
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
-    gain.connect(ctx.destination);
-    // Two slightly detuned sawtooths create a harsh beating tone.
-    for (const freq of [155, 183]) {
-      const osc = ctx.createOscillator();
-      osc.type = "sawtooth";
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.28);
-    }
-    setTimeout(() => ctx.close(), 400);
-  } catch {
-    // Silently ignore if Web Audio is unavailable.
-  }
-}
-
 export function useWaitMode(
   musicxml: MidiConversionResult | null,
   measureRange: { from: number; to: number } | null,
   noteSensitivityMilliseconds = 150,
+  onWrongNote?: () => void,
 ): WaitModeHandle {
   const [active, setActive] = useState(true);
   const [pointIndex, setPointIndex] = useState(0);
@@ -104,6 +84,11 @@ export function useWaitMode(
   const measureRangeRef = useRef(measureRange);
   const timeSigNumRef = useRef(musicxml?.timeSigNum ?? 4);
   const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
+  const onWrongNoteRef = useRef(onWrongNote);
+
+  useEffect(() => {
+    onWrongNoteRef.current = onWrongNote;
+  }, [onWrongNote]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -240,6 +225,26 @@ export function useWaitMode(
     setActive(true);
   }
 
+  function seekToBeat(beat: number) {
+    const points = waitPointsRef.current;
+    const { first, end } = rangeBounds(
+      points,
+      measureRangeRef.current,
+      timeSigNumRef.current,
+    );
+    let idx = first;
+    for (let i = first; i < end; i++) {
+      if (points[i].beat > beat) {
+        break;
+      }
+      idx = i;
+    }
+    setPointIndex(idx);
+    pointIndexRef.current = idx;
+    heldNotesRef.current.clear();
+    lastAdvanceTimeRef.current = 0;
+  }
+
   function rewind() {
     const { first } = rangeBounds(
       waitPointsRef.current,
@@ -292,7 +297,7 @@ export function useWaitMode(
 
     // Wrong note: the pressed key is not in the expected chord at all.
     if (!expected.has(noteNumber)) {
-      playWrongNoteSound();
+      onWrongNoteRef.current?.();
       setWrongNoteFlash(true);
       if (wrongNoteTimerRef.current !== null) {
         clearTimeout(wrongNoteTimerRef.current);
@@ -316,15 +321,9 @@ export function useWaitMode(
       lastAdvanceTimeRef.current = Date.now();
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
-        if (measureRangeRef.current) {
-          // Restart from the start of the focus range.
-          pointIndexRef.current = first;
-          setPointIndex(first);
-        } else {
-          // No range: end of piece — deactivate.
-          setActive(false);
-          activeRef.current = false;
-        }
+        // Restart from the beginning of the active range (or piece).
+        pointIndexRef.current = first;
+        setPointIndex(first);
       } else {
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
@@ -341,5 +340,6 @@ export function useWaitMode(
     onNoteEvent,
     toggle,
     rewind,
+    seekToBeat,
   };
 }

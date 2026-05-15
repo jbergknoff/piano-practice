@@ -37,7 +37,25 @@ export function midiNoteName(n: number): string {
   return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1);
 }
 
-// Parses a raw BLE MIDI packet into NoteEvent records.
+// Builds a minimal BLE MIDI packet containing a single Note On or Note Off.
+// Format: [header, timestamp, status, note, velocity] — timestamps are zeroed.
+export function buildBLEMIDINote(
+  note: number,
+  velocity: number, // 0 = Note Off
+  channel = 0, // 0–15; channel 9 = GM percussion
+): Uint8Array<ArrayBuffer> {
+  const statusBase = velocity > 0 ? 0x90 : 0x80; // Note On / Note Off
+  const status = statusBase | (channel & 0x0f);
+  const buf = new ArrayBuffer(5);
+  const view = new Uint8Array(buf);
+  view[0] = 0x80;
+  view[1] = 0x80;
+  view[2] = status;
+  view[3] = note & 0x7f;
+  view[4] = velocity & 0x7f;
+  return view;
+}
+
 //
 // We implement this inline rather than using an off-the-shelf library because
 // the only widely-referenced JS BLE MIDI library (skratchdot/ble-midi) has not

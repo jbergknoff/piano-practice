@@ -3,6 +3,7 @@ import { parseMidi } from "midi-file";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
 import { PracticeScreen } from "./components/PracticeScreen";
+import { useWakeLock } from "./useWakeLock";
 import { MidiPlayer } from "./midi-player";
 import {
   type MidiConversionResult,
@@ -62,12 +63,28 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
+  // Ref breaks the dependency cycle: waitMode needs bluetooth.sendNote, but
+  // bluetooth needs waitMode.onNoteEvent. The callback is only ever invoked
+  // during async user interaction, so the ref is always current by then.
+  const sendNoteRef =
+    useRef<
+      (
+        note: number,
+        velocity: number,
+        durationMs: number,
+        channel?: number,
+      ) => void
+    >();
   const waitMode = useWaitMode(
     musicxml,
     showFocus ? measureRange : null,
     noteSensitivityMilliseconds,
+    // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
+    () => sendNoteRef.current?.(42, 55, 80, 9),
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
+  sendNoteRef.current = bluetooth.sendNote;
+  useWakeLock(musicxml !== null);
 
   // Rebuild player when conversion result changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange go through player methods
@@ -178,6 +195,7 @@ export function App() {
 
   function handleSeek(beat: number) {
     if (waitMode.active) {
+      waitMode.seekToBeat(beat);
       return;
     }
     playerRef.current?.seek(beat);

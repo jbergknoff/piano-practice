@@ -420,27 +420,13 @@ export function PracticeScreen({
             style={{
               fontFamily: "'Instrument Serif', serif",
               fontStyle: "italic",
-              fontSize: 22,
+              fontSize: 28,
               lineHeight: 1,
               letterSpacing: "-0.01em",
               color: theme.ink,
             }}
           >
             {pieceTitle}
-          </div>
-          <div
-            style={{
-              fontSize: 10,
-              marginTop: 4,
-              color: theme.inkSoft,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {musicxml ? `${musicxml.timeSigNum}/4` : ""}
-            {tracks.length > 0
-              ? ` · ${tracks.length} track${tracks.length !== 1 ? "s" : ""}`
-              : ""}
           </div>
         </button>
       </div>
@@ -682,7 +668,10 @@ export function PracticeScreen({
                   label: `Focus measure ${contextMenu.measureNumber}`,
                   action: "focus" as const,
                 },
-                { label: "Jump here", action: "seek" as const },
+                {
+                  label: "Move cursor to here",
+                  action: "seek" as const,
+                },
               ] as { label: string; action: "focus" | "seek" }[]
             ).map(({ label, action }) => (
               <button

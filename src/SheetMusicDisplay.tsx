@@ -534,6 +534,9 @@ export function SheetMusicDisplay({
         userSelect: "none",
         touchAction: "pan-x",
         cursor: dragFocusRange ? "ew-resize" : "grab",
+        // Horizontal padding gives the focus-range scrubber pills room to render
+        // at the very first and last measure without being clipped by the container.
+        paddingInline: 8,
         ...(containerStyle as Record<string, string | number> | undefined),
       }}
       onContextMenu={(e) => {
@@ -550,7 +553,8 @@ export function SheetMusicDisplay({
         const svgX =
           me.clientX -
           containerEl.getBoundingClientRect().left +
-          containerEl.scrollLeft;
+          containerEl.scrollLeft -
+          Number.parseFloat(getComputedStyle(containerEl).paddingLeft);
         let measureIndex = 0;
         for (let i = 0; i < layout.measureXs.length; i++) {
           if (layout.measureXs[i] <= svgX) {
@@ -583,6 +587,7 @@ export function SheetMusicDisplay({
           ref={svgRef}
           width={layout.totalWidth}
           height={layout.totalHeight}
+          overflow="visible"
           style={{
             display: "block",
             fontFamily: BRAVURA,
