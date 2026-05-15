@@ -3,6 +3,7 @@ import { parseMidi } from "midi-file";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
 import { PracticeScreen } from "./components/PracticeScreen";
+import { useWakeLock } from "./useWakeLock";
 import { MidiPlayer } from "./midi-player";
 import {
   type MidiConversionResult,
@@ -68,6 +69,7 @@ export function App() {
     noteSensitivityMilliseconds,
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
+  useWakeLock(musicxml !== null);
 
   // Rebuild player when conversion result changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange go through player methods
