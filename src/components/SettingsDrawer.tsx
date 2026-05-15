@@ -16,10 +16,18 @@ interface SettingsDrawerProps {
 }
 
 function sensitivityLabel(ms: number): string {
-  if (ms === 0) return "Strict";
-  if (ms <= 100) return "Low";
-  if (ms <= 250) return "Normal";
-  if (ms <= 400) return "High";
+  if (ms === 0) {
+    return "Strict";
+  }
+  if (ms <= 100) {
+    return "Low";
+  }
+  if (ms <= 250) {
+    return "Normal";
+  }
+  if (ms <= 400) {
+    return "High";
+  }
   return "Lenient";
 }
 
