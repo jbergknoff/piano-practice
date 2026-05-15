@@ -64,24 +64,30 @@ function rangeBounds(
   return { first, end };
 }
 
-/** Brief dissonant buzz played on a wrong note. */
+/** Soft two-note descending chime played on a wrong note. */
 function playWrongNoteSound(): void {
   try {
     const ctx = new AudioContext();
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
-    gain.connect(ctx.destination);
-    // Two slightly detuned sawtooths create a harsh beating tone.
-    for (const freq of [155, 183]) {
+    // Two sine tones a minor third apart, staggered to give a gentle "ding-dong" drop.
+    const notes = [
+      { freq: 523.25, startDelay: 0, duration: 0.35 },    // C5
+      { freq: 440.0, startDelay: 0.18, duration: 0.35 },  // A4 (minor third below)
+    ];
+    for (const { freq, startDelay, duration } of notes) {
+      const gain = ctx.createGain();
+      const t0 = ctx.currentTime + startDelay;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.18, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+      gain.connect(ctx.destination);
       const osc = ctx.createOscillator();
-      osc.type = "sawtooth";
+      osc.type = "sine";
       osc.frequency.value = freq;
       osc.connect(gain);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.28);
+      osc.start(t0);
+      osc.stop(t0 + duration);
     }
-    setTimeout(() => ctx.close(), 400);
+    setTimeout(() => ctx.close(), 700);
   } catch {
     // Silently ignore if Web Audio is unavailable.
   }
