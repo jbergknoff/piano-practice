@@ -295,8 +295,9 @@ export function App() {
       setBaseBpm(tempo);
 
       if (history) {
-        const validTracks = history.selectedTrackIndices.filter(
-          (i) => i < trackList.length,
+        const knownIndices = new Set(trackList.map((t) => t.index));
+        const validTracks = history.selectedTrackIndices.filter((i) =>
+          knownIndices.has(i),
         );
         setSelectedTracks(
           validTracks.length > 0 ? validTracks : trackList.map((t) => t.index),
