@@ -37,11 +37,9 @@ export function LandingScreen({
         fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
         position: "relative",
         overflow: "hidden",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        display: "flex",
         alignItems: "center",
-        padding: "0 64px",
-        gap: 48,
+        justifyContent: "center",
       }}
     >
       {/* Paper texture */}
@@ -72,62 +70,15 @@ export function LandingScreen({
         <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={false} />
       </div>
 
-      {/* LEFT column */}
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <div
-          style={{
-            fontSize: 10,
-            color: theme.inkSoft,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            marginBottom: 14,
-          }}
-        >
-          ♪ Piano Practice
-        </div>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: "'Instrument Serif', serif",
-            fontStyle: "italic",
-            fontSize: 56,
-            lineHeight: 1.02,
-            letterSpacing: "-0.02em",
-            fontWeight: 400,
-            color: theme.ink,
-          }}
-        >
-          Piano
-          <br />
-          practice.
-        </h1>
-        <p
-          style={{
-            marginTop: 18,
-            fontSize: 13,
-            lineHeight: 1.5,
-            color: theme.inkSoft,
-            maxWidth: 320,
-          }}
-        >
-          Open a piece and play along — the score advances when you hit the
-          right notes.
-        </p>
-
-        {fileError && (
-          <p style={{ marginTop: 12, fontSize: 12, color: theme.error }}>
-            {fileError}
-          </p>
-        )}
-      </div>
-
-      {/* RIGHT column — drop zone */}
+      {/* Centered drop zone */}
       <div
         style={{
           position: "relative",
           zIndex: 1,
-          display: "flex",
-          justifyContent: "center",
+          width: "100%",
+          maxWidth: 480,
+          padding: "0 24px",
+          boxSizing: "border-box",
         }}
       >
         <label
@@ -141,17 +92,18 @@ export function LandingScreen({
             onDrop(e as unknown as DragEvent);
           }}
           style={{
-            width: 300,
-            height: 230,
+            width: "100%",
+            height: 320,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            gap: 14,
-            padding: "22px 22px 44px",
+            gap: 18,
+            padding: "32px 32px 56px",
+            boxSizing: "border-box",
             background: hovering ? hexA(accent, 0.08) : theme.panel,
             border: `1.5px dashed ${hovering ? accent : hexA(theme.ink, 0.18)}`,
-            borderRadius: 18,
+            borderRadius: 24,
             backdropFilter: "blur(20px) saturate(160%)",
             WebkitBackdropFilter: "blur(20px) saturate(160%)",
             cursor: "pointer",
@@ -177,8 +129,8 @@ export function LandingScreen({
           {/* Upload icon */}
           <div
             style={{
-              width: 44,
-              height: 44,
+              width: 56,
+              height: 56,
               borderRadius: "50%",
               background: hexA(accent, 0.12),
               color: accent,
@@ -187,7 +139,7 @@ export function LandingScreen({
               justifyContent: "center",
             }}
           >
-            <UploadIcon size={20} />
+            <UploadIcon size={26} />
           </div>
 
           <div style={{ textAlign: "center" }}>
@@ -195,17 +147,30 @@ export function LandingScreen({
               style={{
                 fontFamily: "'Instrument Serif', serif",
                 fontStyle: "italic",
-                fontSize: 20,
+                fontSize: 28,
                 color: theme.ink,
                 lineHeight: 1.2,
               }}
             >
               Drop a piece here
             </div>
-            <div style={{ fontSize: 11, color: theme.inkSoft, marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: theme.inkSoft, marginTop: 6 }}>
               or click to browse
             </div>
           </div>
+
+          {fileError && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                color: theme.error,
+                textAlign: "center",
+              }}
+            >
+              {fileError}
+            </p>
+          )}
 
           <div
             style={{
@@ -213,7 +178,7 @@ export function LandingScreen({
               gap: 5,
               alignItems: "center",
               position: "absolute",
-              bottom: 14,
+              bottom: 18,
             }}
           >
             {[".mid", ".midi"].map((ext) => (
