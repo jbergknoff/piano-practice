@@ -14,7 +14,12 @@ export interface BluetoothState {
   error: string | null;
   connect: () => Promise<void>;
   /** Send a note to the connected device. No-op when not connected. */
-  sendNote: (note: number, velocity: number, durationMs: number) => void;
+  sendNote: (
+    note: number,
+    velocity: number,
+    durationMs: number,
+    channel?: number,
+  ) => void;
 }
 
 export function useBluetooth(
@@ -73,16 +78,23 @@ export function useBluetooth(
     }
   }
 
-  function sendNote(note: number, velocity: number, durationMs: number) {
+  function sendNote(
+    note: number,
+    velocity: number,
+    durationMs: number,
+    channel = 0,
+  ) {
     const char = charRef.current;
     if (!char) {
       return;
     }
     try {
-      char.writeValueWithoutResponse(buildBLEMIDINote(note, velocity));
+      char.writeValueWithoutResponse(buildBLEMIDINote(note, velocity, channel));
       setTimeout(() => {
         try {
-          charRef.current?.writeValueWithoutResponse(buildBLEMIDINote(note, 0));
+          charRef.current?.writeValueWithoutResponse(
+            buildBLEMIDINote(note, 0, channel),
+          );
         } catch {}
       }, durationMs);
     } catch {}

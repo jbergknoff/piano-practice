@@ -67,12 +67,20 @@ export function App() {
   // bluetooth needs waitMode.onNoteEvent. The callback is only ever invoked
   // during async user interaction, so the ref is always current by then.
   const sendNoteRef =
-    useRef<(note: number, velocity: number, durationMs: number) => void>();
+    useRef<
+      (
+        note: number,
+        velocity: number,
+        durationMs: number,
+        channel?: number,
+      ) => void
+    >();
   const waitMode = useWaitMode(
     musicxml,
     showFocus ? measureRange : null,
     noteSensitivityMilliseconds,
-    () => sendNoteRef.current?.(36, 100, 250),
+    // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
+    () => sendNoteRef.current?.(42, 55, 80, 9),
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;

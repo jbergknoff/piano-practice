@@ -42,8 +42,10 @@ export function midiNoteName(n: number): string {
 export function buildBLEMIDINote(
   note: number,
   velocity: number, // 0 = Note Off
+  channel = 0, // 0–15; channel 9 = GM percussion
 ): Uint8Array<ArrayBuffer> {
-  const status = velocity > 0 ? 0x90 : 0x80; // ch 1 Note On / Note Off
+  const statusBase = velocity > 0 ? 0x90 : 0x80; // Note On / Note Off
+  const status = statusBase | (channel & 0x0f);
   const buf = new ArrayBuffer(5);
   const view = new Uint8Array(buf);
   view[0] = 0x80;
