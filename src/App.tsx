@@ -16,6 +16,7 @@ import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import { useWaitMode } from "./use-wait-mode";
 import { useBluetooth } from "./useBluetooth";
 import {
+  type FileHistory,
   hashFileBytes,
   loadFileHistory,
   loadRecentFile,
@@ -39,6 +40,8 @@ export function App() {
   const [fileHash, setFileHash] = useState<string | null>(null);
   // Beat to seek to once the player is created after a file load with saved history.
   const pendingSeekRef = useRef<number>(0);
+  // Wait mode state to apply once musicxml is ready after a history restore.
+  const pendingWaitModeRef = useRef<boolean | null>(null);
 
   // Transport state
   const [bpm, setBpm] = useState(120);
@@ -94,6 +97,9 @@ export function App() {
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;
+  // Stable ref so effects don't need waitMode.toggle in their dep arrays.
+  const waitModeToggleRef = useRef(waitMode.toggle);
+  waitModeToggleRef.current = waitMode.toggle;
   useWakeLock(musicxml !== null);
 
   // On startup, reload the most recently opened file automatically.
@@ -107,21 +113,28 @@ export function App() {
     );
   }, []);
 
-  // Persist session state keyed by file hash so it can be restored next load.
+  // Mirror latest saveable state for the beforeunload handler below.
+  const snapshotRef = useRef<{ hash: string; history: FileHistory } | null>(
+    null,
+  );
+
+  // Keep snapshot current and periodically flush to localStorage.
   useEffect(() => {
     if (!fileHash || !midiData) {
+      snapshotRef.current = null;
       return;
     }
-    const timer = setTimeout(() => {
-      saveFileHistory(fileHash, {
-        bpmRatio: bpm / baseBpm,
-        measureRange,
-        showFocus,
-        selectedTrackIndices: selectedTracks,
-        currentBeat,
-        noteSensitivityMilliseconds,
-      });
-    }, 500);
+    const history: FileHistory = {
+      bpmRatio: bpm / baseBpm,
+      measureRange,
+      showFocus,
+      selectedTrackIndices: selectedTracks,
+      currentBeat,
+      noteSensitivityMilliseconds,
+      waitModeActive: waitMode.active,
+    };
+    snapshotRef.current = { hash: fileHash, history };
+    const timer = setTimeout(() => saveFileHistory(fileHash, history), 500);
     return () => clearTimeout(timer);
   }, [
     fileHash,
@@ -133,7 +146,32 @@ export function App() {
     selectedTracks,
     currentBeat,
     noteSensitivityMilliseconds,
+    waitMode.active,
   ]);
+
+  // Save synchronously on page close/refresh so cursor position isn't lost.
+  useEffect(() => {
+    function save() {
+      if (snapshotRef.current) {
+        saveFileHistory(snapshotRef.current.hash, snapshotRef.current.history);
+      }
+    }
+    window.addEventListener("beforeunload", save);
+    return () => window.removeEventListener("beforeunload", save);
+  }, []);
+
+  // Apply restored wait mode state once musicxml is available.
+  useEffect(() => {
+    const pending = pendingWaitModeRef.current;
+    if (musicxml === null || pending === null) {
+      return;
+    }
+    pendingWaitModeRef.current = null;
+    // useWaitMode initializes active=true; only toggle if history says inactive.
+    if (!pending) {
+      waitModeToggleRef.current(0);
+    }
+  }, [musicxml]);
 
   // Rebuild player when conversion result changes.
   // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange go through player methods
@@ -307,6 +345,7 @@ export function App() {
         setShowFocus(history.showFocus);
         setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
         pendingSeekRef.current = history.currentBeat;
+        pendingWaitModeRef.current = history.waitModeActive ?? true;
       } else {
         setSelectedTracks(trackList.map((t) => t.index));
         setBpm(tempo);
