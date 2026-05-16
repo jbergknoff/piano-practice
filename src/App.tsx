@@ -280,6 +280,16 @@ export function App() {
     };
   }, [musicxml]);
 
+  // Keep currentBeat and the player position in sync with the wait-mode cursor
+  // so that both modes drive the score cursor through the same value.
+  useEffect(() => {
+    if (waitMode.cursorBeat === null) {
+      return;
+    }
+    setCurrentBeat(waitMode.cursorBeat);
+    playerRef.current?.seek(waitMode.cursorBeat);
+  }, [waitMode.cursorBeat]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: waitMode.activeRef is a ref
   useEffect(() => {
     const player = playerRef.current;
@@ -486,7 +496,7 @@ export function App() {
   }, [waitMode.active, waitMode.noteColors, musicxml, currentBeat, accent]);
 
   const playbackBeat =
-    waitMode.cursorBeat ?? (currentBeat > 0 ? currentBeat : undefined);
+    currentBeat > 0 || waitMode.active ? currentBeat : undefined;
 
   const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
 
@@ -521,7 +531,7 @@ export function App() {
         musicxml={musicxml}
         noteColors={noteColors}
         playbackBeat={playbackBeat}
-        cursorColor={waitMode.wrongNoteFlash ? theme.error : accent}
+        cursorColor={accent}
         isPlaying={isPlaying}
         bpm={bpm}
         baseBpm={baseBpm}
