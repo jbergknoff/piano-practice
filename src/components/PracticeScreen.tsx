@@ -387,19 +387,19 @@ export function PracticeScreen({
           left: 22,
           zIndex: 2,
           display: "flex",
-          alignItems: "center",
-          gap: 16,
+          flexDirection: "column",
+          gap: 6,
         }}
       >
-        <button
-          type="button"
-          onClick={onGoToLanding}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Back"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button
+            type="button"
+            onClick={onGoToLanding}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title="Back"
+          >
+            <ChevronLeftIcon />
+          </button>
           <button
             type="button"
             onClick={() => setPieceInfoOpen(true)}
@@ -424,20 +424,20 @@ export function PracticeScreen({
               {pieceTitle}
             </div>
           </button>
-          {totalMeasures > 0 && (
-            <MeasureScrubber
-              currentMeasure={currentMeasure}
-              totalMeasures={totalMeasures}
-              totalBeats={totalBeats}
-              timeSigNum={musicxml?.timeSigNum ?? 4}
-              playbackBeat={playbackBeat}
-              isPlaying={isPlaying}
-              theme={theme}
-              accent={accent}
-              onViewChange={(beat) => viewScrollRef.current?.(beat)}
-            />
-          )}
         </div>
+        {totalMeasures > 0 && (
+          <MeasureScrubber
+            currentMeasure={currentMeasure}
+            totalMeasures={totalMeasures}
+            totalBeats={totalBeats}
+            timeSigNum={musicxml?.timeSigNum ?? 4}
+            playbackBeat={playbackBeat}
+            isPlaying={isPlaying}
+            theme={theme}
+            accent={accent}
+            onViewChange={(beat) => viewScrollRef.current?.(beat)}
+          />
+        )}
       </div>
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
