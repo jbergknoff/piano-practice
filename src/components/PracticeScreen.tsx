@@ -532,8 +532,8 @@ export function PracticeScreen({
                 disabled={m === "race"}
                 style={{
                   ...(miniBtnStyle(theme) as Record<string, string | number>),
-                  padding: "0 10px",
-                  minWidth: 44,
+                  padding: "0 14px",
+                  minWidth: 60,
                   height: 30,
                   background: active ? accent : "transparent",
                   color: active
