@@ -494,7 +494,7 @@ export function PracticeScreen({
             const active = mode === m;
             const labels: Record<string, string> = {
               wait: "Wait",
-              race: "Race",
+              race: "Playalong",
               listen: "Listen",
             };
             return (
@@ -522,7 +522,9 @@ export function PracticeScreen({
                   cursor: m === "race" ? "not-allowed" : "pointer",
                 }}
                 aria-pressed={active}
-                title={m === "race" ? "Race mode — coming soon" : undefined}
+                title={
+                  m === "race" ? "Playalong mode — coming soon" : undefined
+                }
               >
                 {labels[m]}
               </button>
