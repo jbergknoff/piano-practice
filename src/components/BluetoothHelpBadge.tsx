@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
+import { BluetoothIcon } from "./icons";
 
 const IS_MOBILE_BRAVE =
   "brave" in navigator && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -200,15 +201,15 @@ function AboutTab({
           lineHeight: 1.55,
         }}
       >
-        Piano Practice is an app for learning piano pieces on your phone,
-        connected to a MIDI-capable digital piano over Bluetooth.{" "}
+        This is an app for practicing piano pieces. It's designed to be used
+        on a phone, connected to a MIDI-capable digital piano over Bluetooth.{" "}
         <a
           href="https://github.com/jbergknoff/piano-practice"
           target="_blank"
           rel="noreferrer"
           style={{ color: accent, textDecoration: "none" }}
         >
-          View on GitHub ↗
+          Source on GitHub ↗
         </a>
       </p>
 
@@ -228,7 +229,7 @@ function AboutTab({
         {[
           {
             name: "Wait",
-            desc: "Only advances through the music when you've played the correct notes for the beat. Great for learning at your own pace.",
+            desc: "Only advances through the music when you've played the correct notes for the beat.",
           },
           {
             name: "Playalong",
@@ -275,17 +276,49 @@ function BluetoothTab({
   theme: ThemeTokens;
   accent: string;
 }) {
+  const steps: { key: string; content: preact.ComponentChildren }[] = [
+    {
+      key: "pair",
+      content: "Enable Bluetooth MIDI pairing on your piano (check its manual).",
+    },
+    {
+      key: "connect",
+      content: (
+        <span>
+          Tap the{" "}
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "1px 6px",
+              borderRadius: 6,
+              background: hexA(theme.ink, 0.08),
+              verticalAlign: "middle",
+            }}
+          >
+            <BluetoothIcon size={10} />
+          </span>
+          {" "}button in the bottom right to connect your piano.
+        </span>
+      ),
+    },
+    {
+      key: "pick",
+      content: "Select your piano from the browser's device picker.",
+    },
+    {
+      key: "play",
+      content: "Once connected, play notes — the score will respond.",
+    },
+  ];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        {[
-          "Enable Bluetooth MIDI pairing on your piano (check its manual).",
-          'Open Settings (gear icon) and tap "Connect piano…" at the bottom.',
-          "Select your piano from the browser's device picker.",
-          "Once connected, play notes — the score will respond.",
-        ].map((text, i) => (
+        {steps.map(({ key, content }, i) => (
           <div
-            key={text}
+            key={key}
             style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
           >
             <span
@@ -309,7 +342,7 @@ function BluetoothTab({
             <span
               style={{ fontSize: 12, color: theme.inkSoft, lineHeight: 1.45 }}
             >
-              {text}
+              {content}
             </span>
           </div>
         ))}

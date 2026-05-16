@@ -195,22 +195,19 @@ export function PlusIcon({ size = 14 }: { size?: number }) {
 
 export function SectionsIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <span
       aria-hidden="true"
+      style={{
+        fontSize: size * 0.9,
+        lineHeight: 1,
+        fontFamily: "ui-monospace, 'Geist Mono', monospace",
+        letterSpacing: "-0.05em",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
     >
-      {/* left brace */}
-      <path d="M9 4 C6 4 6 8 6 12 C6 16 6 20 9 20" />
-      {/* right brace */}
-      <path d="M15 4 C18 4 18 8 18 12 C18 16 18 20 15 20" />
-    </svg>
+      {"{}"}
+    </span>
   );
 }
 

@@ -3,6 +3,8 @@ import { hexA } from "../theme";
 import type { useBluetooth } from "../useBluetooth";
 import { BluetoothIcon } from "./icons";
 
+const BT_SUPPORTED = typeof navigator !== "undefined" && !!navigator.bluetooth;
+
 export function ConnectionBadge({
   theme,
   bluetooth,
@@ -14,7 +16,13 @@ export function ConnectionBadge({
 }) {
   const connected = bluetooth.status === "connected";
   const connecting = bluetooth.status === "connecting";
-  const dotColor = connected ? "#5E8C5A" : theme.inkFaint;
+  const hasError = bluetooth.status === "error";
+
+  const dotColor = connected
+    ? "#5E8C5A"
+    : hasError
+      ? "#c62828"
+      : theme.inkFaint;
 
   const pillStyle = {
     height: 38,
@@ -26,9 +34,10 @@ export function ConnectionBadge({
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     display: "inline-flex",
     alignItems: "center",
-    cursor: connected ? "default" : "pointer",
-    color: theme.inkSoft,
+    cursor: connected || !BT_SUPPORTED ? "default" : "pointer",
+    color: hasError ? "#c62828" : theme.inkSoft,
     outline: "none",
+    opacity: !BT_SUPPORTED ? 0.5 : 1,
   };
 
   const dot = (
@@ -44,18 +53,24 @@ export function ConnectionBadge({
     />
   );
 
+  const title = !BT_SUPPORTED
+    ? "Web Bluetooth is not supported in this browser (use Chrome or Edge)"
+    : connected
+      ? `Connected · ${bluetooth.deviceName}`
+      : connecting
+        ? "Connecting…"
+        : hasError
+          ? (bluetooth.error ?? "Connection failed")
+          : "Connect Bluetooth";
+
+  const handleClick = !BT_SUPPORTED || connected ? undefined : bluetooth.connect;
+
   if (compact) {
     return (
       <button
         type="button"
-        title={
-          connected
-            ? `Connected · ${bluetooth.deviceName}`
-            : connecting
-              ? "Connecting…"
-              : "Connect Bluetooth"
-        }
-        onClick={connected ? undefined : bluetooth.connect}
+        title={title}
+        onClick={handleClick}
         style={
           { ...pillStyle, padding: "0 10px", gap: 6 } as Record<
             string,
@@ -72,9 +87,10 @@ export function ConnectionBadge({
   return (
     <button
       type="button"
-      onClick={connected ? undefined : bluetooth.connect}
+      title={title}
+      onClick={handleClick}
       style={
-        { ...pillStyle, padding: "0 12px", gap: 7, color: theme.ink } as Record<
+        { ...pillStyle, padding: "0 12px", gap: 7, color: hasError ? "#c62828" : theme.ink } as Record<
           string,
           string | number
         >
@@ -85,11 +101,15 @@ export function ConnectionBadge({
       <span
         style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: "0.01em" }}
       >
-        {connected
-          ? (bluetooth.deviceName ?? "Connected")
-          : connecting
-            ? "Connecting…"
-            : "Connect"}
+        {!BT_SUPPORTED
+          ? "Not supported"
+          : connected
+            ? (bluetooth.deviceName ?? "Connected")
+            : connecting
+              ? "Connecting…"
+              : hasError
+                ? "Failed"
+                : "Connect"}
       </span>
     </button>
   );

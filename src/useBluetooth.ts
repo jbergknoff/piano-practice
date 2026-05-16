@@ -73,7 +73,13 @@ export function useBluetooth(
       setDeviceName(device.name ?? "BLE MIDI Device");
       setStatus("connected");
     } catch (err) {
-      setError(String(err));
+      const msg = String(err);
+      // User dismissed the device picker — not an error, just go back to idle.
+      if (msg.includes("cancelled") || msg.includes("User cancelled")) {
+        setStatus("idle");
+        return;
+      }
+      setError(msg);
       setStatus("error");
     }
   }
