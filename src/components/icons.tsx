@@ -193,6 +193,26 @@ export function PlusIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+export function SectionsIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="7" width="20" height="10" rx="1.5" />
+      <line x1="7.5" y1="7" x2="7.5" y2="17" />
+      <line x1="12" y1="7" x2="12" y2="17" />
+      <line x1="16.5" y1="7" x2="16.5" y2="17" />
+    </svg>
+  );
+}
+
 export function UploadIcon({ size = 20 }: { size?: number }) {
   return (
     <svg
