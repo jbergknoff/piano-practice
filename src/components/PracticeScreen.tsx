@@ -399,68 +399,45 @@ export function PracticeScreen({
         >
           <ChevronLeftIcon />
         </button>
-        <button
-          type="button"
-          onClick={() => setPieceInfoOpen(true)}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
-            textAlign: "left",
-          }}
-        >
-          <div
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <button
+            type="button"
+            onClick={() => setPieceInfoOpen(true)}
             style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontStyle: "italic",
-              fontSize: 28,
-              lineHeight: 1,
-              letterSpacing: "-0.01em",
-              color: theme.ink,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              textAlign: "left",
             }}
           >
-            {pieceTitle}
-          </div>
-        </button>
-      </div>
-
-      {/* TOP RIGHT: connection badge + measure progress + gear */}
-      <div
-        style={{
-          position: "absolute",
-          top: 18,
-          right: 22,
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          zIndex: 2,
-        }}
-      >
-        {bluetooth.status !== "connected" && (
-          <BluetoothHelpBadge theme={theme} accent={accent} />
-        )}
-        <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
-        {totalMeasures > 0 && (
-          <MeasureScrubber
-            currentMeasure={currentMeasure}
-            totalMeasures={totalMeasures}
-            totalBeats={totalBeats}
-            timeSigNum={musicxml?.timeSigNum ?? 4}
-            playbackBeat={playbackBeat}
-            isPlaying={isPlaying}
-            theme={theme}
-            accent={accent}
-            onViewChange={(beat) => viewScrollRef.current?.(beat)}
-          />
-        )}
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-        >
-          <GearIcon />
-        </button>
+            <div
+              style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontStyle: "italic",
+                fontSize: 28,
+                lineHeight: 1,
+                letterSpacing: "-0.01em",
+                color: theme.ink,
+              }}
+            >
+              {pieceTitle}
+            </div>
+          </button>
+          {totalMeasures > 0 && (
+            <MeasureScrubber
+              currentMeasure={currentMeasure}
+              totalMeasures={totalMeasures}
+              totalBeats={totalBeats}
+              timeSigNum={musicxml?.timeSigNum ?? 4}
+              playbackBeat={playbackBeat}
+              isPlaying={isPlaying}
+              theme={theme}
+              accent={accent}
+              onViewChange={(beat) => viewScrollRef.current?.(beat)}
+            />
+          )}
+        </div>
       </div>
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
@@ -560,20 +537,19 @@ export function PracticeScreen({
         </div>
       </div>
 
-      {/* BOTTOM RIGHT: BPM */}
-      {mode !== "wait" && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 20,
-            right: 22,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            zIndex: 2,
-          }}
-        >
-          {/* Tempo panel */}
+      {/* BOTTOM RIGHT: BPM (listen/playalong only) + bluetooth + gear */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 20,
+          right: 22,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          zIndex: 2,
+        }}
+      >
+        {mode !== "wait" && (
           <div
             style={{
               padding: "6px 8px",
@@ -628,8 +604,19 @@ export function PracticeScreen({
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+        {bluetooth.status !== "connected" && (
+          <BluetoothHelpBadge theme={theme} accent={accent} />
+        )}
+        <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+        >
+          <GearIcon />
+        </button>
+      </div>
 
       <style>{`
         @keyframes bar0 { 0%,100% { height: 4px } 50% { height: 12px } }
