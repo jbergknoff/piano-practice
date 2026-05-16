@@ -480,7 +480,8 @@ export function PracticeScreen({
           {mode !== "wait" && (
             <div
               style={{
-                padding: "6px 8px",
+                height: 38,
+                padding: "0 8px",
                 background: theme.panel,
                 border: `0.5px solid ${theme.border}`,
                 borderRadius: 12,
@@ -490,6 +491,7 @@ export function PracticeScreen({
                 alignItems: "center",
                 gap: 4,
                 boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+                boxSizing: "border-box",
               }}
             >
               <span
