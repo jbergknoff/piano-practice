@@ -3,11 +3,10 @@ const STORAGE_PREFIX = "piano-practice:file:";
 export interface FileHistory {
   bpmRatio: number;
   measureRange: { from: number; to: number } | null;
-  showFocus: boolean;
+  mode: "wait" | "race" | "listen";
   selectedTrackIndices: number[];
   currentBeat: number;
   noteSensitivityMilliseconds: number;
-  waitModeActive: boolean;
 }
 
 export async function hashFileBytes(bytes: Uint8Array): Promise<string> {
@@ -26,11 +25,18 @@ export function loadFileHistory(hash: string): FileHistory | null {
     if (!raw) {
       return null;
     }
-    const h = JSON.parse(raw) as FileHistory;
+    const h = JSON.parse(raw) as FileHistory & {
+      showFocus?: boolean;
+      waitModeActive?: boolean;
+    };
     if (typeof h.bpmRatio !== "number" || h.bpmRatio <= 0) {
       return null;
     }
-    return h;
+    // Normalize old format that used showFocus + waitModeActive
+    if (!h.mode) {
+      h.mode = h.waitModeActive === false ? "listen" : "wait";
+    }
+    return h as FileHistory;
   } catch {
     return null;
   }

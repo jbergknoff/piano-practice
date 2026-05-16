@@ -9,10 +9,8 @@ import { ConnectionBadge } from "./ConnectionBadge";
 import { SettingsDrawer } from "./SettingsDrawer";
 import {
   ChevronLeftIcon,
-  FocusIcon,
   GearIcon,
   PauseIcon,
-  PianoIcon,
   PlayIcon,
   ResetIcon,
 } from "./icons";
@@ -29,23 +27,21 @@ interface PracticeScreenProps {
   isPlaying: boolean;
   bpm: number;
   baseBpm: number;
-  showFocus: boolean;
   measureRange: { from: number; to: number } | null;
   totalMeasures: number;
   currentMeasure: number;
   bluetooth: ReturnType<typeof useBluetooth>;
-  waitMode: boolean;
+  mode: "wait" | "race" | "listen";
   tracks: TrackInfo[];
   selectedTracks: number[];
   onPlayPause: () => void;
   onReset: () => void;
   onBpmChange: (bpm: number) => void;
-  onFocusToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
-  onToggleWaitMode: () => void;
+  onModeChange: (mode: "wait" | "race" | "listen") => void;
   onTrackToggle: (idx: number) => void;
   onContextMenuAction: (
-    action: "focus" | "seek",
+    action: "focus" | "seek" | "clearFocus",
     measureNumber: number,
     beat: number,
   ) => void;
@@ -244,21 +240,19 @@ export function PracticeScreen({
   isPlaying,
   bpm,
   baseBpm,
-  showFocus,
   measureRange,
   totalMeasures,
   currentMeasure,
   bluetooth,
-  waitMode,
+  mode,
   tracks,
   selectedTracks,
   onPlayPause,
   onReset,
   onBpmChange,
-  onFocusToggle,
   onMeasureRangeChange,
   onContextMenuAction,
-  onToggleWaitMode,
+  onModeChange,
   onTrackToggle,
   onGoToLanding,
   noteSensitivityMilliseconds,
@@ -279,11 +273,11 @@ export function PracticeScreen({
     playbackBeatRef.current = playbackBeat;
   });
   useEffect(() => {
-    if (waitMode && playbackBeatRef.current !== undefined) {
+    if (mode === "wait" && playbackBeatRef.current !== undefined) {
       viewScrollRef.current?.(playbackBeatRef.current);
       viewScrollRef.current?.(null);
     }
-  }, [waitMode]);
+  }, [mode]);
 
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
@@ -325,9 +319,9 @@ export function PracticeScreen({
           playbackBeat={playbackBeat}
           cursorColor={cursorColor}
           inkColor={theme.ink}
-          focusRange={showFocus ? measureRange : null}
+          focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
-          onFocusRangeChange={showFocus ? onMeasureRangeChange : undefined}
+          onFocusRangeChange={onMeasureRangeChange}
           viewScrollRef={viewScrollRef}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
@@ -469,7 +463,7 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* BOTTOM LEFT: wait mode + transport controls */}
+      {/* BOTTOM LEFT: mode selector + transport controls */}
       <div
         style={{
           position: "absolute",
@@ -481,37 +475,60 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        {/* Wait mode — primary button */}
-        <button
-          type="button"
-          onClick={onToggleWaitMode}
+        {/* Mode selector group */}
+        <div
           style={{
-            ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            height: 52,
-            width: "auto",
-            padding: "0 16px",
-            flexDirection: "column",
-            gap: 3,
-            background: waitMode ? accent : theme.panel,
-            color: waitMode ? "#FFF7E5" : theme.inkSoft,
-            border: waitMode ? "none" : "none",
-            boxShadow: waitMode
-              ? `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`
-              : undefined,
+            padding: "4px 6px",
+            background: theme.panel,
+            border: `0.5px solid ${theme.border}`,
+            borderRadius: 12,
+            backdropFilter: "blur(20px) saturate(160%)",
+            WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
           }}
-          title={
-            waitMode
-              ? "Wait for piano enabled. Click to disable."
-              : "Wait for piano disabled. Click to enable."
-          }
         >
-          <PianoIcon size={20} />
-          <span
-            style={{ fontSize: 10, letterSpacing: "0.05em", fontWeight: 500 }}
-          >
-            Wait
-          </span>
-        </button>
+          {(["wait", "race", "listen"] as const).map((m) => {
+            const active = mode === m;
+            const labels: Record<string, string> = {
+              wait: "Wait",
+              race: "Race",
+              listen: "Listen",
+            };
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onModeChange(m)}
+                disabled={m === "race"}
+                style={{
+                  ...(miniBtnStyle(theme) as Record<string, string | number>),
+                  padding: "0 10px",
+                  minWidth: 44,
+                  height: 30,
+                  background: active ? accent : "transparent",
+                  color: active
+                    ? "#FFF7E5"
+                    : m === "race"
+                      ? theme.inkFaint
+                      : theme.ink,
+                  fontWeight: active ? 600 : 400,
+                  fontSize: 12,
+                  boxShadow: active
+                    ? `0 2px 8px ${hexA(accent, 0.35)}`
+                    : undefined,
+                  cursor: m === "race" ? "not-allowed" : "pointer",
+                }}
+                aria-pressed={active}
+                title={m === "race" ? "Race mode — coming soon" : undefined}
+              >
+                {labels[m]}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Reset — always shown */}
         <button
@@ -519,7 +536,7 @@ export function PracticeScreen({
           onClick={onReset}
           style={cornerBtnStyle(theme) as Record<string, string | number>}
           title={
-            showFocus && measureRange
+            measureRange
               ? "Return to start of selection. Click to reset."
               : "Return to beginning. Click to reset."
           }
@@ -528,7 +545,7 @@ export function PracticeScreen({
         </button>
 
         {/* Play/Pause — only shown outside wait mode */}
-        {!waitMode && (
+        {mode !== "wait" && (
           <button
             type="button"
             onClick={onPlayPause}
@@ -540,7 +557,7 @@ export function PracticeScreen({
         )}
       </div>
 
-      {/* BOTTOM RIGHT: focus toggle + BPM */}
+      {/* BOTTOM RIGHT: BPM */}
       <div
         style={{
           position: "absolute",
@@ -552,20 +569,6 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <button
-          type="button"
-          onClick={onFocusToggle}
-          style={{
-            ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            background: showFocus ? hexA(accent, 0.18) : theme.panel,
-            color: showFocus ? accent : theme.ink,
-            borderColor: showFocus ? hexA(accent, 0.35) : theme.border,
-          }}
-          title="Focus section"
-        >
-          <FocusIcon />
-        </button>
-
         {/* Tempo panel */}
         <div
           style={{
@@ -672,7 +675,10 @@ export function PracticeScreen({
                   label: "Move cursor to here",
                   action: "seek" as const,
                 },
-              ] as { label: string; action: "focus" | "seek" }[]
+                ...(measureRange
+                  ? [{ label: "Clear focus", action: "clearFocus" as const }]
+                  : []),
+              ] as { label: string; action: "focus" | "seek" | "clearFocus" }[]
             ).map(({ label, action }) => (
               <button
                 key={action}

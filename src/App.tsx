@@ -44,8 +44,8 @@ export function App() {
   const [fileHash, setFileHash] = useState<string | null>(null);
   // Beat to seek to once the player is created after a file load with saved history.
   const pendingSeekRef = useRef<number>(0);
-  // Wait mode state to apply once musicxml is ready after a history restore.
-  const pendingWaitModeRef = useRef<boolean | null>(null);
+  // Mode to apply once musicxml is ready after a history restore.
+  const pendingModeRef = useRef<"wait" | "race" | "listen" | null>(null);
 
   // Transport state
   const [bpm, setBpm] = useState(120);
@@ -60,7 +60,7 @@ export function App() {
   // UI state
   const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
-  const [showFocus, setShowFocus] = useState(false);
+  const [mode, setMode] = useState<"wait" | "race" | "listen">("wait");
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [completionModal, setCompletionModal] = useState<{
@@ -77,11 +77,6 @@ export function App() {
   useEffect(() => {
     measureRangeRef.current = measureRange;
   }, [measureRange]);
-
-  const showFocusRef = useRef(showFocus);
-  useEffect(() => {
-    showFocusRef.current = showFocus;
-  }, [showFocus]);
 
   const bpmRef = useRef(bpm);
   useEffect(() => {
@@ -128,16 +123,13 @@ export function App() {
       return;
     }
     const range = measureRangeRef.current;
-    const focusActive = showFocusRef.current;
     const currentBpm = bpmRef.current;
 
-    const selectionKey =
-      focusActive && range ? `m${range.from}-m${range.to}` : "full";
+    const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
 
-    const selectionBeats =
-      focusActive && range
-        ? (range.to - range.from + 1) * mx.timeSigNum
-        : mx.totalBeats;
+    const selectionBeats = range
+      ? (range.to - range.from + 1) * mx.timeSigNum
+      : mx.totalBeats;
 
     const expectedDurationMs = (selectionBeats / currentBpm) * 60_000;
 
@@ -149,12 +141,11 @@ export function App() {
     saveAttempt(hash, selectionKey, attempt);
     const allAttempts = loadAttemptHistory(hash)[selectionKey] ?? [];
 
-    const selectionLabel =
-      focusActive && range
-        ? range.from === range.to
-          ? `Measure ${range.from}`
-          : `Measures ${range.from}–${range.to}`
-        : "Full piece";
+    const selectionLabel = range
+      ? range.from === range.to
+        ? `Measure ${range.from}`
+        : `Measures ${range.from}–${range.to}`
+      : "Full piece";
 
     setCompletionModal({
       history: allAttempts,
@@ -165,7 +156,7 @@ export function App() {
 
   const waitMode = useWaitMode(
     musicxml,
-    showFocus ? measureRange : null,
+    measureRange,
     noteSensitivityMilliseconds,
     // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
     () => sendNoteRef.current?.(42, 55, 80, 9),
@@ -203,11 +194,10 @@ export function App() {
     const history: FileHistory = {
       bpmRatio: bpm / baseBpm,
       measureRange,
-      showFocus,
+      mode,
       selectedTrackIndices: selectedTracks,
       currentBeat,
       noteSensitivityMilliseconds,
-      waitModeActive: waitMode.active,
     };
     snapshotRef.current = { hash: fileHash, history };
     const timer = setTimeout(() => saveFileHistory(fileHash, history), 500);
@@ -218,11 +208,10 @@ export function App() {
     bpm,
     baseBpm,
     measureRange,
-    showFocus,
+    mode,
     selectedTracks,
     currentBeat,
     noteSensitivityMilliseconds,
-    waitMode.active,
   ]);
 
   // Save synchronously on page close/refresh so cursor position isn't lost.
@@ -236,15 +225,15 @@ export function App() {
     return () => window.removeEventListener("beforeunload", save);
   }, []);
 
-  // Apply restored wait mode state once musicxml is available.
+  // Apply restored mode once musicxml is available.
   useEffect(() => {
-    const pending = pendingWaitModeRef.current;
+    const pending = pendingModeRef.current;
     if (musicxml === null || pending === null) {
       return;
     }
-    pendingWaitModeRef.current = null;
-    // useWaitMode initializes active=true; only toggle if history says inactive.
-    if (!pending) {
+    pendingModeRef.current = null;
+    // useWaitMode initializes active=true; toggle off if mode is not "wait".
+    if (pending !== "wait") {
       waitModeToggleRef.current(0);
     }
   }, [musicxml]);
@@ -297,7 +286,7 @@ export function App() {
       return;
     }
     const { timeSigNum } = musicxml;
-    if (showFocus && measureRange) {
+    if (measureRange) {
       const startBeat = (measureRange.from - 1) * timeSigNum;
       const endBeat = measureRange.to * timeSigNum;
       if (player) {
@@ -310,10 +299,10 @@ export function App() {
     } else if (player) {
       player.focusRange = null;
     }
-  }, [showFocus, measureRange, musicxml]);
+  }, [measureRange, musicxml]);
 
   async function handlePlayPause() {
-    if (waitMode.active) {
+    if (mode === "wait") {
       return;
     }
     const player = playerRef.current;
@@ -330,14 +319,13 @@ export function App() {
   }
 
   function handleReset() {
-    if (waitMode.active) {
+    if (mode === "wait") {
       waitMode.rewind();
       return;
     }
-    const startBeat =
-      showFocus && measureRange
-        ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
-        : 0;
+    const startBeat = measureRange
+      ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
+      : 0;
     playerRef.current?.pause();
     playerRef.current?.seek(startBeat);
     setIsPlaying(false);
@@ -350,20 +338,21 @@ export function App() {
   }
 
   function handleContextMenuAction(
-    action: "focus" | "seek",
+    action: "focus" | "seek" | "clearFocus",
     measureNumber: number,
     beat: number,
   ) {
     if (action === "focus") {
-      setShowFocus(true);
       setMeasureRange({ from: measureNumber, to: measureNumber });
+    } else if (action === "clearFocus") {
+      setMeasureRange(null);
     } else {
       handleSeek(beat);
     }
   }
 
   function handleSeek(beat: number) {
-    if (waitMode.active) {
+    if (mode === "wait") {
       waitMode.seekToBeat(beat);
       return;
     }
@@ -371,12 +360,24 @@ export function App() {
     setCurrentBeat(beat);
   }
 
-  function handleToggleWaitMode() {
-    if (!waitMode.active) {
+  function handleModeChange(newMode: "wait" | "race" | "listen") {
+    if (newMode === mode) {
+      return;
+    }
+    setMode(newMode);
+    const becomingWait = newMode === "wait";
+    const wasWait = mode === "wait";
+    if (becomingWait && !wasWait) {
       playerRef.current?.pause();
       setIsPlaying(false);
+      if (!waitMode.active) {
+        waitMode.toggle(currentBeat);
+      }
+    } else if (!becomingWait && wasWait) {
+      if (waitMode.active) {
+        waitMode.toggle(currentBeat);
+      }
     }
-    waitMode.toggle(currentBeat);
   }
 
   async function parseMidiFile(file: File) {
@@ -388,7 +389,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setShowFocus(false);
+    setMode("wait");
     setFileHash(null);
     pendingSeekRef.current = 0;
 
@@ -418,10 +419,10 @@ export function App() {
         );
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setShowFocus(history.showFocus);
+        setMode(history.mode);
         setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
         pendingSeekRef.current = history.currentBeat;
-        pendingWaitModeRef.current = history.waitModeActive ?? true;
+        pendingModeRef.current = history.mode;
       } else {
         setSelectedTracks(trackList.map((t) => t.index));
         setBpm(tempo);
@@ -458,7 +459,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setShowFocus(false);
+    setMode("wait");
   }
 
   // Note colors
@@ -535,28 +536,19 @@ export function App() {
         isPlaying={isPlaying}
         bpm={bpm}
         baseBpm={baseBpm}
-        showFocus={showFocus}
         measureRange={measureRange}
         totalMeasures={totalMeasures}
         currentMeasure={currentMeasure}
         bluetooth={bluetooth}
-        waitMode={waitMode.active}
+        mode={mode}
         tracks={tracks}
         selectedTracks={selectedTracks}
         onPlayPause={handlePlayPause}
         onReset={handleReset}
         onBpmChange={handleBpmChange}
-        onFocusToggle={() => {
-          setShowFocus((v) => {
-            if (!v && musicxml && !measureRange) {
-              setMeasureRange({ from: 1, to: Math.min(4, totalMeasures) });
-            }
-            return !v;
-          });
-        }}
         onMeasureRangeChange={setMeasureRange}
         onContextMenuAction={handleContextMenuAction}
-        onToggleWaitMode={handleToggleWaitMode}
+        onModeChange={handleModeChange}
         onTrackToggle={onTrackToggle}
         onGoToLanding={handleGoToLanding}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
