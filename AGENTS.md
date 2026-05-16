@@ -52,9 +52,8 @@ Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persis
 ### PracticeScreen control areas
 
 - **Top-left** — back button, piece title (opens info modal on click)
-- **Top-right** — Bluetooth badge, measure scrubber, settings gear
-- **Bottom-left** — Reset + Play/Pause buttons (row), then Wait/Playalong/Listen mode selector (below)
-- **Bottom-right** — BPM selector panel (hidden in Wait mode)
+- **Bottom-left** — Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
+- **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
 
 
 

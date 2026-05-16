@@ -487,18 +487,6 @@ export function App() {
   const playbackBeat =
     waitMode.cursorBeat ?? (currentBeat > 0 ? currentBeat : undefined);
 
-  const totalMeasures =
-    musicxml && musicxml.totalBeats > 0
-      ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum)
-      : 0;
-  const currentMeasure =
-    musicxml && musicxml.totalBeats > 0
-      ? Math.min(
-          totalMeasures,
-          Math.floor((playbackBeat ?? 0) / musicxml.timeSigNum) + 1,
-        )
-      : 1;
-
   const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
 
   const onTrackToggle = (idx: number) =>
@@ -537,8 +525,6 @@ export function App() {
         bpm={bpm}
         baseBpm={baseBpm}
         measureRange={measureRange}
-        totalMeasures={totalMeasures}
-        currentMeasure={currentMeasure}
         bluetooth={bluetooth}
         mode={mode}
         tracks={tracks}

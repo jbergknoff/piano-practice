@@ -28,8 +28,6 @@ interface PracticeScreenProps {
   bpm: number;
   baseBpm: number;
   measureRange: { from: number; to: number } | null;
-  totalMeasures: number;
-  currentMeasure: number;
   bluetooth: ReturnType<typeof useBluetooth>;
   mode: "wait" | "race" | "listen";
   tracks: TrackInfo[];
@@ -50,184 +48,6 @@ interface PracticeScreenProps {
   onSensitivityChange: (ms: number) => void;
 }
 
-function MeasureScrubber({
-  currentMeasure,
-  totalMeasures,
-  totalBeats,
-  timeSigNum,
-  playbackBeat,
-  isPlaying,
-  theme,
-  accent,
-  onViewChange,
-}: {
-  currentMeasure: number;
-  totalMeasures: number;
-  totalBeats: number;
-  timeSigNum: number;
-  playbackBeat: number | undefined;
-  isPlaying: boolean;
-  theme: ThemeTokens;
-  accent: string;
-  onViewChange: (beat: number | null) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  // scrubBeat persists after drag ends so the handle stays put; cleared when
-  // playback starts so the handle resumes following the cursor.
-  const [scrubBeat, setScrubBeat] = useState<number | null>(null);
-  const onViewChangeRef = useRef(onViewChange);
-  onViewChangeRef.current = onViewChange;
-
-  useEffect(() => {
-    if (isPlaying) {
-      setScrubBeat(null);
-      onViewChangeRef.current(null);
-    }
-  }, [isPlaying]);
-
-  const playbackProgress =
-    totalBeats > 0 && playbackBeat != null
-      ? Math.min(1, playbackBeat / totalBeats)
-      : 0;
-
-  const progress =
-    scrubBeat !== null && totalBeats > 0
-      ? Math.min(1, scrubBeat / totalBeats)
-      : playbackProgress;
-
-  const displayMeasure =
-    scrubBeat !== null && timeSigNum > 0
-      ? Math.min(totalMeasures, Math.floor(scrubBeat / timeSigNum) + 1)
-      : currentMeasure;
-
-  function beatFromPointer(e: PointerEvent): number {
-    if (!trackRef.current) {
-      return 0;
-    }
-    const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(
-      0,
-      Math.min(1, (e.clientX - rect.left) / rect.width),
-    );
-    return ratio * totalBeats;
-  }
-
-  const thumbPct = `${progress * 100}%`;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        userSelect: "none",
-      }}
-    >
-      {/* Track + floating measure label + playhead */}
-      <div
-        ref={trackRef}
-        onPointerDown={(e) => {
-          isDragging.current = true;
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-          const beat = beatFromPointer(e as unknown as PointerEvent);
-          setScrubBeat(beat);
-          onViewChange(beat);
-        }}
-        onPointerMove={(e) => {
-          if (isDragging.current) {
-            const beat = beatFromPointer(e as unknown as PointerEvent);
-            setScrubBeat(beat);
-            onViewChange(beat);
-          }
-        }}
-        onPointerUp={() => {
-          isDragging.current = false;
-          // scrubBeat is intentionally kept — handle stays at the browsed
-          // position until playback starts (cleared in the isPlaying effect).
-        }}
-        style={{
-          width: 130,
-          height: 22,
-          position: "relative",
-          touchAction: "none",
-        }}
-      >
-        {/* Track line */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "50%",
-            height: 1.5,
-            background: theme.border,
-            borderRadius: 1,
-            transform: "translateY(-50%)",
-          }}
-        />
-        {/* Measure number floating above playhead */}
-        <div
-          style={{
-            position: "absolute",
-            left: thumbPct,
-            bottom: "calc(50% + 9px)",
-            transform: "translateX(-50%)",
-            fontSize: 9,
-            color: theme.ink,
-            letterSpacing: "0.06em",
-            lineHeight: 1,
-            pointerEvents: "none",
-          }}
-        >
-          {displayMeasure}
-        </div>
-        {/* Playhead bar */}
-        <div
-          style={{
-            position: "absolute",
-            left: thumbPct,
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            width: 2,
-            height: 14,
-            background: accent,
-            borderRadius: 1,
-            pointerEvents: "none",
-          }}
-        />
-      </div>
-      {/* End labels */}
-      <div
-        style={{
-          width: 130,
-          display: "flex",
-          justifyContent: "space-between",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 8,
-            color: theme.ink,
-            letterSpacing: "0.06em",
-          }}
-        >
-          1
-        </span>
-        <span
-          style={{
-            fontSize: 8,
-            color: theme.ink,
-            letterSpacing: "0.06em",
-          }}
-        >
-          {totalMeasures}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export function PracticeScreen({
   theme,
   accent,
@@ -241,8 +61,6 @@ export function PracticeScreen({
   bpm,
   baseBpm,
   measureRange,
-  totalMeasures,
-  currentMeasure,
   bluetooth,
   mode,
   tracks,
@@ -285,8 +103,6 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
-  const totalBeats = musicxml?.totalBeats ?? 0;
-
   return (
     <div
       style={{
@@ -387,74 +203,51 @@ export function PracticeScreen({
           left: 22,
           zIndex: 2,
           display: "flex",
-          flexDirection: "column",
-          gap: 6,
+          alignItems: "center",
+          gap: 16,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button
-            type="button"
-            onClick={onGoToLanding}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title="Back"
-          >
-            <ChevronLeftIcon />
-          </button>
-          <button
-            type="button"
-            onClick={() => setPieceInfoOpen(true)}
+        <button
+          type="button"
+          onClick={onGoToLanding}
+          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          title="Back"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          onClick={() => setPieceInfoOpen(true)}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            textAlign: "left",
+          }}
+        >
+          <div
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-              textAlign: "left",
+              fontFamily: "'Instrument Serif', serif",
+              fontStyle: "italic",
+              fontSize: 28,
+              lineHeight: 1,
+              letterSpacing: "-0.01em",
+              color: theme.ink,
             }}
           >
-            <div
-              style={{
-                fontFamily: "'Instrument Serif', serif",
-                fontStyle: "italic",
-                fontSize: 28,
-                lineHeight: 1,
-                letterSpacing: "-0.01em",
-                color: theme.ink,
-              }}
-            >
-              {pieceTitle}
-            </div>
-          </button>
-        </div>
-        {totalMeasures > 0 && (
-          <MeasureScrubber
-            currentMeasure={currentMeasure}
-            totalMeasures={totalMeasures}
-            totalBeats={totalBeats}
-            timeSigNum={musicxml?.timeSigNum ?? 4}
-            playbackBeat={playbackBeat}
-            isPlaying={isPlaying}
-            theme={theme}
-            accent={accent}
-            onViewChange={(beat) => viewScrollRef.current?.(beat)}
-          />
-        )}
+            {pieceTitle}
+          </div>
+        </button>
       </div>
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
       <div
-        style={{
-          position: "absolute",
-          bottom: 20,
-          left: 22,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          gap: 8,
-          zIndex: 2,
-        }}
+        style={{ position: "absolute", bottom: 20, left: 22, zIndex: 2 }}
+        class="bl-controls"
       >
-        {/* Reset + Play/Pause row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {/* Reset + Play/Pause + BPM row */}
+        <div class="bl-transport">
           <button
             type="button"
             onClick={onReset}
@@ -542,6 +335,7 @@ export function PracticeScreen({
 
         {/* Mode selector group */}
         <div
+          class="bl-modes"
           style={{
             padding: "4px 6px",
             background: theme.panel,
@@ -630,6 +424,12 @@ export function PracticeScreen({
         @keyframes bar2 { 0%,100% { height: 5px } 50% { height: 10px } }
         @keyframes bar3 { 0%,100% { height: 8px } 50% { height: 14px } }
         @keyframes bar4 { 0%,100% { height: 3px } 50% { height: 9px } }
+        .bl-controls { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+        .bl-transport { display:flex; align-items:center; gap:10px; }
+        @media (orientation:landscape) {
+          .bl-controls { flex-direction:row; align-items:center; gap:10px; }
+          .bl-modes { order:-1; }
+        }
       `}</style>
 
       {/* Context menu (right-click / long-press on sheet music) */}
