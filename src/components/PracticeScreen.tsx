@@ -292,7 +292,7 @@ export function PracticeScreen({
       style={{
         width: "100%",
         height: "100%",
-        background: `radial-gradient(120% 80% at 50% 0%, ${theme.bg} 0%, ${theme.bgDeep} 100%)`,
+        background: `radial-gradient(120% 140% at 50% 0%, ${theme.bg} 0%, ${theme.bgDeep} 100%)`,
         color: theme.ink,
         fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
         position: "relative",
