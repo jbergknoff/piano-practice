@@ -5,6 +5,8 @@ import { hexA } from "../theme";
 const IS_MOBILE_BRAVE =
   "brave" in navigator && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
+type Tab = "about" | "bluetooth";
+
 export function BluetoothHelpBadge({
   theme,
   accent,
@@ -13,12 +15,14 @@ export function BluetoothHelpBadge({
   accent: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("about");
+
   return (
-    <div style={{ position: "relative" }}>
+    <>
       <button
         type="button"
-        aria-label="Bluetooth setup help"
-        onClick={() => setOpen((v) => !v)}
+        aria-label="Help"
+        onClick={() => setOpen(true)}
         style={{
           width: 38,
           height: 38,
@@ -43,140 +47,317 @@ export function BluetoothHelpBadge({
       </button>
 
       {open && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes, not primary interaction
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 99 }}
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 10px)",
-            right: 0,
-            zIndex: 100,
-            width: 260,
-            maxHeight: "70vh",
-            overflowY: "auto",
-            background: theme.panelSolid,
-            border: `1px solid ${theme.border}`,
-            borderRadius: 14,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
-            padding: "16px 18px 18px",
-            fontFamily: "'Geist', sans-serif",
-          }}
-        >
+        <>
+          {/* Backdrop */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
           <div
             style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: theme.ink,
-              marginBottom: 12,
-              letterSpacing: "0.01em",
+              position: "fixed",
+              inset: 0,
+              zIndex: 199,
+              background: "rgba(0,0,0,0.3)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+            }}
+            onClick={() => setOpen(false)}
+          />
+
+          {/* Modal */}
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 200,
+              background: theme.panelSolid,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 20,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              width: "min(400px, calc(100vw - 40px))",
+              maxHeight: "calc(100vh - 80px)",
+              display: "flex",
+              flexDirection: "column",
+              fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+              overflow: "hidden",
             }}
           >
-            Connecting a Bluetooth piano
-          </div>
-          {[
-            {
-              n: 1,
-              text: "Enable Bluetooth MIDI pairing on your piano (check its manual).",
-            },
-            {
-              n: 2,
-              text: 'Click "Connect Bluetooth" in the top-right corner.',
-            },
-            {
-              n: 3,
-              text: "Select your piano from the browser's device picker.",
-            },
-            {
-              n: 4,
-              text: "Once connected, play notes — the score will wait for you.",
-            },
-          ].map(({ n, text }) => (
+            {/* Header */}
             <div
-              key={n}
               style={{
                 display: "flex",
-                gap: 10,
-                marginBottom: 9,
-                alignItems: "flex-start",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "20px 24px 0",
+                flexShrink: 0,
               }}
             >
               <span
                 style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: "50%",
-                  background: hexA(accent, 0.14),
-                  color: accent,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  marginTop: 1,
+                  fontFamily: "'Instrument Serif', serif",
+                  fontStyle: "italic",
+                  fontSize: 22,
+                  color: theme.ink,
                 }}
               >
-                {n}
+                Help
               </span>
-              <span
-                style={{ fontSize: 12, color: theme.inkSoft, lineHeight: 1.45 }}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: theme.inkSoft,
+                  cursor: "pointer",
+                  fontSize: 18,
+                  padding: 4,
+                  outline: "none",
+                  lineHeight: 1,
+                }}
               >
-                {text}
-              </span>
+                ✕
+              </button>
             </div>
-          ))}
-          {IS_MOBILE_BRAVE && (
+
+            {/* Tab bar */}
             <div
               style={{
-                marginTop: 12,
-                paddingTop: 10,
-                borderTop: `1px solid ${theme.border}`,
-                fontSize: 11,
-                color: theme.inkSoft,
-                lineHeight: 1.5,
+                display: "flex",
+                gap: 4,
+                padding: "14px 24px 0",
+                flexShrink: 0,
               }}
             >
-              <span style={{ fontWeight: 600 }}>
-                Enable Web Bluetooth in Brave (one-time):
-              </span>{" "}
-              open{" "}
-              <span
-                style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}
-              >
-                brave://flags
-              </span>{" "}
-              in Brave, search for{" "}
-              <span
-                style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}
-              >
-                enable-experimental-web-platform-features
-              </span>
-              , set it to <span style={{ fontWeight: 600 }}>Enabled</span>, then
-              tap <span style={{ fontWeight: 600 }}>Relaunch</span> at the
-              bottom.
+              {(["about", "bluetooth"] as Tab[]).map((t) => {
+                const active = tab === t;
+                const labels: Record<Tab, string> = {
+                  about: "About",
+                  bluetooth: "Bluetooth",
+                };
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTab(t)}
+                    style={{
+                      padding: "5px 14px",
+                      borderRadius: 20,
+                      border: active
+                        ? "none"
+                        : `0.5px solid ${theme.border}`,
+                      background: active ? accent : "transparent",
+                      color: active ? "#FFF7E5" : theme.inkSoft,
+                      fontSize: 12,
+                      fontWeight: active ? 600 : 400,
+                      cursor: "pointer",
+                      outline: "none",
+                      fontFamily: "'Geist', sans-serif",
+                      transition: "background 0.15s, color 0.15s",
+                    }}
+                  >
+                    {labels[t]}
+                  </button>
+                );
+              })}
             </div>
-          )}
+
+            {/* Tab content */}
+            <div
+              style={{
+                padding: "18px 24px 24px",
+                overflowY: "auto",
+                flex: 1,
+              }}
+            >
+              {tab === "about" ? (
+                <AboutTab theme={theme} accent={accent} />
+              ) : (
+                <BluetoothTab theme={theme} accent={accent} />
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function AboutTab({
+  theme,
+  accent,
+}: {
+  theme: ThemeTokens;
+  accent: string;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: theme.inkSoft,
+          lineHeight: 1.55,
+        }}
+      >
+        Piano Practice is an app for learning piano pieces on your phone,
+        connected to a MIDI-capable digital piano over Bluetooth.{" "}
+        <a
+          href="https://github.com/jbergknoff/piano-practice"
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: accent, textDecoration: "none" }}
+        >
+          View on GitHub ↗
+        </a>
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: theme.inkSoft,
+          }}
+        >
+          Modes
+        </span>
+
+        {[
+          {
+            name: "Wait",
+            desc: "Only advances through the music when you've played the correct notes for the beat. Great for learning at your own pace.",
+          },
+          {
+            name: "Playalong",
+            desc: "Play along with the music at the chosen tempo. Keeps moving whether or not you hit the right notes.",
+          },
+          {
+            name: "Listen",
+            desc: "Simply plays the music aloud. Use it to hear a section before practicing it.",
+          },
+        ].map(({ name, desc }) => (
           <div
+            key={name}
             style={{
-              marginTop: 12,
-              paddingTop: 10,
-              borderTop: `1px solid ${theme.border}`,
-              fontSize: 11,
-              color: theme.inkFaint,
-              lineHeight: 1.4,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: `0.5px solid ${theme.border}`,
+              background: hexA(theme.ink, 0.03),
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
             }}
           >
-            Requires Chrome or Edge on desktop. Web Bluetooth is not available
-            in Safari or Firefox.
+            <span
+              style={{ fontSize: 12, fontWeight: 600, color: theme.ink }}
+            >
+              {name}
+            </span>
+            <span
+              style={{ fontSize: 12, color: theme.inkSoft, lineHeight: 1.5 }}
+            >
+              {desc}
+            </span>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BluetoothTab({
+  theme,
+  accent,
+}: {
+  theme: ThemeTokens;
+  accent: string;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        {[
+          "Enable Bluetooth MIDI pairing on your piano (check its manual).",
+          'Open Settings (gear icon) and tap "Connect piano…" at the bottom.',
+          "Select your piano from the browser's device picker.",
+          "Once connected, play notes — the score will respond.",
+        ].map((text, i) => (
+          <div
+            key={text}
+            style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
+          >
+            <span
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: hexA(accent, 0.14),
+                color: accent,
+                fontSize: 10,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                marginTop: 1,
+              }}
+            >
+              {i + 1}
+            </span>
+            <span
+              style={{ fontSize: 12, color: theme.inkSoft, lineHeight: 1.45 }}
+            >
+              {text}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {IS_MOBILE_BRAVE && (
+        <div
+          style={{
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: `0.5px solid ${theme.border}`,
+            background: hexA(theme.ink, 0.03),
+            fontSize: 11,
+            color: theme.inkSoft,
+            lineHeight: 1.5,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>
+            Enable Web Bluetooth in Brave (one-time):
+          </span>{" "}
+          open{" "}
+          <span
+            style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}
+          >
+            brave://flags
+          </span>{" "}
+          in Brave, search for{" "}
+          <span
+            style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}
+          >
+            enable-experimental-web-platform-features
+          </span>
+          , set it to <span style={{ fontWeight: 600 }}>Enabled</span>, then
+          tap <span style={{ fontWeight: 600 }}>Relaunch</span> at the bottom.
         </div>
       )}
+
+      <div
+        style={{
+          fontSize: 11,
+          color: theme.inkFaint,
+          lineHeight: 1.4,
+          paddingTop: 2,
+        }}
+      >
+        Requires Chrome or Edge on desktop. Web Bluetooth is not available in
+        Safari or Firefox.
+      </div>
     </div>
   );
 }
