@@ -72,6 +72,7 @@ export function useWaitMode(
   noteSensitivityMilliseconds = 150,
   onWrongNote?: () => void,
   onComplete?: (stats: { wrongNotes: number; elapsedMs: number }) => void,
+  noteColor = "#E08A3E",
 ): WaitModeHandle {
   const [active, setActive] = useState(true);
   const [pointIndex, setPointIndex] = useState(0);
@@ -198,11 +199,11 @@ export function useWaitMode(
       if (!note.tieStop && note.startBeat === targetBeat) {
         colors[
           `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-        ] = "#e65100";
+        ] = noteColor;
       }
     }
     return colors;
-  }, [active, musicxml, waitPoints, pointIndex]);
+  }, [active, musicxml, waitPoints, pointIndex, noteColor]);
 
   function toggle(currentBeat: number) {
     if (active) {

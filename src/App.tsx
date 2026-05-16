@@ -161,6 +161,7 @@ export function App() {
     // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
     () => sendNoteRef.current?.(42, 55, 80, 9),
     handleWaitModeComplete,
+    accent,
   );
   const bluetooth = useBluetooth(waitMode.onNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;
