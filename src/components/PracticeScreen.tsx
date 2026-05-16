@@ -561,73 +561,75 @@ export function PracticeScreen({
       </div>
 
       {/* BOTTOM RIGHT: BPM */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 20,
-          right: 22,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          zIndex: 2,
-        }}
-      >
-        {/* Tempo panel */}
+      {mode !== "wait" && (
         <div
           style={{
-            padding: "6px 8px",
-            background: theme.panel,
-            border: `0.5px solid ${theme.border}`,
-            borderRadius: 12,
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            position: "absolute",
+            bottom: 20,
+            right: 22,
             display: "flex",
             alignItems: "center",
-            gap: 4,
-            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+            gap: 10,
+            zIndex: 2,
           }}
         >
-          <span
+          {/* Tempo panel */}
+          <div
             style={{
-              fontSize: 10,
-              color: theme.inkSoft,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              padding: "0 6px 0 2px",
-              userSelect: "none",
+              padding: "6px 8px",
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 12,
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
             }}
           >
-            BPM
-          </span>
-          {([25, 50, 75, 100] as const).map((pct) => {
-            const targetBpm = Math.round((baseBpm * pct) / 100);
-            const active = bpm === targetBpm;
-            return (
-              <button
-                key={pct}
-                type="button"
-                onClick={() => onBpmChange(targetBpm)}
-                style={{
-                  ...(miniBtnStyle(theme) as Record<string, string | number>),
-                  padding: "0 10px",
-                  minWidth: 44,
-                  background: active ? accent : undefined,
-                  border: active ? "none" : undefined,
-                  color: active ? "#FFF7E5" : theme.ink,
-                  fontWeight: active ? 600 : 400,
-                  fontSize: 13,
-                  boxShadow: active
-                    ? `0 2px 8px ${hexA(accent, 0.35)}`
-                    : undefined,
-                }}
-                aria-pressed={active}
-              >
-                {targetBpm}
-              </button>
-            );
-          })}
+            <span
+              style={{
+                fontSize: 10,
+                color: theme.inkSoft,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                padding: "0 6px 0 2px",
+                userSelect: "none",
+              }}
+            >
+              BPM
+            </span>
+            {([25, 50, 75, 100] as const).map((pct) => {
+              const targetBpm = Math.round((baseBpm * pct) / 100);
+              const active = bpm === targetBpm;
+              return (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => onBpmChange(targetBpm)}
+                  style={{
+                    ...(miniBtnStyle(theme) as Record<string, string | number>),
+                    padding: "0 10px",
+                    minWidth: 44,
+                    background: active ? accent : undefined,
+                    border: active ? "none" : undefined,
+                    color: active ? "#FFF7E5" : theme.ink,
+                    fontWeight: active ? 600 : 400,
+                    fontSize: 13,
+                    boxShadow: active
+                      ? `0 2px 8px ${hexA(accent, 0.35)}`
+                      : undefined,
+                  }}
+                  aria-pressed={active}
+                >
+                  {targetBpm}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <style>{`
         @keyframes bar0 { 0%,100% { height: 4px } 50% { height: 12px } }
