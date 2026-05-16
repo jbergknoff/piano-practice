@@ -1,3 +1,8 @@
+import { useEffect, useState } from "preact/hooks";
+import {
+  type WaitModeAttempt,
+  loadAttemptHistory,
+} from "../use-file-history";
 import type { ThemeTokens } from "../theme";
 
 interface SelectionRangesDrawerProps {
@@ -8,6 +13,7 @@ interface SelectionRangesDrawerProps {
   totalMeasures: number;
   measureRange: { from: number; to: number } | null;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
+  fileHash: string | null;
 }
 
 function rangesEqual(
@@ -17,6 +23,26 @@ function rangesEqual(
   if (a === null && b === null) { return true; }
   if (a === null || b === null) { return false; }
   return a.from === b.from && a.to === b.to;
+}
+
+function selectionKey(range: { from: number; to: number } | null): string {
+  return range ? `m${range.from}-m${range.to}` : "full";
+}
+
+function bestAttempt(attempts: WaitModeAttempt[]): WaitModeAttempt | null {
+  if (attempts.length === 0) { return null; }
+  return attempts.reduce((best, a) => {
+    if (a.wrongNotes < best.wrongNotes) { return a; }
+    if (a.wrongNotes === best.wrongNotes && a.elapsedMs < best.elapsedMs) { return a; }
+    return best;
+  });
+}
+
+function formatTime(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function MiniBar({
@@ -72,8 +98,19 @@ export function SelectionRangesDrawer({
   totalMeasures,
   measureRange,
   onMeasureRangeChange,
+  fileHash,
 }: SelectionRangesDrawerProps) {
   const n = totalMeasures;
+
+  const [attemptHistory, setAttemptHistory] = useState<
+    Record<string, WaitModeAttempt[]>
+  >({});
+
+  useEffect(() => {
+    if (open && fileHash) {
+      setAttemptHistory(loadAttemptHistory(fileHash));
+    }
+  }, [open, fileHash]);
 
   const wholeIsActive =
     measureRange === null ||
@@ -109,6 +146,11 @@ export function SelectionRangesDrawer({
   function handleSelect(range: { from: number; to: number } | null) {
     onMeasureRangeChange(range);
     onClose();
+  }
+
+  function bestForRange(range: { from: number; to: number } | null): WaitModeAttempt | null {
+    const key = selectionKey(range);
+    return bestAttempt(attemptHistory[key] ?? []);
   }
 
   return (
@@ -192,6 +234,7 @@ export function SelectionRangesDrawer({
         <PresetButton
           label="Whole piece"
           sublabel={`mm. 1–${n}`}
+          best={bestForRange(null)}
           active={wholeIsActive}
           accent={accent}
           theme={theme}
@@ -221,6 +264,7 @@ export function SelectionRangesDrawer({
                       ? `mm. ${p.range.from}–${p.range.to}`
                       : ""
                   }
+                  best={bestForRange(p.range)}
                   active={active}
                   accent={accent}
                   theme={theme}
@@ -263,6 +307,7 @@ export function SelectionRangesDrawer({
                         ? `mm. ${p.range.from}–${p.range.to}`
                         : ""
                     }
+                    best={bestForRange(p.range)}
                     active={active}
                     accent={accent}
                     theme={theme}
@@ -319,6 +364,7 @@ function Section({
 function PresetButton({
   label,
   sublabel,
+  best,
   active,
   accent,
   theme,
@@ -327,6 +373,7 @@ function PresetButton({
 }: {
   label: string;
   sublabel: string;
+  best: WaitModeAttempt | null;
   active: boolean;
   accent: string;
   theme: ThemeTokens;
@@ -340,7 +387,7 @@ function PresetButton({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: 7,
         padding: "10px 12px",
         borderRadius: 10,
         border: active
@@ -374,6 +421,21 @@ function PresetButton({
         <span style={{ fontSize: 10, color: theme.inkSoft }}>{sublabel}</span>
       </div>
       {miniBar}
+      {best !== null ? (
+        <span
+          style={{
+            fontSize: 10,
+            color: best.wrongNotes === 0 ? "#5E8C5A" : theme.inkSoft,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          Best: {best.wrongNotes} wrong · {formatTime(best.elapsedMs)}
+        </span>
+      ) : (
+        <span style={{ fontSize: 10, color: theme.inkFaint }}>
+          No attempts yet
+        </span>
+      )}
     </button>
   );
 }

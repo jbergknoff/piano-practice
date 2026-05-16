@@ -34,6 +34,7 @@ interface PracticeScreenProps {
   mode: "wait" | "race" | "listen";
   tracks: TrackInfo[];
   selectedTracks: number[];
+  fileHash: string | null;
   onPlayPause: () => void;
   onReset: () => void;
   onBpmChange: (bpm: number) => void;
@@ -77,6 +78,7 @@ export function PracticeScreen({
   onGoToLanding,
   noteSensitivityMilliseconds,
   onSensitivityChange,
+  fileHash,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
@@ -621,6 +623,7 @@ export function PracticeScreen({
         }
         measureRange={measureRange}
         onMeasureRangeChange={onMeasureRangeChange}
+        fileHash={fileHash}
       />
       <SettingsDrawer
         open={drawerOpen}
