@@ -930,6 +930,18 @@ function Measure({
         staffSpace={staffSpace}
         inkColor={inkColor}
       />
+      {partIndex === 0 && (
+        <text
+          x={x + 4}
+          y={staffBottomY - 4 * staffSpace - 5}
+          font-size={staffSpace * 0.85}
+          font-family="Geist, ui-sans-serif, system-ui, sans-serif"
+          fill={inkColor}
+          fill-opacity={0.38}
+        >
+          {measure.number}
+        </text>
+      )}
       {isFirstMeasure && (
         <>
           <Clef

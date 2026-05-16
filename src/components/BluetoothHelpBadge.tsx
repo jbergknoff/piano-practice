@@ -20,8 +20,8 @@ export function BluetoothHelpBadge({
         aria-label="Bluetooth setup help"
         onClick={() => setOpen((v) => !v)}
         style={{
-          width: 22,
-          height: 22,
+          width: 38,
+          height: 38,
           borderRadius: "50%",
           border: `1px solid ${theme.border}`,
           background: theme.panel,

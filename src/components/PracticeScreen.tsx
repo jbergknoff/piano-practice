@@ -9,10 +9,8 @@ import { ConnectionBadge } from "./ConnectionBadge";
 import { SettingsDrawer } from "./SettingsDrawer";
 import {
   ChevronLeftIcon,
-  FocusIcon,
   GearIcon,
   PauseIcon,
-  PianoIcon,
   PlayIcon,
   ResetIcon,
 } from "./icons";
@@ -29,207 +27,25 @@ interface PracticeScreenProps {
   isPlaying: boolean;
   bpm: number;
   baseBpm: number;
-  showFocus: boolean;
   measureRange: { from: number; to: number } | null;
-  totalMeasures: number;
-  currentMeasure: number;
   bluetooth: ReturnType<typeof useBluetooth>;
-  waitMode: boolean;
+  mode: "wait" | "race" | "listen";
   tracks: TrackInfo[];
   selectedTracks: number[];
   onPlayPause: () => void;
   onReset: () => void;
   onBpmChange: (bpm: number) => void;
-  onFocusToggle: () => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
-  onToggleWaitMode: () => void;
+  onModeChange: (mode: "wait" | "race" | "listen") => void;
   onTrackToggle: (idx: number) => void;
   onContextMenuAction: (
-    action: "focus" | "seek",
+    action: "focus" | "seek" | "clearFocus",
     measureNumber: number,
     beat: number,
   ) => void;
   onGoToLanding: () => void;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
-}
-
-function MeasureScrubber({
-  currentMeasure,
-  totalMeasures,
-  totalBeats,
-  timeSigNum,
-  playbackBeat,
-  isPlaying,
-  theme,
-  accent,
-  onViewChange,
-}: {
-  currentMeasure: number;
-  totalMeasures: number;
-  totalBeats: number;
-  timeSigNum: number;
-  playbackBeat: number | undefined;
-  isPlaying: boolean;
-  theme: ThemeTokens;
-  accent: string;
-  onViewChange: (beat: number | null) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  // scrubBeat persists after drag ends so the handle stays put; cleared when
-  // playback starts so the handle resumes following the cursor.
-  const [scrubBeat, setScrubBeat] = useState<number | null>(null);
-  const onViewChangeRef = useRef(onViewChange);
-  onViewChangeRef.current = onViewChange;
-
-  useEffect(() => {
-    if (isPlaying) {
-      setScrubBeat(null);
-      onViewChangeRef.current(null);
-    }
-  }, [isPlaying]);
-
-  const playbackProgress =
-    totalBeats > 0 && playbackBeat != null
-      ? Math.min(1, playbackBeat / totalBeats)
-      : 0;
-
-  const progress =
-    scrubBeat !== null && totalBeats > 0
-      ? Math.min(1, scrubBeat / totalBeats)
-      : playbackProgress;
-
-  const displayMeasure =
-    scrubBeat !== null && timeSigNum > 0
-      ? Math.min(totalMeasures, Math.floor(scrubBeat / timeSigNum) + 1)
-      : currentMeasure;
-
-  function beatFromPointer(e: PointerEvent): number {
-    if (!trackRef.current) {
-      return 0;
-    }
-    const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(
-      0,
-      Math.min(1, (e.clientX - rect.left) / rect.width),
-    );
-    return ratio * totalBeats;
-  }
-
-  const thumbPct = `${progress * 100}%`;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        userSelect: "none",
-      }}
-    >
-      {/* Track + floating measure label + playhead */}
-      <div
-        ref={trackRef}
-        onPointerDown={(e) => {
-          isDragging.current = true;
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-          const beat = beatFromPointer(e as unknown as PointerEvent);
-          setScrubBeat(beat);
-          onViewChange(beat);
-        }}
-        onPointerMove={(e) => {
-          if (isDragging.current) {
-            const beat = beatFromPointer(e as unknown as PointerEvent);
-            setScrubBeat(beat);
-            onViewChange(beat);
-          }
-        }}
-        onPointerUp={() => {
-          isDragging.current = false;
-          // scrubBeat is intentionally kept — handle stays at the browsed
-          // position until playback starts (cleared in the isPlaying effect).
-        }}
-        style={{
-          width: 130,
-          height: 22,
-          position: "relative",
-          touchAction: "none",
-        }}
-      >
-        {/* Track line */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "50%",
-            height: 1.5,
-            background: theme.border,
-            borderRadius: 1,
-            transform: "translateY(-50%)",
-          }}
-        />
-        {/* Measure number floating above playhead */}
-        <div
-          style={{
-            position: "absolute",
-            left: thumbPct,
-            bottom: "calc(50% + 9px)",
-            transform: "translateX(-50%)",
-            fontSize: 9,
-            color: theme.ink,
-            letterSpacing: "0.06em",
-            lineHeight: 1,
-            pointerEvents: "none",
-          }}
-        >
-          {displayMeasure}
-        </div>
-        {/* Playhead bar */}
-        <div
-          style={{
-            position: "absolute",
-            left: thumbPct,
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            width: 2,
-            height: 14,
-            background: accent,
-            borderRadius: 1,
-            pointerEvents: "none",
-          }}
-        />
-      </div>
-      {/* End labels */}
-      <div
-        style={{
-          width: 130,
-          display: "flex",
-          justifyContent: "space-between",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 8,
-            color: theme.ink,
-            letterSpacing: "0.06em",
-          }}
-        >
-          1
-        </span>
-        <span
-          style={{
-            fontSize: 8,
-            color: theme.ink,
-            letterSpacing: "0.06em",
-          }}
-        >
-          {totalMeasures}
-        </span>
-      </div>
-    </div>
-  );
 }
 
 export function PracticeScreen({
@@ -244,21 +60,17 @@ export function PracticeScreen({
   isPlaying,
   bpm,
   baseBpm,
-  showFocus,
   measureRange,
-  totalMeasures,
-  currentMeasure,
   bluetooth,
-  waitMode,
+  mode,
   tracks,
   selectedTracks,
   onPlayPause,
   onReset,
   onBpmChange,
-  onFocusToggle,
   onMeasureRangeChange,
   onContextMenuAction,
-  onToggleWaitMode,
+  onModeChange,
   onTrackToggle,
   onGoToLanding,
   noteSensitivityMilliseconds,
@@ -279,11 +91,11 @@ export function PracticeScreen({
     playbackBeatRef.current = playbackBeat;
   });
   useEffect(() => {
-    if (waitMode && playbackBeatRef.current !== undefined) {
+    if (mode === "wait" && playbackBeatRef.current !== undefined) {
       viewScrollRef.current?.(playbackBeatRef.current);
       viewScrollRef.current?.(null);
     }
-  }, [waitMode]);
+  }, [mode]);
 
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
@@ -291,14 +103,12 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
-  const totalBeats = musicxml?.totalBeats ?? 0;
-
   return (
     <div
       style={{
         width: "100%",
         height: "100%",
-        background: `radial-gradient(120% 80% at 50% 0%, ${theme.bg} 0%, ${theme.bgDeep} 100%)`,
+        background: theme.bg,
         color: theme.ink,
         fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
         position: "relative",
@@ -325,9 +135,9 @@ export function PracticeScreen({
           playbackBeat={playbackBeat}
           cursorColor={cursorColor}
           inkColor={theme.ink}
-          focusRange={showFocus ? measureRange : null}
+          focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
-          onFocusRangeChange={showFocus ? onMeasureRangeChange : undefined}
+          onFocusRangeChange={onMeasureRangeChange}
           viewScrollRef={viewScrollRef}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
@@ -431,15 +241,167 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* TOP RIGHT: connection badge + measure progress + gear */}
+      {/* BOTTOM LEFT: transport controls + mode selector */}
+      <div
+        style={{ position: "absolute", bottom: 20, left: 22, zIndex: 2 }}
+        class="bl-controls"
+      >
+        {/* Reset + Play/Pause + BPM row */}
+        <div class="bl-transport">
+          <button
+            type="button"
+            onClick={onReset}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title={
+              measureRange
+                ? "Return to start of selection. Click to reset."
+                : "Return to beginning. Click to reset."
+            }
+          >
+            <ResetIcon />
+          </button>
+          {mode !== "wait" && (
+            <button
+              type="button"
+              onClick={onPlayPause}
+              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+            </button>
+          )}
+          {mode !== "wait" && (
+            <div
+              style={{
+                height: 38,
+                padding: "0 8px",
+                background: theme.panel,
+                border: `0.5px solid ${theme.border}`,
+                borderRadius: 12,
+                backdropFilter: "blur(20px) saturate(160%)",
+                WebkitBackdropFilter: "blur(20px) saturate(160%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+                boxSizing: "border-box",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  color: theme.inkSoft,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "0 6px 0 2px",
+                  userSelect: "none",
+                }}
+              >
+                BPM
+              </span>
+              {([25, 50, 75, 100] as const).map((pct) => {
+                const targetBpm = Math.round((baseBpm * pct) / 100);
+                const active = bpm === targetBpm;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => onBpmChange(targetBpm)}
+                    style={{
+                      ...(miniBtnStyle(theme) as Record<
+                        string,
+                        string | number
+                      >),
+                      padding: "0 10px",
+                      minWidth: 44,
+                      background: active ? accent : undefined,
+                      border: active ? "none" : undefined,
+                      color: active ? "#FFF7E5" : theme.ink,
+                      fontWeight: active ? 600 : 400,
+                      fontSize: 13,
+                      boxShadow: active
+                        ? `0 2px 8px ${hexA(accent, 0.35)}`
+                        : undefined,
+                    }}
+                    aria-pressed={active}
+                  >
+                    {targetBpm}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Mode selector group */}
+        <div
+          class="bl-modes"
+          style={{
+            padding: "4px 6px",
+            background: theme.panel,
+            border: `0.5px solid ${theme.border}`,
+            borderRadius: 12,
+            backdropFilter: "blur(20px) saturate(160%)",
+            WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+          }}
+        >
+          {(["wait", "race", "listen"] as const).map((m) => {
+            const active = mode === m;
+            const labels: Record<string, string> = {
+              wait: "Wait",
+              race: "Playalong",
+              listen: "Listen",
+            };
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => onModeChange(m)}
+                disabled={m === "race"}
+                style={{
+                  ...(miniBtnStyle(theme) as Record<string, string | number>),
+                  padding: "0 14px",
+                  minWidth: 60,
+                  height: 30,
+                  background: active ? accent : "transparent",
+                  color: active
+                    ? "#FFF7E5"
+                    : m === "race"
+                      ? theme.inkFaint
+                      : theme.ink,
+                  fontWeight: active ? 600 : 400,
+                  fontSize: 12,
+                  boxShadow: active
+                    ? `0 2px 8px ${hexA(accent, 0.35)}`
+                    : undefined,
+                  cursor: m === "race" ? "not-allowed" : "pointer",
+                  justifyContent: "center",
+                }}
+                aria-pressed={active}
+                title={
+                  m === "race" ? "Playalong mode — coming soon" : undefined
+                }
+              >
+                {labels[m]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* BOTTOM RIGHT: bluetooth + gear */}
       <div
         style={{
           position: "absolute",
-          top: 18,
+          bottom: 20,
           right: 22,
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: 10,
           zIndex: 2,
         }}
       >
@@ -447,19 +409,6 @@ export function PracticeScreen({
           <BluetoothHelpBadge theme={theme} accent={accent} />
         )}
         <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
-        {totalMeasures > 0 && (
-          <MeasureScrubber
-            currentMeasure={currentMeasure}
-            totalMeasures={totalMeasures}
-            totalBeats={totalBeats}
-            timeSigNum={musicxml?.timeSigNum ?? 4}
-            playbackBeat={playbackBeat}
-            isPlaying={isPlaying}
-            theme={theme}
-            accent={accent}
-            onViewChange={(beat) => viewScrollRef.current?.(beat)}
-          />
-        )}
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -469,166 +418,18 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* BOTTOM LEFT: wait mode + transport controls */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 20,
-          left: 22,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          zIndex: 2,
-        }}
-      >
-        {/* Wait mode — primary button */}
-        <button
-          type="button"
-          onClick={onToggleWaitMode}
-          style={{
-            ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            height: 52,
-            width: "auto",
-            padding: "0 16px",
-            flexDirection: "column",
-            gap: 3,
-            background: waitMode ? accent : theme.panel,
-            color: waitMode ? "#FFF7E5" : theme.inkSoft,
-            border: waitMode ? "none" : "none",
-            boxShadow: waitMode
-              ? `0 6px 18px ${hexA(accent, 0.35)}, inset 0 1px 0 rgba(255,255,255,0.25)`
-              : undefined,
-          }}
-          title={
-            waitMode
-              ? "Wait for piano enabled. Click to disable."
-              : "Wait for piano disabled. Click to enable."
-          }
-        >
-          <PianoIcon size={20} />
-          <span
-            style={{ fontSize: 10, letterSpacing: "0.05em", fontWeight: 500 }}
-          >
-            Wait
-          </span>
-        </button>
-
-        {/* Reset — always shown */}
-        <button
-          type="button"
-          onClick={onReset}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title={
-            showFocus && measureRange
-              ? "Return to start of selection. Click to reset."
-              : "Return to beginning. Click to reset."
-          }
-        >
-          <ResetIcon />
-        </button>
-
-        {/* Play/Pause — only shown outside wait mode */}
-        {!waitMode && (
-          <button
-            type="button"
-            onClick={onPlayPause}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title={isPlaying ? "Pause" : "Play"}
-          >
-            {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
-          </button>
-        )}
-      </div>
-
-      {/* BOTTOM RIGHT: focus toggle + BPM */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 20,
-          right: 22,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          zIndex: 2,
-        }}
-      >
-        <button
-          type="button"
-          onClick={onFocusToggle}
-          style={{
-            ...(cornerBtnStyle(theme) as Record<string, string | number>),
-            background: showFocus ? hexA(accent, 0.18) : theme.panel,
-            color: showFocus ? accent : theme.ink,
-            borderColor: showFocus ? hexA(accent, 0.35) : theme.border,
-          }}
-          title="Focus section"
-        >
-          <FocusIcon />
-        </button>
-
-        {/* Tempo panel */}
-        <div
-          style={{
-            padding: "6px 8px",
-            background: theme.panel,
-            border: `0.5px solid ${theme.border}`,
-            borderRadius: 12,
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              color: theme.inkSoft,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              padding: "0 6px 0 2px",
-              userSelect: "none",
-            }}
-          >
-            BPM
-          </span>
-          {([25, 50, 75, 100] as const).map((pct) => {
-            const targetBpm = Math.round((baseBpm * pct) / 100);
-            const active = bpm === targetBpm;
-            return (
-              <button
-                key={pct}
-                type="button"
-                onClick={() => onBpmChange(targetBpm)}
-                style={{
-                  ...(miniBtnStyle(theme) as Record<string, string | number>),
-                  padding: "0 10px",
-                  minWidth: 44,
-                  background: active ? accent : undefined,
-                  border: active ? "none" : undefined,
-                  color: active ? "#FFF7E5" : theme.ink,
-                  fontWeight: active ? 600 : 400,
-                  fontSize: 13,
-                  boxShadow: active
-                    ? `0 2px 8px ${hexA(accent, 0.35)}`
-                    : undefined,
-                }}
-                aria-pressed={active}
-              >
-                {targetBpm}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       <style>{`
         @keyframes bar0 { 0%,100% { height: 4px } 50% { height: 12px } }
         @keyframes bar1 { 0%,100% { height: 6px } 50% { height: 14px } }
         @keyframes bar2 { 0%,100% { height: 5px } 50% { height: 10px } }
         @keyframes bar3 { 0%,100% { height: 8px } 50% { height: 14px } }
         @keyframes bar4 { 0%,100% { height: 3px } 50% { height: 9px } }
+        .bl-controls { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+        .bl-transport { display:flex; align-items:center; gap:10px; }
+        @media (orientation:landscape) {
+          .bl-controls { flex-direction:row; align-items:center; gap:10px; }
+          .bl-modes { order:-1; }
+        }
       `}</style>
 
       {/* Context menu (right-click / long-press on sheet music) */}
@@ -672,7 +473,10 @@ export function PracticeScreen({
                   label: "Move cursor to here",
                   action: "seek" as const,
                 },
-              ] as { label: string; action: "focus" | "seek" }[]
+                ...(measureRange
+                  ? [{ label: "Clear focus", action: "clearFocus" as const }]
+                  : []),
+              ] as { label: string; action: "focus" | "seek" | "clearFocus" }[]
             ).map(({ label, action }) => (
               <button
                 key={action}
