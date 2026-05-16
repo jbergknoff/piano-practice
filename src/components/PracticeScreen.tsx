@@ -463,18 +463,45 @@ export function PracticeScreen({
         </button>
       </div>
 
-      {/* BOTTOM LEFT: mode selector + transport controls */}
+      {/* BOTTOM LEFT: transport controls + mode selector */}
       <div
         style={{
           position: "absolute",
           bottom: 20,
           left: 22,
           display: "flex",
-          alignItems: "center",
-          gap: 10,
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: 8,
           zIndex: 2,
         }}
       >
+        {/* Reset + Play/Pause row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            type="button"
+            onClick={onReset}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title={
+              measureRange
+                ? "Return to start of selection. Click to reset."
+                : "Return to beginning. Click to reset."
+            }
+          >
+            <ResetIcon />
+          </button>
+          {mode !== "wait" && (
+            <button
+              type="button"
+              onClick={onPlayPause}
+              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+            </button>
+          )}
+        </div>
+
         {/* Mode selector group */}
         <div
           style={{
@@ -531,32 +558,6 @@ export function PracticeScreen({
             );
           })}
         </div>
-
-        {/* Reset — always shown */}
-        <button
-          type="button"
-          onClick={onReset}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title={
-            measureRange
-              ? "Return to start of selection. Click to reset."
-              : "Return to beginning. Click to reset."
-          }
-        >
-          <ResetIcon />
-        </button>
-
-        {/* Play/Pause — only shown outside wait mode */}
-        {mode !== "wait" && (
-          <button
-            type="button"
-            onClick={onPlayPause}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title={isPlaying ? "Pause" : "Play"}
-          >
-            {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
-          </button>
-        )}
       </div>
 
       {/* BOTTOM RIGHT: BPM */}
