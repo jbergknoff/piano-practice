@@ -477,6 +477,65 @@ export function PracticeScreen({
               {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
             </button>
           )}
+          {mode !== "wait" && (
+            <div
+              style={{
+                padding: "6px 8px",
+                background: theme.panel,
+                border: `0.5px solid ${theme.border}`,
+                borderRadius: 12,
+                backdropFilter: "blur(20px) saturate(160%)",
+                WebkitBackdropFilter: "blur(20px) saturate(160%)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  color: theme.inkSoft,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "0 6px 0 2px",
+                  userSelect: "none",
+                }}
+              >
+                BPM
+              </span>
+              {([25, 50, 75, 100] as const).map((pct) => {
+                const targetBpm = Math.round((baseBpm * pct) / 100);
+                const active = bpm === targetBpm;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => onBpmChange(targetBpm)}
+                    style={{
+                      ...(miniBtnStyle(theme) as Record<
+                        string,
+                        string | number
+                      >),
+                      padding: "0 10px",
+                      minWidth: 44,
+                      background: active ? accent : undefined,
+                      border: active ? "none" : undefined,
+                      color: active ? "#FFF7E5" : theme.ink,
+                      fontWeight: active ? 600 : 400,
+                      fontSize: 13,
+                      boxShadow: active
+                        ? `0 2px 8px ${hexA(accent, 0.35)}`
+                        : undefined,
+                    }}
+                    aria-pressed={active}
+                  >
+                    {targetBpm}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Mode selector group */}
@@ -524,6 +583,7 @@ export function PracticeScreen({
                     ? `0 2px 8px ${hexA(accent, 0.35)}`
                     : undefined,
                   cursor: m === "race" ? "not-allowed" : "pointer",
+                  justifyContent: "center",
                 }}
                 aria-pressed={active}
                 title={
@@ -537,7 +597,7 @@ export function PracticeScreen({
         </div>
       </div>
 
-      {/* BOTTOM RIGHT: BPM (listen/playalong only) + bluetooth + gear */}
+      {/* BOTTOM RIGHT: bluetooth + gear */}
       <div
         style={{
           position: "absolute",
@@ -549,62 +609,6 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        {mode !== "wait" && (
-          <div
-            style={{
-              padding: "6px 8px",
-              background: theme.panel,
-              border: `0.5px solid ${theme.border}`,
-              borderRadius: 12,
-              backdropFilter: "blur(20px) saturate(160%)",
-              WebkitBackdropFilter: "blur(20px) saturate(160%)",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 10,
-                color: theme.inkSoft,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                padding: "0 6px 0 2px",
-                userSelect: "none",
-              }}
-            >
-              BPM
-            </span>
-            {([25, 50, 75, 100] as const).map((pct) => {
-              const targetBpm = Math.round((baseBpm * pct) / 100);
-              const active = bpm === targetBpm;
-              return (
-                <button
-                  key={pct}
-                  type="button"
-                  onClick={() => onBpmChange(targetBpm)}
-                  style={{
-                    ...(miniBtnStyle(theme) as Record<string, string | number>),
-                    padding: "0 10px",
-                    minWidth: 44,
-                    background: active ? accent : undefined,
-                    border: active ? "none" : undefined,
-                    color: active ? "#FFF7E5" : theme.ink,
-                    fontWeight: active ? 600 : 400,
-                    fontSize: 13,
-                    boxShadow: active
-                      ? `0 2px 8px ${hexA(accent, 0.35)}`
-                      : undefined,
-                  }}
-                  aria-pressed={active}
-                >
-                  {targetBpm}
-                </button>
-              );
-            })}
-          </div>
-        )}
         {bluetooth.status !== "connected" && (
           <BluetoothHelpBadge theme={theme} accent={accent} />
         )}

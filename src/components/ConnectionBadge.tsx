@@ -17,7 +17,7 @@ export function ConnectionBadge({
   const dotColor = connected ? "#5E8C5A" : theme.inkFaint;
 
   const pillStyle = {
-    height: 28,
+    height: 38,
     background: theme.panel,
     border: `0.5px solid ${theme.border}`,
     borderRadius: 999,
