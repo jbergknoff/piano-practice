@@ -1,8 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import {
-  type WaitModeAttempt,
-  loadAttemptHistory,
-} from "../use-file-history";
+import { type WaitModeAttempt, loadAttemptHistory } from "../use-file-history";
 import type { ThemeTokens } from "../theme";
 
 interface SelectionRangesDrawerProps {
@@ -20,8 +17,12 @@ function rangesEqual(
   a: { from: number; to: number } | null,
   b: { from: number; to: number } | null,
 ): boolean {
-  if (a === null && b === null) { return true; }
-  if (a === null || b === null) { return false; }
+  if (a === null && b === null) {
+    return true;
+  }
+  if (a === null || b === null) {
+    return false;
+  }
   return a.from === b.from && a.to === b.to;
 }
 
@@ -30,10 +31,16 @@ function selectionKey(range: { from: number; to: number } | null): string {
 }
 
 function bestAttempt(attempts: WaitModeAttempt[]): WaitModeAttempt | null {
-  if (attempts.length === 0) { return null; }
+  if (attempts.length === 0) {
+    return null;
+  }
   return attempts.reduce((best, a) => {
-    if (a.wrongNotes < best.wrongNotes) { return a; }
-    if (a.wrongNotes === best.wrongNotes && a.elapsedMs < best.elapsedMs) { return a; }
+    if (a.wrongNotes < best.wrongNotes) {
+      return a;
+    }
+    if (a.wrongNotes === best.wrongNotes && a.elapsedMs < best.elapsedMs) {
+      return a;
+    }
     return best;
   });
 }
@@ -113,8 +120,7 @@ export function SelectionRangesDrawer({
   }, [open, fileHash]);
 
   const wholeIsActive =
-    measureRange === null ||
-    (measureRange.from === 1 && measureRange.to === n);
+    measureRange === null || (measureRange.from === 1 && measureRange.to === n);
 
   const halves: Preset[] = [
     { label: "First half", range: { from: 1, to: Math.floor(n / 2) } },
@@ -148,7 +154,9 @@ export function SelectionRangesDrawer({
     onClose();
   }
 
-  function bestForRange(range: { from: number; to: number } | null): WaitModeAttempt | null {
+  function bestForRange(
+    range: { from: number; to: number } | null,
+  ): WaitModeAttempt | null {
     const key = selectionKey(range);
     return bestAttempt(attemptHistory[key] ?? []);
   }
@@ -161,7 +169,9 @@ export function SelectionRangesDrawer({
         tabIndex={-1}
         onClick={onClose}
         onKeyDown={(e) => {
-          if (e.key === "Escape" || e.key === "Enter") { onClose(); }
+          if (e.key === "Escape" || e.key === "Enter") {
+            onClose();
+          }
         }}
         style={{
           position: "absolute",
@@ -259,11 +269,7 @@ export function SelectionRangesDrawer({
                 <PresetButton
                   key={p.label}
                   label={p.label}
-                  sublabel={
-                    p.range
-                      ? `mm. ${p.range.from}–${p.range.to}`
-                      : ""
-                  }
+                  sublabel={p.range ? `mm. ${p.range.from}–${p.range.to}` : ""}
                   best={bestForRange(p.range)}
                   active={active}
                   accent={accent}
@@ -303,9 +309,7 @@ export function SelectionRangesDrawer({
                     key={p.label}
                     label={p.label}
                     sublabel={
-                      p.range
-                        ? `mm. ${p.range.from}–${p.range.to}`
-                        : ""
+                      p.range ? `mm. ${p.range.from}–${p.range.to}` : ""
                     }
                     best={bestForRange(p.range)}
                     active={active}

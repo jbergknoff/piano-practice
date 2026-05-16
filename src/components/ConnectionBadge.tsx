@@ -63,7 +63,8 @@ export function ConnectionBadge({
           ? (bluetooth.error ?? "Connection failed")
           : "Connect Bluetooth";
 
-  const handleClick = !BT_SUPPORTED || connected ? undefined : bluetooth.connect;
+  const handleClick =
+    !BT_SUPPORTED || connected ? undefined : bluetooth.connect;
 
   if (compact) {
     return (
@@ -90,10 +91,12 @@ export function ConnectionBadge({
       title={title}
       onClick={handleClick}
       style={
-        { ...pillStyle, padding: "0 12px", gap: 7, color: hasError ? "#c62828" : theme.ink } as Record<
-          string,
-          string | number
-        >
+        {
+          ...pillStyle,
+          padding: "0 12px",
+          gap: 7,
+          color: hasError ? "#c62828" : theme.ink,
+        } as Record<string, string | number>
       }
     >
       {dot}

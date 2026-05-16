@@ -144,9 +144,7 @@ export function BluetoothHelpBadge({
                     style={{
                       padding: "5px 14px",
                       borderRadius: 20,
-                      border: active
-                        ? "none"
-                        : `0.5px solid ${theme.border}`,
+                      border: active ? "none" : `0.5px solid ${theme.border}`,
                       background: active ? accent : "transparent",
                       color: active ? "#FFF7E5" : theme.inkSoft,
                       fontSize: 12,
@@ -201,8 +199,8 @@ function AboutTab({
           lineHeight: 1.55,
         }}
       >
-        This is an app for practicing piano pieces. It's designed to be used
-        on a phone, connected to a MIDI-capable digital piano over Bluetooth.{" "}
+        This is an app for practicing piano pieces. It's designed to be used on
+        a phone, connected to a MIDI-capable digital piano over Bluetooth.{" "}
         <a
           href="https://github.com/jbergknoff/piano-practice"
           target="_blank"
@@ -252,9 +250,7 @@ function AboutTab({
               gap: 4,
             }}
           >
-            <span
-              style={{ fontSize: 12, fontWeight: 600, color: theme.ink }}
-            >
+            <span style={{ fontSize: 12, fontWeight: 600, color: theme.ink }}>
               {name}
             </span>
             <span
@@ -279,7 +275,8 @@ function BluetoothTab({
   const steps: { key: string; content: preact.ComponentChildren }[] = [
     {
       key: "pair",
-      content: "Enable Bluetooth MIDI pairing on your piano (check its manual).",
+      content:
+        "Enable Bluetooth MIDI pairing on your piano (check its manual).",
     },
     {
       key: "connect",
@@ -298,8 +295,8 @@ function BluetoothTab({
             }}
           >
             <BluetoothIcon size={10} />
-          </span>
-          {" "}button in the bottom right to connect your piano.
+          </span>{" "}
+          button in the bottom right to connect your piano.
         </span>
       ),
     },
@@ -364,19 +361,15 @@ function BluetoothTab({
             Enable Web Bluetooth in Brave (one-time):
           </span>{" "}
           open{" "}
-          <span
-            style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}
-          >
+          <span style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}>
             brave://flags
           </span>{" "}
           in Brave, search for{" "}
-          <span
-            style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}
-          >
+          <span style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}>
             enable-experimental-web-platform-features
           </span>
-          , set it to <span style={{ fontWeight: 600 }}>Enabled</span>, then
-          tap <span style={{ fontWeight: 600 }}>Relaunch</span> at the bottom.
+          , set it to <span style={{ fontWeight: 600 }}>Enabled</span>, then tap{" "}
+          <span style={{ fontWeight: 600 }}>Relaunch</span> at the bottom.
         </div>
       )}
 

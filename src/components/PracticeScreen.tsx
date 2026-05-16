@@ -617,9 +617,7 @@ export function PracticeScreen({
         theme={theme}
         accent={accent}
         totalMeasures={
-          musicxml
-            ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum)
-            : 1
+          musicxml ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum) : 1
         }
         measureRange={measureRange}
         onMeasureRangeChange={onMeasureRangeChange}
