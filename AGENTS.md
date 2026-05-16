@@ -1,5 +1,63 @@
 # Agent notes
 
+## Keeping this file current
+
+**Update the Architecture section below whenever you make changes that affect it** — new screens, new hooks, changes to the mode or focus systems, new control areas, or significant state ownership shifts. The goal is that a future agent can read this file and skip broad exploration. A stale architecture section is worse than none, so if you change something described here, update the description in the same commit.
+
+## Architecture
+
+### Two-screen model
+
+The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether `midiData` is loaded. `App.tsx` owns all shared state and passes everything down as props.
+
+### Data pipeline
+
+MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiConversionResult` (contains `musicxml` string, `notes`, `totalBeats`, `timeSigNum`) → fed into `MidiPlayer` for playback and `useWaitMode` for interactive practice.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `src/App.tsx` | State hub: owns all app state, instantiates hooks, passes props to screens |
+| `src/components/PracticeScreen.tsx` | Main UI layout; mostly presentational, receives all state + callbacks via props |
+| `src/components/LandingScreen.tsx` | File drop/pick screen |
+| `src/use-wait-mode.ts` | Hook: tracks expected chords, detects correct piano input, fires completion callback |
+| `src/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping |
+| `src/midi-to-musicxml.ts` | Converts parsed MIDI to MusicXML + note list used throughout |
+| `src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
+| `src/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
+| `src/useBluetooth.ts` | BLE MIDI input; calls `waitMode.onNoteEvent` on each note |
+| `src/theme.ts` | Design tokens + `cornerBtnStyle` / `miniBtnStyle` helpers |
+| `src/components/icons.tsx` | All SVG icons as Preact components |
+
+### Mode system
+
+Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persisted in `FileHistory`.
+
+- **Wait** — score halts; `useWaitMode` is active and listens for correct piano chords before advancing. Play/Pause and BPM controls hidden.
+- **Playalong** (`"race"`) — not yet implemented; reserved. Behaves like Listen for now.
+- **Listen** — normal playback; `useWaitMode` inactive. Play/Pause and BPM controls shown.
+
+`useWaitMode` always starts with `active = true`; `handleModeChange` in App.tsx calls `waitMode.toggle()` to keep the hook in sync when the mode changes.
+
+### Focus system
+
+`measureRange: { from: number; to: number } | null` in `App.tsx` is the single source of truth.
+
+- `null` → whole piece; no orange overlay or drag handles rendered in `SheetMusicDisplay`
+- non-null → section highlighted with a translucent orange overlay and two draggable handles
+- Set via right-click context menu ("Focus measure X"); cleared via "Clear focus" in the same menu
+- When non-null, `MidiPlayer.focusRange` loops playback within that range, and `useWaitMode` constrains wait points to that range
+
+### PracticeScreen control areas
+
+- **Top-left** — back button, piece title (opens info modal on click)
+- **Top-right** — Bluetooth badge, measure scrubber, settings gear
+- **Bottom-left** — Reset + Play/Pause buttons (row), then Wait/Playalong/Listen mode selector (below)
+- **Bottom-right** — BPM selector panel (hidden in Wait mode)
+
+
+
 ## Local development
 
 The only local requirements are `make` and `docker`. Bun, Node, and Biome are all run inside a Docker container via `docker-compose`; nothing needs to be installed on the host.
