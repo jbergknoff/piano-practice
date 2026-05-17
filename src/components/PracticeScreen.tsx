@@ -421,7 +421,12 @@ export function PracticeScreen({
         {bluetooth.status !== "connected" && (
           <BluetoothHelpBadge theme={theme} accent={accent} />
         )}
-        <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
+        <ConnectionBadge
+          theme={theme}
+          accent={accent}
+          bluetooth={bluetooth}
+          compact={true}
+        />
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}

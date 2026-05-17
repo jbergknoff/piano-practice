@@ -67,7 +67,12 @@ export function LandingScreen({
         }}
       >
         {!connected && <BluetoothHelpBadge theme={theme} accent={accent} />}
-        <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
+        <ConnectionBadge
+          theme={theme}
+          accent={accent}
+          bluetooth={bluetooth}
+          compact={true}
+        />
       </div>
 
       {/* Centered drop zone */}

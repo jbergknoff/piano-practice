@@ -200,7 +200,7 @@ function AboutTab({
         }}
       >
         This is an app for practicing piano pieces. It's designed to be used on
-        a phone, connected to a MIDI-capable digital piano over Bluetooth.{" "}
+        a phone, connected to a digital piano (with MIDI output) over Bluetooth.{" "}
         <a
           href="https://github.com/jbergknoff/piano-practice"
           target="_blank"
@@ -381,8 +381,15 @@ function BluetoothTab({
           paddingTop: 2,
         }}
       >
-        Requires Chrome or Edge on desktop. Web Bluetooth is not available in
-        Safari or Firefox.
+        Requires a Chromium-based browser.{" "}
+        <a
+          href="https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md"
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: accent, textDecoration: "none" }}
+        >
+          Implementation status ↗
+        </a>
       </div>
     </div>
   );

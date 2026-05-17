@@ -14,37 +14,68 @@ const IS_EDGE = /Edg\//.test(ua);
 const IS_FIREFOX = /Firefox\//.test(ua);
 const IS_SAFARI = /Safari\//.test(ua) && !/Chrome\//.test(ua);
 
-function unsupportedBody(): string {
+const BT_IMPL_STATUS_URL =
+  "https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md";
+
+function unsupportedBody(accent: string) {
+  const link = (
+    <a
+      href={BT_IMPL_STATUS_URL}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: accent, textDecoration: "none" }}
+    >
+      implementation status page ↗
+    </a>
+  );
+
   if (IS_BRAVE) {
     return (
-      "Brave blocks Web Bluetooth by default. " +
-      "To enable it, open brave://flags, search for " +
-      "enable-experimental-web-platform-features, set it to Enabled, " +
-      "then relaunch."
+      <span>
+        Brave blocks Web Bluetooth by default. To enable it, open{" "}
+        <code style={{ fontSize: 11 }}>brave://flags</code>, search for{" "}
+        <code style={{ fontSize: 11 }}>
+          enable-experimental-web-platform-features
+        </code>
+        , set it to <strong>Enabled</strong>, then relaunch. See the {link} for
+        more detail.
+      </span>
     );
   }
   if (IS_SAFARI || IS_FIREFOX) {
-    return `Web Bluetooth is not supported in ${IS_SAFARI ? "Safari" : "Firefox"}. Please open this page in Chrome or Edge on desktop.`;
+    return (
+      <span>
+        Web Bluetooth is not supported in {IS_SAFARI ? "Safari" : "Firefox"}.
+        Please open this page in a Chromium-based browser. See the {link} for
+        the full picture.
+      </span>
+    );
   }
   if (IS_CHROME_LIKE || IS_EDGE) {
     return (
-      "Web Bluetooth doesn't appear to be available. " +
-      "Make sure you're using a recent version of Chrome or Edge, " +
-      "and that Bluetooth is enabled on your device."
+      <span>
+        Web Bluetooth doesn't appear to be available. Make sure you're using a
+        recent Chromium-based browser and that Bluetooth is enabled on your
+        device. See the {link} for more detail.
+      </span>
     );
   }
   return (
-    "Web Bluetooth is not available in this browser. " +
-    "Please use Chrome or Edge on desktop."
+    <span>
+      Web Bluetooth is not available in this browser. Please use a
+      Chromium-based browser. See the {link} for the full picture.
+    </span>
   );
 }
 
 export function ConnectionBadge({
   theme,
+  accent,
   bluetooth,
   compact,
 }: {
   theme: ThemeTokens;
+  accent: string;
   bluetooth: ReturnType<typeof useBluetooth>;
   compact: boolean;
 }) {
@@ -229,7 +260,7 @@ export function ConnectionBadge({
                 lineHeight: 1.6,
               }}
             >
-              {unsupportedBody()}
+              {unsupportedBody(accent)}
             </p>
           </div>
         </>
