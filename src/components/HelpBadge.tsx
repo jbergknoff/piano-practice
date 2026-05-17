@@ -60,7 +60,7 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
 
 const emptyLog = (): DebugBeatEvent[] => [];
 
-export function BluetoothHelpBadge({
+export function HelpBadge({
   theme,
   accent,
   getDebugLog = emptyLog,

@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
 import type { useBluetooth } from "../useBluetooth";
-import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
+import { HelpBadge } from "./HelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { UploadIcon } from "./icons";
 
@@ -66,7 +66,7 @@ export function LandingScreen({
           gap: 10,
         }}
       >
-        {!connected && <BluetoothHelpBadge theme={theme} accent={accent} />}
+        {!connected && <HelpBadge theme={theme} accent={accent} />}
         <ConnectionBadge
           theme={theme}
           accent={accent}

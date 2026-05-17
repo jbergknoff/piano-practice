@@ -4,7 +4,7 @@ import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
 import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
 import type { useBluetooth } from "../useBluetooth";
-import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
+import { HelpBadge } from "./HelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
@@ -537,11 +537,7 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <BluetoothHelpBadge
-          theme={theme}
-          accent={accent}
-          getDebugLog={getDebugLog}
-        />
+        <HelpBadge theme={theme} accent={accent} getDebugLog={getDebugLog} />
         <ConnectionBadge
           theme={theme}
           accent={accent}
