@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import type { DebugBeatEvent } from "../use-wait-mode";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
 import { BluetoothIcon } from "./icons";
@@ -6,14 +7,65 @@ import { BluetoothIcon } from "./icons";
 const IS_MOBILE_BRAVE =
   "brave" in navigator && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-type Tab = "about" | "bluetooth";
+type Tab = "about" | "bluetooth" | "debugging";
+
+const NOTE_NAMES = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+];
+
+function noteName(midi: number): string {
+  const octave = Math.floor(midi / 12) - 1;
+  return `${NOTE_NAMES[midi % 12]}${octave}`;
+}
+
+function formatDebugLog(events: DebugBeatEvent[]): string {
+  if (events.length === 0) {
+    return "(no events yet — play some notes in Wait mode to populate this log)";
+  }
+  const t0 = events[0].t;
+  const lines: string[] = [
+    "=== Piano Practice Debug Log ===",
+    `Captured: ${new Date().toISOString()}`,
+    `Events (oldest → newest, up to ${events.length}):`,
+    "",
+  ];
+  for (const e of events) {
+    const rel = ((e.t - t0) / 1000).toFixed(3);
+    const nn = `${noteName(e.note)}(${e.note})`;
+    const expStr = e.expected.map((n) => `${noteName(n)}(${n})`).join(",");
+    const heldStr = e.held.map((n) => `${noteName(n)}(${n})`).join(",");
+    const beat = e.beat >= 0 ? e.beat.toFixed(2) : "—";
+    lines.push(
+      `+${rel}s  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}` +
+        `  pt=${e.pointIndex} beat=${beat}` +
+        `  exp=[${expStr}]  held=[${heldStr}]` +
+        `  +${e.msSinceAdvance}ms  → ${e.outcome.toUpperCase()}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+const emptyLog = (): DebugBeatEvent[] => [];
 
 export function BluetoothHelpBadge({
   theme,
   accent,
+  getDebugLog = emptyLog,
 }: {
   theme: ThemeTokens;
   accent: string;
+  getDebugLog?: () => DebugBeatEvent[];
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("about");
@@ -130,11 +182,12 @@ export function BluetoothHelpBadge({
                 flexShrink: 0,
               }}
             >
-              {(["about", "bluetooth"] as Tab[]).map((t) => {
+              {(["about", "bluetooth", "debugging"] as Tab[]).map((t) => {
                 const active = tab === t;
                 const labels: Record<Tab, string> = {
                   about: "About",
                   bluetooth: "Bluetooth",
+                  debugging: "Debugging",
                 };
                 return (
                   <button
@@ -171,8 +224,14 @@ export function BluetoothHelpBadge({
             >
               {tab === "about" ? (
                 <AboutTab theme={theme} accent={accent} />
-              ) : (
+              ) : tab === "bluetooth" ? (
                 <BluetoothTab theme={theme} accent={accent} />
+              ) : (
+                <DebuggingTab
+                  theme={theme}
+                  accent={accent}
+                  getDebugLog={getDebugLog}
+                />
               )}
             </div>
           </div>
@@ -391,6 +450,108 @@ function BluetoothTab({
           Implementation status ↗
         </a>
       </div>
+    </div>
+  );
+}
+
+function DebuggingTab({
+  theme,
+  accent,
+  getDebugLog,
+}: {
+  theme: ThemeTokens;
+  accent: string;
+  getDebugLog: () => DebugBeatEvent[];
+}) {
+  const [log, setLog] = useState<string>(() => formatDebugLog(getDebugLog()));
+  const [copied, setCopied] = useState(false);
+
+  function refresh() {
+    setLog(formatDebugLog(getDebugLog()));
+  }
+
+  async function copyToClipboard() {
+    try {
+      await navigator.clipboard.writeText(log);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 12,
+          color: theme.inkSoft,
+          lineHeight: 1.5,
+        }}
+      >
+        Rolling log of the last {50} note events in Wait mode. Use this to
+        report matching bugs — capture a snapshot right after a mis-match
+        occurs.
+      </p>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          type="button"
+          onClick={refresh}
+          style={{
+            padding: "5px 14px",
+            borderRadius: 20,
+            border: `0.5px solid ${theme.border}`,
+            background: "transparent",
+            color: theme.inkSoft,
+            fontSize: 12,
+            cursor: "pointer",
+            outline: "none",
+            fontFamily: "'Geist', sans-serif",
+          }}
+        >
+          Refresh
+        </button>
+        <button
+          type="button"
+          onClick={copyToClipboard}
+          style={{
+            padding: "5px 14px",
+            borderRadius: 20,
+            border: "none",
+            background: accent,
+            color: "#FFF7E5",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+            outline: "none",
+            fontFamily: "'Geist', sans-serif",
+          }}
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+
+      <pre
+        style={{
+          margin: 0,
+          padding: "10px 12px",
+          borderRadius: 10,
+          border: `0.5px solid ${theme.border}`,
+          background: hexA(theme.ink, 0.03),
+          fontFamily: "'Geist Mono', 'Fira Mono', monospace",
+          fontSize: 10,
+          color: theme.inkSoft,
+          lineHeight: 1.6,
+          overflowX: "auto",
+          whiteSpace: "pre",
+          maxHeight: 320,
+          overflowY: "auto",
+        }}
+      >
+        {log}
+      </pre>
     </div>
   );
 }

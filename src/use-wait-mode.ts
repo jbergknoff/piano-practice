@@ -12,6 +12,40 @@ interface WaitPoint {
   noteNumbers: Set<number>;
 }
 
+export interface DebugBeatEvent {
+  /** Wall-clock timestamp (Date.now()). */
+  t: number;
+  /** MIDI note number (0–127). */
+  note: number;
+  kind: "on" | "off";
+  /** Wait-point index at the time of this event. */
+  pointIndex: number;
+  /** Beat of the current wait point (-1 when out of range). */
+  beat: number;
+  /** Expected note numbers at the current wait point. */
+  expected: number[];
+  /** All held notes after this event is processed. */
+  held: number[];
+  /** Milliseconds elapsed since the last successful advance. */
+  msSinceAdvance: number;
+  outcome:
+    | "advance" // all expected notes held → advanced to next point
+    | "wrong" // note not in expected chord (outside grace period)
+    | "grace" // wrong note silently ignored within grace period
+    | "incomplete" // correct note pressed but not all expected notes held yet
+    | "debounce" // within 100 ms anti-race window after last advance
+    | "off"; // note-off event (no matching logic runs)
+}
+
+const DEBUG_LOG_MAX = 50;
+
+function appendDebugEvent(log: DebugBeatEvent[], event: DebugBeatEvent) {
+  log.push(event);
+  if (log.length > DEBUG_LOG_MAX) {
+    log.shift();
+  }
+}
+
 export interface WaitModeHandle {
   /** Whether wait mode is currently active. */
   active: boolean;
@@ -41,6 +75,8 @@ export interface WaitModeHandle {
   rewind: () => void;
   /** Jump the wait-mode cursor to the first wait point at or after the given beat. */
   seekToBeat: (beat: number) => void;
+  /** Returns a snapshot of the rolling debug event log (up to 50 entries, oldest first). */
+  getDebugLog: () => DebugBeatEvent[];
 }
 
 /** Returns the first wait-point index inside the range and the exclusive end index. */
@@ -90,6 +126,7 @@ export function useWaitMode(
   const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
   const onWrongNoteRef = useRef(onWrongNote);
   const onCompleteRef = useRef(onComplete);
+  const debugLogRef = useRef<DebugBeatEvent[]>([]);
 
   useEffect(() => {
     onWrongNoteRef.current = onWrongNote;
@@ -158,6 +195,7 @@ export function useWaitMode(
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
+    debugLogRef.current = [];
     if (wrongNoteTimerRef.current !== null) {
       clearTimeout(wrongNoteTimerRef.current);
       wrongNoteTimerRef.current = null;
@@ -281,14 +319,37 @@ export function useWaitMode(
     }
 
     const held = heldNotesRef.current;
+    const now = Date.now();
+    const msSinceAdvance = now - lastAdvanceTimeRef.current;
+
     if (kind === "on") {
       held.add(noteNumber);
       // Start timing on the first key press of this attempt.
       if (attemptStartTimeRef.current === null) {
-        attemptStartTimeRef.current = Date.now();
+        attemptStartTimeRef.current = now;
       }
     } else {
       held.delete(noteNumber);
+      // Log the note-off so the debug timeline is complete.
+      const points = waitPointsRef.current;
+      const idx = pointIndexRef.current;
+      const { end } = rangeBounds(
+        points,
+        measureRangeRef.current,
+        timeSigNumRef.current,
+      );
+      const wp = idx < end ? points[idx] : null;
+      appendDebugEvent(debugLogRef.current, {
+        t: now,
+        note: noteNumber,
+        kind: "off",
+        pointIndex: idx,
+        beat: wp?.beat ?? -1,
+        expected: wp ? [...wp.noteNumbers] : [],
+        held: [...held],
+        msSinceAdvance,
+        outcome: "off",
+      });
       return; // only check for a match when a new note is pressed
     }
 
@@ -304,15 +365,30 @@ export function useWaitMode(
       return;
     }
 
-    const expected = points[idx].noteNumbers;
+    const wp = points[idx];
+    const expected = wp.noteNumbers;
+    const beat = wp.beat;
+    // Snapshot held *after* adding the new note, for the debug log.
+    const heldSnapshot = [...held];
+    const expectedSnapshot = [...expected];
+    const dbgBase = {
+      t: now,
+      note: noteNumber,
+      kind: "on" as const,
+      pointIndex: idx,
+      beat,
+      expected: expectedSnapshot,
+      held: heldSnapshot,
+      msSinceAdvance,
+    };
 
     // Silently ignore wrong notes within the grace period after a successful
     // advance (catches lingering "note on" events from the previous beat).
     if (
       !expected.has(noteNumber) &&
-      Date.now() - lastAdvanceTimeRef.current <
-        noteSensitivityMillisecondsRef.current
+      msSinceAdvance < noteSensitivityMillisecondsRef.current
     ) {
+      appendDebugEvent(debugLogRef.current, { ...dbgBase, outcome: "grace" });
       return;
     }
 
@@ -328,19 +404,24 @@ export function useWaitMode(
         setWrongNoteFlash(false);
         wrongNoteTimerRef.current = null;
       }, 600);
+      appendDebugEvent(debugLogRef.current, { ...dbgBase, outcome: "wrong" });
       return;
     }
 
     // Ignore events within 100 ms of the last advance so that repeated
     // identical chords don't race ahead, while still allowing fast playing.
-    if (Date.now() - lastAdvanceTimeRef.current < 100) {
+    if (msSinceAdvance < 100) {
+      appendDebugEvent(debugLogRef.current, {
+        ...dbgBase,
+        outcome: "debounce",
+      });
       return;
     }
 
     // All expected notes must be held; extra held notes (e.g. the other hand
     // still sustaining a previous chord) are fine.
     if ([...expected].every((n) => held.has(n))) {
-      lastAdvanceTimeRef.current = Date.now();
+      lastAdvanceTimeRef.current = now;
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
         // Attempt complete — fire callback before resetting.
@@ -348,7 +429,7 @@ export function useWaitMode(
         if (startTime !== null) {
           onCompleteRef.current?.({
             wrongNotes: wrongNoteCountRef.current,
-            elapsedMs: Date.now() - startTime,
+            elapsedMs: now - startTime,
           });
         }
         // Restart from the beginning of the active range (or piece).
@@ -360,8 +441,16 @@ export function useWaitMode(
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
       }
+      appendDebugEvent(debugLogRef.current, { ...dbgBase, outcome: "advance" });
+    } else {
+      appendDebugEvent(debugLogRef.current, {
+        ...dbgBase,
+        outcome: "incomplete",
+      });
     }
   }, []);
+
+  const getDebugLog = useCallback(() => [...debugLogRef.current], []);
 
   return {
     active,
@@ -373,5 +462,6 @@ export function useWaitMode(
     toggle,
     rewind,
     seekToBeat,
+    getDebugLog,
   };
 }

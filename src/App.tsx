@@ -829,6 +829,7 @@ export function App() {
         playalongPianoAudio={playalongPianoAudio}
         onPlayalongPianoAudioChange={setPlayalongPianoAudio}
         fileHash={fileHash}
+        getDebugLog={waitMode.getDebugLog}
       />
       {completionModal && (
         <WaitModeResultModal
