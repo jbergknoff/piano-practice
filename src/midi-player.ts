@@ -25,11 +25,25 @@ export class MidiPlayer {
   private notes: PlaybackNote[];
   private totalBeats: number;
   private _state: "stopped" | "playing" | "paused" = "stopped";
+  private extraTimers: ReturnType<typeof setTimeout>[] = [];
 
   onPositionUpdate?: (beat: number) => void;
   onEnd?: (beat: number) => void;
   /** When set, the player restarts from startBeat once beat reaches endBeat. */
   focusRange: { startBeat: number; endBeat: number } | null = null;
+  /** When true, skip Web Audio synthesis (phone speaker) for scheduled notes. */
+  skipWebAudio = false;
+  /**
+   * When set, called for each note as it is scheduled. delayMs is how far in
+   * the future (from now) the note should sound; durationMs is the note length.
+   * Use this to mirror playback to an external device (e.g. via BLE MIDI).
+   */
+  onNoteScheduled?: (
+    noteNumber: number,
+    velocity: number,
+    delayMs: number,
+    durationMs: number,
+  ) => void;
 
   constructor(notes: PlaybackNote[], totalBeats: number, bpm = 120) {
     this.notes = notes;
@@ -176,8 +190,12 @@ export class MidiPlayer {
     for (const node of this.activeGains) {
       node.disconnect();
     }
+    for (const t of this.extraTimers) {
+      clearTimeout(t);
+    }
     this.activeOscillators = [];
     this.activeGains = [];
+    this.extraTimers = [];
     this.playQueue = [];
     this.playQueueIndex = 0;
   }
@@ -190,6 +208,19 @@ export class MidiPlayer {
   ): void {
     const ctx = this.audioCtx;
     if (!ctx) {
+      return;
+    }
+
+    if (this.onNoteScheduled) {
+      const delayMs = Math.max(0, (startTime - ctx.currentTime) * 1000);
+      const durationMs = duration * 1000;
+      const timer = setTimeout(() => {
+        this.onNoteScheduled?.(midiNote, velocity, 0, durationMs);
+      }, delayMs);
+      this.extraTimers.push(timer);
+    }
+
+    if (this.skipWebAudio) {
       return;
     }
 

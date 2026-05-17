@@ -75,6 +75,11 @@ export function App() {
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
+  const [playalongPianoAudio, setPlayalongPianoAudio] = useState(true);
+  const playalongPianoAudioRef = useRef(playalongPianoAudio);
+  useEffect(() => {
+    playalongPianoAudioRef.current = playalongPianoAudio;
+  }, [playalongPianoAudio]);
   const [completionModal, setCompletionModal] = useState<{
     history: WaitModeAttempt[];
     selectionLabel: string;
@@ -359,6 +364,7 @@ export function App() {
         setIsPlaying(false);
         setCurrentBeat(beat);
         if (modeRef.current === "playalong") {
+          clearPlayalongAudio(player);
           playalong.notifyEnd();
         }
       };
@@ -403,10 +409,19 @@ export function App() {
     }
   }, [measureRange, musicxml]);
 
+  function clearPlayalongAudio(player: InstanceType<typeof MidiPlayer>) {
+    player.skipWebAudio = false;
+    player.onNoteScheduled = undefined;
+  }
+
   function handlePlayalongStop() {
     playalongCancelRef.current?.();
     playalongCancelRef.current = null;
-    playerRef.current?.pause();
+    const player = playerRef.current;
+    if (player) {
+      clearPlayalongAudio(player);
+      player.pause();
+    }
     setIsPlaying(false);
     playalong.abort();
     const range = measureRangeRef.current;
@@ -471,6 +486,19 @@ export function App() {
         }
         playalongCancelRef.current = null;
         playalong.startPlaying();
+
+        // Route playback audio to the piano speaker if the option is on.
+        if (playalongPianoAudioRef.current) {
+          player.skipWebAudio = true;
+          player.onNoteScheduled = (note, velocity, _delay, durationMs) => {
+            sendNoteRef.current?.(
+              note,
+              Math.max(1, Math.round(velocity * 0.3)),
+              durationMs,
+            );
+          };
+        }
+
         await player.play();
       }
       return;
@@ -766,6 +794,8 @@ export function App() {
         onSensitivityChange={setNoteSensitivityMilliseconds}
         playalongTimingBeats={playalongTimingBeats}
         onPlayalongTimingChange={setPlayalongTimingBeats}
+        playalongPianoAudio={playalongPianoAudio}
+        onPlayalongPianoAudioChange={setPlayalongPianoAudio}
         fileHash={fileHash}
       />
       {completionModal && (

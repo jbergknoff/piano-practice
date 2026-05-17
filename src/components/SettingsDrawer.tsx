@@ -15,6 +15,8 @@ interface SettingsDrawerProps {
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
   onPlayalongTimingChange: (beats: number) => void;
+  playalongPianoAudio: boolean;
+  onPlayalongPianoAudioChange: (enabled: boolean) => void;
 }
 
 function sensitivityLabel(ms: number): string {
@@ -46,6 +48,8 @@ export function SettingsDrawer({
   onSensitivityChange,
   playalongTimingBeats,
   onPlayalongTimingChange,
+  playalongPianoAudio,
+  onPlayalongPianoAudioChange,
 }: SettingsDrawerProps) {
   const connected = bluetooth.status === "connected";
 
@@ -219,6 +223,33 @@ export function SettingsDrawer({
             <span>Tight</span>
             <span>Loose</span>
           </div>
+        </DrawerRow>
+
+        {/* Playalong piano audio toggle */}
+        <DrawerRow theme={theme} label="Piano plays along" hint="">
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={playalongPianoAudio}
+              onChange={(e) =>
+                onPlayalongPianoAudioChange(
+                  (e.target as HTMLInputElement).checked,
+                )
+              }
+              style={{ accentColor: accent }}
+            />
+            <span style={{ color: theme.inkSoft }}>
+              Play guide notes through the piano at low volume
+            </span>
+          </label>
         </DrawerRow>
 
         {/* Footer — connection */}

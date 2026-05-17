@@ -53,6 +53,8 @@ interface PracticeScreenProps {
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
   onPlayalongTimingChange: (beats: number) => void;
+  playalongPianoAudio: boolean;
+  onPlayalongPianoAudioChange: (enabled: boolean) => void;
 }
 
 export function PracticeScreen({
@@ -85,6 +87,8 @@ export function PracticeScreen({
   onSensitivityChange,
   playalongTimingBeats,
   onPlayalongTimingChange,
+  playalongPianoAudio,
+  onPlayalongPianoAudioChange,
   fileHash,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -698,6 +702,8 @@ export function PracticeScreen({
         onSensitivityChange={onSensitivityChange}
         playalongTimingBeats={playalongTimingBeats}
         onPlayalongTimingChange={onPlayalongTimingChange}
+        playalongPianoAudio={playalongPianoAudio}
+        onPlayalongPianoAudioChange={onPlayalongPianoAudioChange}
       />
     </div>
   );
