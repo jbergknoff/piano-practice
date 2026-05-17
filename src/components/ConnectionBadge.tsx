@@ -133,7 +133,11 @@ export function ConnectionBadge({
       setShowUnsupportedModal(true);
       return;
     }
-    setShowStatusModal(true);
+    if (connected) {
+      setShowStatusModal(true);
+      return;
+    }
+    bluetooth.connect();
   }
 
   const modalBaseStyle = {
@@ -301,106 +305,43 @@ export function ConnectionBadge({
                 ✕
               </button>
             </div>
-            {connected && (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 13,
-                    color: theme.ink,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: "#5E8C5A",
-                      flexShrink: 0,
-                    }}
-                  />
-                  {bluetooth.deviceName}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowStatusModal(false)}
-                  style={{
-                    background: accent,
-                    border: "none",
-                    borderRadius: 10,
-                    color: "#FFF7E5",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    padding: "8px 18px",
-                    alignSelf: "flex-end",
-                  }}
-                >
-                  Done
-                </button>
-              </>
-            )}
-            {connecting && (
-              <p style={{ margin: 0, fontSize: 13, color: theme.inkSoft }}>
-                Connecting…
-              </p>
-            )}
-            {hasError && (
-              <>
-                <p style={{ margin: 0, fontSize: 13, color: "#c62828" }}>
-                  {bluetooth.error ?? "Connection failed"}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    bluetooth.connect();
-                    setShowStatusModal(false);
-                  }}
-                  style={{
-                    background: accent,
-                    border: "none",
-                    borderRadius: 10,
-                    color: "#FFF7E5",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    padding: "8px 18px",
-                    alignSelf: "flex-end",
-                  }}
-                >
-                  Retry
-                </button>
-              </>
-            )}
-            {!connected && !connecting && !hasError && (
-              <>
-                <p style={{ margin: 0, fontSize: 13, color: theme.inkSoft }}>
-                  Not connected
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    bluetooth.connect();
-                    setShowStatusModal(false);
-                  }}
-                  style={{
-                    background: accent,
-                    border: "none",
-                    borderRadius: 10,
-                    color: "#FFF7E5",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    padding: "8px 18px",
-                    alignSelf: "flex-end",
-                  }}
-                >
-                  Connect piano…
-                </button>
-              </>
-            )}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                color: theme.ink,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#5E8C5A",
+                  flexShrink: 0,
+                }}
+              />
+              {bluetooth.deviceName}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowStatusModal(false)}
+              style={{
+                background: accent,
+                border: "none",
+                borderRadius: 10,
+                color: "#FFF7E5",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                padding: "8px 18px",
+                alignSelf: "flex-end",
+              }}
+            >
+              Done
+            </button>
           </div>
         </>
       )}

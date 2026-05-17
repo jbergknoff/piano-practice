@@ -165,14 +165,25 @@ export function useBluetooth(
           channel,
         ),
       );
+      // Group Note Offs by duration so simultaneous releases go in one packet.
+      const byDuration = new Map<number, number[]>();
       for (const { note, durationMs } of notes) {
+        const key = Math.round(durationMs);
+        const list = byDuration.get(key) ?? [];
+        list.push(note);
+        byDuration.set(key, list);
+      }
+      for (const [duration, noteList] of byDuration) {
         setTimeout(() => {
           try {
             charRef.current?.writeValueWithoutResponse(
-              buildBLEMIDINote(note, 0, channel),
+              buildBLEMIDIBatch(
+                noteList.map((n) => ({ note: n, velocity: 0 })),
+                channel,
+              ),
             );
           } catch {}
-        }, durationMs);
+        }, duration);
       }
     } catch {}
   }
