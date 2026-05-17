@@ -193,6 +193,7 @@ export function App() {
     const attempt: PlayalongAttempt = {
       timestamp: Date.now(),
       score: stats.score,
+      bpm: bpmRef.current,
     };
     savePlayalongAttempt(hash, selectionKey, attempt);
     const allAttempts = loadPlayalongAttemptHistory(hash)[selectionKey] ?? [];
@@ -432,7 +433,10 @@ export function App() {
         playalong.phaseRef.current === "playing"
       ) {
         handlePlayalongStop();
-      } else if (playalong.phaseRef.current === "idle") {
+      } else if (
+        playalong.phaseRef.current === "idle" ||
+        playalong.phaseRef.current === "complete"
+      ) {
         const mx = musicxmlRef.current;
         if (!mx) {
           return;
@@ -782,7 +786,8 @@ export function App() {
           history={playalongModal.history}
           onClose={() => {
             setPlayalongModal(null);
-            playalong.abort();
+            // Keep phase="complete" so green/red note colors remain for review.
+            // Seek to start so the sheet is positioned at the beginning.
             const range = measureRangeRef.current;
             const startBeat = range
               ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)

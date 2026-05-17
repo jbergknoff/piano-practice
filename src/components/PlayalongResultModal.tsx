@@ -132,27 +132,38 @@ export function PlayalongResultModal({
               gap: 12,
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: theme.inkSoft,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Score
-              </span>
-              <span
-                style={{
-                  fontSize: 40,
-                  fontWeight: 700,
-                  color: scoreColor(latest.score),
-                  fontVariantNumeric: "tabular-nums",
-                  lineHeight: 1,
-                }}
-              >
-                {latest.score}%
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: theme.inkSoft,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Score
+                </span>
+                <span
+                  style={{
+                    fontSize: 40,
+                    fontWeight: 700,
+                    color: scoreColor(latest.score),
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                  }}
+                >
+                  {latest.score}%
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: theme.inkSoft }}>
+                {latest.bpm} BPM
               </span>
             </div>
             <div
@@ -197,13 +208,13 @@ export function PlayalongResultModal({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 64px",
+                  gridTemplateColumns: "1fr 64px 64px",
                   padding: "7px 12px",
                   background: hexA(theme.ink, 0.04),
                   borderBottom: `0.5px solid ${theme.border}`,
                 }}
               >
-                {(["When", "Score"] as string[]).map((h) => (
+                {(["When", "Tempo", "Score"] as string[]).map((h) => (
                   <span
                     key={h}
                     style={{
@@ -222,7 +233,7 @@ export function PlayalongResultModal({
                   key={a.timestamp}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 64px",
+                    gridTemplateColumns: "1fr 64px 64px",
                     padding: "7px 12px",
                     borderBottom:
                       i < prior.length - 1
@@ -233,6 +244,15 @@ export function PlayalongResultModal({
                 >
                   <span style={{ fontSize: 12, color: theme.inkSoft }}>
                     {formatDate(a.timestamp)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: theme.inkSoft,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {a.bpm ?? "—"}
                   </span>
                   <ScoreChip score={a.score} />
                 </div>

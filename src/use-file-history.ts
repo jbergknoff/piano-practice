@@ -69,6 +69,7 @@ const MAX_ATTEMPTS_PER_SELECTION = 50;
 export interface PlayalongAttempt {
   timestamp: number;
   score: number; // 0–100
+  bpm: number;
 }
 
 type PlayalongAttemptHistory = Record<string, PlayalongAttempt[]>;
