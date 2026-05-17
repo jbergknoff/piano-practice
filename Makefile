@@ -26,7 +26,7 @@ test: node_modules
 
 build: node_modules
 	mkdir -p dist
-	$(bun) build src/main.tsx --outdir dist --minify
+	$(bun) build src/main.tsx --outdir dist --minify --define 'GIT_COMMIT="$(shell git rev-parse --short HEAD)"'
 	cp node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2 dist/bravura.woff2
 
 pr-ready: format lint typecheck test build

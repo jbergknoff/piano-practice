@@ -36,6 +36,7 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
   const t0 = events[0].t;
   const lines: string[] = [
     "=== Piano Practice Debug Log ===",
+    `Version: ${GIT_COMMIT}`,
     `Captured: ${new Date().toISOString()}`,
     `Events (oldest → newest, up to ${events.length}):`,
     "",
