@@ -61,6 +61,15 @@ type AttemptHistory = Record<string, WaitModeAttempt[]>;
 const ATTEMPTS_PREFIX = "piano-practice:attempts:";
 const MAX_ATTEMPTS_PER_SELECTION = 50;
 
+export interface PlayalongAttempt {
+  timestamp: number;
+  score: number; // 0–100
+}
+
+type PlayalongAttemptHistory = Record<string, PlayalongAttempt[]>;
+
+const PLAYALONG_ATTEMPTS_PREFIX = "piano-practice:playalong-attempts:";
+
 export function loadAttemptHistory(hash: string): AttemptHistory {
   try {
     const raw = localStorage.getItem(ATTEMPTS_PREFIX + hash);
@@ -87,6 +96,40 @@ export function saveAttempt(
     }
     history[selectionKey] = list;
     localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
+  } catch {
+    // ignore (private mode, quota exceeded, etc.)
+  }
+}
+
+export function loadPlayalongAttemptHistory(
+  hash: string,
+): PlayalongAttemptHistory {
+  try {
+    const raw = localStorage.getItem(PLAYALONG_ATTEMPTS_PREFIX + hash);
+    if (!raw) { return {}; }
+    return JSON.parse(raw) as PlayalongAttemptHistory;
+  } catch {
+    return {};
+  }
+}
+
+export function savePlayalongAttempt(
+  hash: string,
+  selectionKey: string,
+  attempt: PlayalongAttempt,
+): void {
+  try {
+    const history = loadPlayalongAttemptHistory(hash);
+    const list = history[selectionKey] ?? [];
+    list.push(attempt);
+    if (list.length > MAX_ATTEMPTS_PER_SELECTION) {
+      list.splice(0, list.length - MAX_ATTEMPTS_PER_SELECTION);
+    }
+    history[selectionKey] = list;
+    localStorage.setItem(
+      PLAYALONG_ATTEMPTS_PREFIX + hash,
+      JSON.stringify(history),
+    );
   } catch {
     // ignore (private mode, quota exceeded, etc.)
   }

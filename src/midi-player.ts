@@ -255,6 +255,84 @@ export class MidiPlayer {
     this.activeOscillators.push(osc3);
   }
 
+  /**
+   * Schedule a metronome count-in. Returns a cancel function and a promise
+   * that resolves when the count-in finishes. Call cancel() to stop early.
+   */
+  async playCountIn(
+    beats: number,
+    timeSigNum: number,
+  ): Promise<{ cancel: () => void; done: Promise<void> }> {
+    if (!this.audioCtx) {
+      this.audioCtx = new AudioContext();
+    }
+    await this.audioCtx.resume();
+
+    const ctx = this.audioCtx;
+    const secsPerBeat = 60 / this._bpm;
+    const startTime = ctx.currentTime + 0.05;
+    const sources: AudioBufferSourceNode[] = [];
+
+    for (let i = 0; i < beats; i++) {
+      const t = startTime + i * secsPerBeat;
+      const isDownbeat = i % timeSigNum === 0;
+      sources.push(this.scheduleClick(ctx, t, isDownbeat ? 0.5 : 0.3));
+    }
+
+    let canceled = false;
+    const done = new Promise<void>((resolve) => {
+      setTimeout(
+        () => {
+          if (!canceled) { resolve(); }
+        },
+        beats * secsPerBeat * 1000 + 80,
+      );
+    });
+
+    const cancel = () => {
+      canceled = true;
+      for (const src of sources) {
+        try {
+          src.stop(0);
+        } catch {}
+      }
+    };
+
+    return { cancel, done };
+  }
+
+  private scheduleClick(
+    ctx: AudioContext,
+    time: number,
+    volume: number,
+  ): AudioBufferSourceNode {
+    const sr = ctx.sampleRate;
+    const len = Math.ceil(sr * 0.06);
+    const buf = ctx.createBuffer(1, len, sr);
+    const data = buf.getChannelData(0);
+    const tau = sr * 0.012;
+    for (let i = 0; i < len; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / tau);
+    }
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 6000;
+
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+
+    src.connect(hp);
+    hp.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(time);
+
+    return src;
+  }
+
   /** Seek to a beat position. If playing, restarts audio from that beat. */
   seek(beat: number): void {
     if (this._state === "playing") {

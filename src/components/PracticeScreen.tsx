@@ -15,6 +15,7 @@ import {
   PlayIcon,
   ResetIcon,
   SectionsIcon,
+  StopIcon,
 } from "./icons";
 
 interface PracticeScreenProps {
@@ -32,6 +33,7 @@ interface PracticeScreenProps {
   measureRange: { from: number; to: number } | null;
   bluetooth: ReturnType<typeof useBluetooth>;
   mode: "wait" | "race" | "listen";
+  playalongPhase: "idle" | "counting-in" | "playing" | "complete";
   tracks: TrackInfo[];
   selectedTracks: number[];
   fileHash: string | null;
@@ -66,6 +68,7 @@ export function PracticeScreen({
   measureRange,
   bluetooth,
   mode,
+  playalongPhase,
   tracks,
   selectedTracks,
   onPlayPause,
@@ -261,26 +264,42 @@ export function PracticeScreen({
           >
             <SectionsIcon />
           </button>
-          <button
-            type="button"
-            onClick={onReset}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title={
-              measureRange
-                ? "Return to start of selection. Click to reset."
-                : "Return to beginning. Click to reset."
-            }
-          >
-            <ResetIcon />
-          </button>
+          {mode !== "race" && (
+            <button
+              type="button"
+              onClick={onReset}
+              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              title={
+                measureRange
+                  ? "Return to start of selection. Click to reset."
+                  : "Return to beginning. Click to reset."
+              }
+            >
+              <ResetIcon />
+            </button>
+          )}
           {mode !== "wait" && (
             <button
               type="button"
               onClick={onPlayPause}
               style={cornerBtnStyle(theme) as Record<string, string | number>}
-              title={isPlaying ? "Pause" : "Play"}
+              title={
+                isPlaying || playalongPhase === "counting-in"
+                  ? mode === "race"
+                    ? "Stop"
+                    : "Pause"
+                  : "Play"
+              }
             >
-              {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+              {isPlaying || playalongPhase === "counting-in" ? (
+                mode === "race" ? (
+                  <StopIcon size={18} />
+                ) : (
+                  <PauseIcon size={22} />
+                )
+              ) : (
+                <PlayIcon size={22} />
+              )}
             </button>
           )}
           {mode !== "wait" && (
@@ -374,30 +393,22 @@ export function PracticeScreen({
                 key={m}
                 type="button"
                 onClick={() => onModeChange(m)}
-                disabled={m === "race"}
                 style={{
                   ...(miniBtnStyle(theme) as Record<string, string | number>),
                   padding: "0 14px",
                   minWidth: 60,
                   height: 30,
                   background: active ? accent : "transparent",
-                  color: active
-                    ? "#FFF7E5"
-                    : m === "race"
-                      ? theme.inkFaint
-                      : theme.ink,
+                  color: active ? "#FFF7E5" : theme.ink,
                   fontWeight: active ? 600 : 400,
                   fontSize: 12,
                   boxShadow: active
                     ? `0 2px 8px ${hexA(accent, 0.35)}`
                     : undefined,
-                  cursor: m === "race" ? "not-allowed" : "pointer",
+                  cursor: "pointer",
                   justifyContent: "center",
                 }}
                 aria-pressed={active}
-                title={
-                  m === "race" ? "Playalong mode — coming soon" : undefined
-                }
               >
                 {labels[m]}
               </button>
@@ -405,6 +416,41 @@ export function PracticeScreen({
           })}
         </div>
       </div>
+
+      {/* Count-in overlay */}
+      {mode === "race" && playalongPhase === "counting-in" && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 10,
+            pointerEvents: "none",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              borderRadius: 16,
+              padding: "14px 28px",
+              color: "#fff",
+              fontSize: 15,
+              fontWeight: 600,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            Count in…
+          </div>
+        </div>
+      )}
 
       {/* BOTTOM RIGHT: bluetooth + gear */}
       <div

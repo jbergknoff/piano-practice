@@ -1,9 +1,10 @@
 import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
 import { PracticeScreen } from "./components/PracticeScreen";
 import { WaitModeResultModal } from "./components/WaitModeResultModal";
+import { PlayalongResultModal } from "./components/PlayalongResultModal";
 import { useWakeLock } from "./useWakeLock";
 import { MidiPlayer } from "./midi-player";
 import {
@@ -15,16 +16,20 @@ import {
 } from "./midi-to-musicxml";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import { useWaitMode } from "./use-wait-mode";
+import { type PlayalongPhase, usePlayalongMode } from "./use-playalong-mode";
 import { useBluetooth } from "./useBluetooth";
 import {
   type FileHistory,
+  type PlayalongAttempt,
   type WaitModeAttempt,
   hashFileBytes,
   loadAttemptHistory,
   loadFileHistory,
+  loadPlayalongAttemptHistory,
   loadRecentFile,
   saveAttempt,
   saveFileHistory,
+  savePlayalongAttempt,
   saveRecentFile,
 } from "./use-file-history";
 
@@ -68,6 +73,10 @@ export function App() {
     selectionLabel: string;
     expectedDurationMs: number;
   } | null>(null);
+  const [playalongModal, setPlayalongModal] = useState<{
+    history: PlayalongAttempt[];
+    selectionLabel: string;
+  } | null>(null);
 
   const theme = THEMES[themeName];
 
@@ -82,6 +91,16 @@ export function App() {
   useEffect(() => {
     bpmRef.current = bpm;
   }, [bpm]);
+
+  const currentBeatRef = useRef(currentBeat);
+  useEffect(() => {
+    currentBeatRef.current = currentBeat;
+  }, [currentBeat]);
+
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const fileHashRef = useRef(fileHash);
   useEffect(() => {
@@ -154,6 +173,33 @@ export function App() {
     });
   }
 
+  function handlePlayalongComplete(stats: { score: number }) {
+    const hash = fileHashRef.current;
+    const mx = musicxmlRef.current;
+    if (!hash || !mx) { return; }
+
+    const range = measureRangeRef.current;
+    const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
+
+    const attempt: PlayalongAttempt = {
+      timestamp: Date.now(),
+      score: stats.score,
+    };
+    savePlayalongAttempt(hash, selectionKey, attempt);
+    const allAttempts = loadPlayalongAttemptHistory(hash)[selectionKey] ?? [];
+
+    const selectionLabel = range
+      ? range.from === range.to
+        ? `Measure ${range.from}`
+        : `Measures ${range.from}–${range.to}`
+      : "Full piece";
+
+    setIsPlaying(false);
+    setPlayalongModal({ history: allAttempts, selectionLabel });
+  }
+
+  const playalongCancelRef = useRef<(() => void) | null>(null);
+
   const waitMode = useWaitMode(
     musicxml,
     measureRange,
@@ -163,7 +209,29 @@ export function App() {
     handleWaitModeComplete,
     accent,
   );
-  const bluetooth = useBluetooth(waitMode.onNoteEvent);
+
+  const playalong = usePlayalongMode(
+    musicxml,
+    measureRange,
+    currentBeatRef,
+    handlePlayalongComplete,
+  );
+
+  // Stable combined note-event handler: routes to the active mode's handler.
+  // Both onNoteEvent callbacks are stable (useCallback []); modeRef is a ref.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stable callbacks + refs
+  const combinedNoteEvent = useCallback(
+    (noteNumber: number, kind: "on" | "off") => {
+      if (modeRef.current === "race") {
+        playalong.onNoteEvent(noteNumber, kind);
+      } else {
+        waitMode.onNoteEvent(noteNumber, kind);
+      }
+    },
+    [],
+  );
+
+  const bluetooth = useBluetooth(combinedNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;
   // Stable ref so effects don't need waitMode.toggle in their dep arrays.
   const waitModeToggleRef = useRef(waitMode.toggle);
@@ -270,6 +338,9 @@ export function App() {
       player.onEnd = (beat) => {
         setIsPlaying(false);
         setCurrentBeat(beat);
+        if (modeRef.current === "race") {
+          playalong.notifyEnd();
+        }
       };
       playerRef.current = player;
     }
@@ -312,6 +383,20 @@ export function App() {
     }
   }, [measureRange, musicxml]);
 
+  function handlePlayalongStop() {
+    playalongCancelRef.current?.();
+    playalongCancelRef.current = null;
+    playerRef.current?.pause();
+    setIsPlaying(false);
+    playalong.abort();
+    const range = measureRangeRef.current;
+    const startBeat = range
+      ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
+      : 0;
+    playerRef.current?.seek(startBeat);
+    setCurrentBeat(startBeat);
+  }
+
   async function handlePlayPause() {
     if (mode === "wait") {
       return;
@@ -320,6 +405,48 @@ export function App() {
     if (!player) {
       return;
     }
+
+    if (mode === "race") {
+      if (
+        isPlaying ||
+        playalong.phaseRef.current === "counting-in" ||
+        playalong.phaseRef.current === "playing"
+      ) {
+        handlePlayalongStop();
+      } else if (playalong.phaseRef.current === "idle") {
+        const mx = musicxmlRef.current;
+        if (!mx) { return; }
+
+        // Seek to range start before count-in.
+        const range = measureRangeRef.current;
+        const startBeat = range ? (range.from - 1) * mx.timeSigNum : 0;
+        player.seek(startBeat);
+        setCurrentBeat(startBeat);
+
+        playalong.startCountIn();
+        setIsPlaying(true); // show stop button during count-in
+
+        const countInBeats = 2 * mx.timeSigNum;
+        const { cancel, done } = await player.playCountIn(
+          countInBeats,
+          mx.timeSigNum,
+        );
+        playalongCancelRef.current = cancel;
+
+        await done;
+
+        if ((playalong.phaseRef.current as string) !== "counting-in") {
+          // Was stopped during count-in.
+          setIsPlaying(false);
+          return;
+        }
+        playalongCancelRef.current = null;
+        playalong.startPlaying();
+        await player.play();
+      }
+      return;
+    }
+
     if (isPlaying) {
       player.pause();
       setIsPlaying(false);
@@ -332,6 +459,11 @@ export function App() {
   function handleReset() {
     if (mode === "wait") {
       waitMode.rewind();
+      return;
+    }
+    // Race mode has no reset button, but handle it defensively.
+    if (mode === "race") {
+      handlePlayalongStop();
       return;
     }
     const startBeat = measureRange
@@ -374,6 +506,10 @@ export function App() {
   function handleModeChange(newMode: "wait" | "race" | "listen") {
     if (newMode === mode) {
       return;
+    }
+    // Abort any in-progress playalong when leaving race mode.
+    if (mode === "race" && playalong.phaseRef.current !== "idle") {
+      handlePlayalongStop();
     }
     setMode(newMode);
     const becomingWait = newMode === "wait";
@@ -478,6 +614,32 @@ export function App() {
     if (waitMode.active) {
       return waitMode.noteColors;
     }
+
+    if (
+      mode === "race" &&
+      (playalong.phase === "playing" || playalong.phase === "complete")
+    ) {
+      if (!musicxml) { return {}; }
+      const range = measureRange;
+      const startBeat = range ? (range.from - 1) * musicxml.timeSigNum : 0;
+      const endBeat = range ? range.to * musicxml.timeSigNum : musicxml.totalBeats;
+      // In complete phase, treat all selection notes as past.
+      const effectiveBeat =
+        playalong.phase === "complete" ? Number.POSITIVE_INFINITY : currentBeat;
+      const colors: Record<string, string> = {};
+      for (const note of musicxml.notes) {
+        if (note.tieStop) { continue; }
+        if (note.startBeat < startBeat || note.startBeat >= endBeat) { continue; }
+        const id = `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
+        if (playalong.hitNoteIds.has(id)) {
+          colors[id] = "#2e7d32"; // green: correctly played
+        } else if (note.startBeat < effectiveBeat - 0.4) {
+          colors[id] = "#c62828"; // red: missed
+        }
+      }
+      return colors;
+    }
+
     if (!musicxml || currentBeat === 0) {
       return {};
     }
@@ -493,7 +655,17 @@ export function App() {
       }
     }
     return colors;
-  }, [waitMode.active, waitMode.noteColors, musicxml, currentBeat, accent]);
+  }, [
+    waitMode.active,
+    waitMode.noteColors,
+    mode,
+    playalong.phase,
+    playalong.hitNoteIds,
+    musicxml,
+    measureRange,
+    currentBeat,
+    accent,
+  ]);
 
   const playbackBeat =
     currentBeat > 0 || waitMode.active ? currentBeat : undefined;
@@ -538,6 +710,7 @@ export function App() {
         measureRange={measureRange}
         bluetooth={bluetooth}
         mode={mode}
+        playalongPhase={playalong.phase}
         tracks={tracks}
         selectedTracks={selectedTracks}
         onPlayPause={handlePlayPause}
@@ -560,6 +733,24 @@ export function App() {
           history={completionModal.history}
           expectedDurationMs={completionModal.expectedDurationMs}
           onClose={() => setCompletionModal(null)}
+        />
+      )}
+      {playalongModal && (
+        <PlayalongResultModal
+          theme={theme}
+          accent={accent}
+          selectionLabel={playalongModal.selectionLabel}
+          history={playalongModal.history}
+          onClose={() => {
+            setPlayalongModal(null);
+            playalong.abort();
+            const range = measureRangeRef.current;
+            const startBeat = range
+              ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
+              : 0;
+            playerRef.current?.seek(startBeat);
+            setCurrentBeat(startBeat);
+          }}
         />
       )}
     </>
