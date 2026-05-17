@@ -1,6 +1,6 @@
 import type { TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
-import type { useBluetooth } from "../useBluetooth";
+import { ResetIcon } from "./icons";
 
 interface SettingsDrawerProps {
   open: boolean;
@@ -9,7 +9,6 @@ interface SettingsDrawerProps {
   accent: string;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  bluetooth: ReturnType<typeof useBluetooth>;
   onTrackToggle: (idx: number) => void;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
@@ -42,7 +41,6 @@ export function SettingsDrawer({
   accent,
   tracks,
   selectedTracks,
-  bluetooth,
   onTrackToggle,
   noteSensitivityMilliseconds,
   onSensitivityChange,
@@ -51,8 +49,6 @@ export function SettingsDrawer({
   playalongPianoAudio,
   onPlayalongPianoAudioChange,
 }: SettingsDrawerProps) {
-  const connected = bluetooth.status === "connected";
-
   return (
     <>
       {/* Backdrop */}
@@ -166,6 +162,7 @@ export function SettingsDrawer({
           theme={theme}
           label="Note sensitivity"
           hint={sensitivityLabel(noteSensitivityMilliseconds)}
+          onReset={() => onSensitivityChange(150)}
         >
           <input
             type="range"
@@ -197,6 +194,7 @@ export function SettingsDrawer({
           theme={theme}
           label="Playalong timing window"
           hint={`±${playalongTimingBeats.toFixed(2)} beats`}
+          onReset={() => onPlayalongTimingChange(0.4)}
         >
           <input
             type="range"
@@ -251,67 +249,6 @@ export function SettingsDrawer({
             </span>
           </label>
         </DrawerRow>
-
-        {/* Footer — connection */}
-        <div
-          style={{
-            marginTop: "auto",
-            paddingTop: 14,
-            borderTop: `0.5px solid ${theme.border}`,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              color: theme.inkSoft,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            {connected ? "Connected" : "Not connected"}
-          </span>
-          {connected ? (
-            <span
-              style={{
-                fontSize: 11,
-                color: theme.ink,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: "#5E8C5A",
-                  flexShrink: 0,
-                }}
-              />
-              {bluetooth.deviceName}
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={bluetooth.connect}
-              style={{
-                fontSize: 11,
-                color: accent,
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                outline: "none",
-              }}
-            >
-              Connect piano…
-            </button>
-          )}
-        </div>
       </div>
     </>
   );
@@ -321,11 +258,13 @@ function DrawerRow({
   theme,
   label,
   hint,
+  onReset,
   children,
 }: {
   theme: ThemeTokens;
   label: string;
   hint: string;
+  onReset?: () => void;
   children: preact.ComponentChildren;
 }) {
   return (
@@ -340,9 +279,28 @@ function DrawerRow({
         <span style={{ fontSize: 12, fontWeight: 500, color: theme.ink }}>
           {label}
         </span>
-        {hint && (
-          <span style={{ fontSize: 11, color: theme.inkSoft }}>{hint}</span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {hint && (
+            <span style={{ fontSize: 11, color: theme.inkSoft }}>{hint}</span>
+          )}
+          {onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: theme.inkSoft,
+                padding: 4,
+                lineHeight: 0,
+              }}
+              title="Reset to default"
+            >
+              <ResetIcon size={12} />
+            </button>
+          )}
+        </div>
       </div>
       {children}
     </div>

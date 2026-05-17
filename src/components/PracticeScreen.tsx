@@ -272,14 +272,16 @@ export function PracticeScreen({
       >
         {/* Reset + Play/Pause + BPM row */}
         <div class="bl-transport">
-          <button
-            type="button"
-            onClick={() => setRangesDrawerOpen(true)}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title="Select section"
-          >
-            <SectionsIcon />
-          </button>
+          {!playalongActive && (
+            <button
+              type="button"
+              onClick={() => setRangesDrawerOpen(true)}
+              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              title="Select section"
+            >
+              <SectionsIcon />
+            </button>
+          )}
           {mode !== "playalong" && (
             <button
               type="button"
@@ -318,7 +320,7 @@ export function PracticeScreen({
               )}
             </button>
           )}
-          {mode !== "wait" && (
+          {mode !== "wait" && !(mode === "playalong") && (
             <div
               style={{
                 height: 38,
@@ -382,62 +384,65 @@ export function PracticeScreen({
         </div>
 
         {/* Mode selector group */}
-        <div
-          class="bl-modes"
-          style={{
-            padding: "4px 6px",
-            background: theme.panel,
-            border: `0.5px solid ${theme.border}`,
-            borderRadius: 12,
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
-            display: "flex",
-            alignItems: "center",
-            gap: 2,
-            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-          }}
-        >
-          {(["listen", "wait", "playalong"] as const).map((m) => {
-            const active = mode === m;
-            const requiresPiano = m === "wait" || m === "playalong";
-            const disabled = requiresPiano && bluetooth.status !== "connected";
-            const labels: Record<string, string> = {
-              listen: "Listen",
-              wait: "Wait",
-              playalong: "Playalong",
-            };
-            return (
-              <button
-                key={m}
-                type="button"
-                disabled={disabled}
-                onClick={() => onModeChange(m)}
-                style={{
-                  ...(miniBtnStyle(theme) as Record<string, string | number>),
-                  padding: "0 14px",
-                  minWidth: 60,
-                  height: 30,
-                  background: active ? accent : "transparent",
-                  color: active ? "#FFF7E5" : theme.ink,
-                  fontWeight: active ? 600 : 400,
-                  fontSize: 12,
-                  boxShadow: active
-                    ? `0 2px 8px ${hexA(accent, 0.35)}`
-                    : undefined,
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  opacity: disabled ? 0.35 : 1,
-                  justifyContent: "center",
-                }}
-                aria-pressed={active}
-                title={
-                  disabled ? "Connect a piano to use this mode" : undefined
-                }
-              >
-                {labels[m]}
-              </button>
-            );
-          })}
-        </div>
+        {!playalongActive && (
+          <div
+            class="bl-modes"
+            style={{
+              padding: "4px 6px",
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 12,
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+            }}
+          >
+            {(["listen", "wait", "playalong"] as const).map((m) => {
+              const active = mode === m;
+              const requiresPiano = m === "wait" || m === "playalong";
+              const disabled =
+                requiresPiano && bluetooth.status !== "connected";
+              const labels: Record<string, string> = {
+                listen: "Listen",
+                wait: "Wait",
+                playalong: "Playalong",
+              };
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onModeChange(m)}
+                  style={{
+                    ...(miniBtnStyle(theme) as Record<string, string | number>),
+                    padding: "0 14px",
+                    minWidth: 60,
+                    height: 30,
+                    background: active ? accent : "transparent",
+                    color: active ? "#FFF7E5" : theme.ink,
+                    fontWeight: active ? 600 : 400,
+                    fontSize: 12,
+                    boxShadow: active
+                      ? `0 2px 8px ${hexA(accent, 0.35)}`
+                      : undefined,
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    opacity: disabled ? 0.35 : 1,
+                    justifyContent: "center",
+                  }}
+                  aria-pressed={active}
+                  title={
+                    disabled ? "Connect a piano to use this mode" : undefined
+                  }
+                >
+                  {labels[m]}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Count-in overlay */}
@@ -730,7 +735,6 @@ export function PracticeScreen({
         accent={accent}
         tracks={tracks}
         selectedTracks={selectedTracks}
-        bluetooth={bluetooth}
         onTrackToggle={onTrackToggle}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
         onSensitivityChange={onSensitivityChange}
