@@ -56,7 +56,7 @@ export function App() {
   // Beat to seek to once the player is created after a file load with saved history.
   const pendingSeekRef = useRef<number>(0);
   // Mode to apply once musicxml is ready after a history restore.
-  const pendingModeRef = useRef<"wait" | "race" | "listen" | null>(null);
+  const pendingModeRef = useRef<"wait" | "playalong" | "listen" | null>(null);
 
   // Transport state
   const [bpm, setBpm] = useState(120);
@@ -71,7 +71,7 @@ export function App() {
   // UI state
   const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
-  const [mode, setMode] = useState<"wait" | "race" | "listen">("wait");
+  const [mode, setMode] = useState<"wait" | "playalong" | "listen">("wait");
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
@@ -232,7 +232,7 @@ export function App() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: stable callbacks + refs
   const combinedNoteEvent = useCallback(
     (noteNumber: number, kind: "on" | "off") => {
-      if (modeRef.current === "race") {
+      if (modeRef.current === "playalong") {
         playalong.onNoteEvent(noteNumber, kind);
       } else {
         waitMode.onNoteEvent(noteNumber, kind);
@@ -350,7 +350,7 @@ export function App() {
       player.onEnd = (beat) => {
         setIsPlaying(false);
         setCurrentBeat(beat);
-        if (modeRef.current === "race") {
+        if (modeRef.current === "playalong") {
           playalong.notifyEnd();
         }
       };
@@ -418,7 +418,7 @@ export function App() {
       return;
     }
 
-    if (mode === "race") {
+    if (mode === "playalong") {
       if (
         isPlaying ||
         playalong.phaseRef.current === "counting-in" ||
@@ -476,7 +476,7 @@ export function App() {
       return;
     }
     // Race mode has no reset button, but handle it defensively.
-    if (mode === "race") {
+    if (mode === "playalong") {
       handlePlayalongStop();
       return;
     }
@@ -517,12 +517,12 @@ export function App() {
     setCurrentBeat(beat);
   }
 
-  function handleModeChange(newMode: "wait" | "race" | "listen") {
+  function handleModeChange(newMode: "wait" | "playalong" | "listen") {
     if (newMode === mode) {
       return;
     }
     // Abort any in-progress playalong when leaving race mode.
-    if (mode === "race" && playalong.phaseRef.current !== "idle") {
+    if (mode === "playalong" && playalong.phaseRef.current !== "idle") {
       handlePlayalongStop();
     }
     setMode(newMode);
@@ -633,7 +633,7 @@ export function App() {
     }
 
     if (
-      mode === "race" &&
+      mode === "playalong" &&
       (playalong.phase === "playing" || playalong.phase === "complete")
     ) {
       if (!musicxml) {

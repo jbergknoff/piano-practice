@@ -32,7 +32,7 @@ interface PracticeScreenProps {
   baseBpm: number;
   measureRange: { from: number; to: number } | null;
   bluetooth: ReturnType<typeof useBluetooth>;
-  mode: "wait" | "race" | "listen";
+  mode: "wait" | "playalong" | "listen";
   playalongPhase: "idle" | "counting-in" | "playing" | "complete";
   tracks: TrackInfo[];
   selectedTracks: number[];
@@ -41,7 +41,7 @@ interface PracticeScreenProps {
   onReset: () => void;
   onBpmChange: (bpm: number) => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
-  onModeChange: (mode: "wait" | "race" | "listen") => void;
+  onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
   onContextMenuAction: (
     action: "focus" | "seek" | "clearFocus",
@@ -268,7 +268,7 @@ export function PracticeScreen({
           >
             <SectionsIcon />
           </button>
-          {mode !== "race" && (
+          {mode !== "playalong" && (
             <button
               type="button"
               onClick={onReset}
@@ -289,14 +289,14 @@ export function PracticeScreen({
               style={cornerBtnStyle(theme) as Record<string, string | number>}
               title={
                 isPlaying || playalongPhase === "counting-in"
-                  ? mode === "race"
+                  ? mode === "playalong"
                     ? "Stop"
                     : "Pause"
                   : "Play"
               }
             >
               {isPlaying || playalongPhase === "counting-in" ? (
-                mode === "race" ? (
+                mode === "playalong" ? (
                   <StopIcon size={18} />
                 ) : (
                   <PauseIcon size={22} />
@@ -385,11 +385,11 @@ export function PracticeScreen({
             boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
           }}
         >
-          {(["wait", "race", "listen"] as const).map((m) => {
+          {(["wait", "playalong", "listen"] as const).map((m) => {
             const active = mode === m;
             const labels: Record<string, string> = {
               wait: "Wait",
-              race: "Playalong",
+              playalong: "Playalong",
               listen: "Listen",
             };
             return (
@@ -422,7 +422,7 @@ export function PracticeScreen({
       </div>
 
       {/* Count-in overlay */}
-      {mode === "race" && playalongPhase === "counting-in" && (
+      {mode === "playalong" && playalongPhase === "counting-in" && (
         <div
           style={{
             position: "absolute",

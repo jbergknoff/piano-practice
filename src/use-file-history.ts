@@ -3,7 +3,7 @@ const STORAGE_PREFIX = "piano-practice:file:";
 export interface FileHistory {
   bpmRatio: number;
   measureRange: { from: number; to: number } | null;
-  mode: "wait" | "race" | "listen";
+  mode: "wait" | "playalong" | "listen";
   selectedTrackIndices: number[];
   currentBeat: number;
   noteSensitivityMilliseconds: number;
@@ -36,6 +36,10 @@ export function loadFileHistory(hash: string): FileHistory | null {
     // Normalize old format that used showFocus + waitModeActive
     if (!h.mode) {
       h.mode = h.waitModeActive === false ? "listen" : "wait";
+    }
+    // Normalize old "race" value to "playalong"
+    if ((h.mode as string) === "race") {
+      h.mode = "playalong";
     }
     return h as FileHistory;
   } catch {
