@@ -89,6 +89,8 @@ The first run of any target will install dependencies into `node_modules/` (whic
 
 ## Code style
 
+Always write out full words in variable, function, and type names. Never shorten names by dropping letters or syllables (e.g. `debugBase` not `dbgBase`, `temporary` not `tmp`, `index` not `idx`, `previous` not `prev`). Abbreviated names slow down readers who aren't already familiar with the code.
+
 Always use braces around conditional and loop bodies, even for single-line statements:
 
 ```ts

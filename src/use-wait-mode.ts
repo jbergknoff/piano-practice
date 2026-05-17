@@ -41,11 +41,33 @@ export interface DebugBeatEvent {
 
 const DEBUG_LOG_MAX = 50;
 
-function appendDebugEvent(log: DebugBeatEvent[], event: DebugBeatEvent) {
-  log.push(event);
-  if (log.length > DEBUG_LOG_MAX) {
-    log.shift();
+interface DebugCircularBuffer {
+  entries: DebugBeatEvent[];
+  /** Index of the next write slot. */
+  head: number;
+  /** Number of valid entries (0 – DEBUG_LOG_MAX). */
+  count: number;
+}
+
+function newDebugBuffer(): DebugCircularBuffer {
+  return { entries: [], head: 0, count: 0 };
+}
+
+function appendDebugEvent(buffer: DebugCircularBuffer, event: DebugBeatEvent) {
+  buffer.entries[buffer.head] = event;
+  buffer.head = (buffer.head + 1) % DEBUG_LOG_MAX;
+  if (buffer.count < DEBUG_LOG_MAX) {
+    buffer.count += 1;
   }
+}
+
+function readDebugBuffer(buffer: DebugCircularBuffer): DebugBeatEvent[] {
+  const start = buffer.count < DEBUG_LOG_MAX ? 0 : buffer.head;
+  const result: DebugBeatEvent[] = [];
+  for (let i = 0; i < buffer.count; i++) {
+    result.push(buffer.entries[(start + i) % DEBUG_LOG_MAX]);
+  }
+  return result;
 }
 
 export interface WaitModeHandle {
@@ -128,7 +150,7 @@ export function useWaitMode(
   const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
   const onWrongNoteRef = useRef(onWrongNote);
   const onCompleteRef = useRef(onComplete);
-  const debugLogRef = useRef<DebugBeatEvent[]>([]);
+  const debugBufferRef = useRef<DebugCircularBuffer>(newDebugBuffer());
 
   useEffect(() => {
     onWrongNoteRef.current = onWrongNote;
@@ -197,7 +219,7 @@ export function useWaitMode(
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
-    debugLogRef.current = [];
+    debugBufferRef.current = newDebugBuffer();
     if (wrongNoteTimerRef.current !== null) {
       clearTimeout(wrongNoteTimerRef.current);
       wrongNoteTimerRef.current = null;
@@ -343,7 +365,7 @@ export function useWaitMode(
       const wp = idx < end ? points[idx] : null;
       const offBeat = wp?.beat ?? -1;
       const tSig = timeSigNumRef.current;
-      appendDebugEvent(debugLogRef.current, {
+      appendDebugEvent(debugBufferRef.current, {
         t: now,
         note: noteNumber,
         kind: "off",
@@ -377,7 +399,7 @@ export function useWaitMode(
     // Snapshot held *after* adding the new note, for the debug log.
     const heldSnapshot = [...held];
     const expectedSnapshot = [...expected];
-    const dbgBase = {
+    const debugBase = {
       t: now,
       note: noteNumber,
       kind: "on" as const,
@@ -395,7 +417,10 @@ export function useWaitMode(
       !expected.has(noteNumber) &&
       msSinceAdvance < noteSensitivityMillisecondsRef.current
     ) {
-      appendDebugEvent(debugLogRef.current, { ...dbgBase, outcome: "grace" });
+      appendDebugEvent(debugBufferRef.current, {
+        ...debugBase,
+        outcome: "grace",
+      });
       return;
     }
 
@@ -411,15 +436,18 @@ export function useWaitMode(
         setWrongNoteFlash(false);
         wrongNoteTimerRef.current = null;
       }, 600);
-      appendDebugEvent(debugLogRef.current, { ...dbgBase, outcome: "wrong" });
+      appendDebugEvent(debugBufferRef.current, {
+        ...debugBase,
+        outcome: "wrong",
+      });
       return;
     }
 
     // Ignore events within 100 ms of the last advance so that repeated
     // identical chords don't race ahead, while still allowing fast playing.
     if (msSinceAdvance < 100) {
-      appendDebugEvent(debugLogRef.current, {
-        ...dbgBase,
+      appendDebugEvent(debugBufferRef.current, {
+        ...debugBase,
         outcome: "debounce",
       });
       return;
@@ -448,16 +476,22 @@ export function useWaitMode(
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
       }
-      appendDebugEvent(debugLogRef.current, { ...dbgBase, outcome: "advance" });
+      appendDebugEvent(debugBufferRef.current, {
+        ...debugBase,
+        outcome: "advance",
+      });
     } else {
-      appendDebugEvent(debugLogRef.current, {
-        ...dbgBase,
+      appendDebugEvent(debugBufferRef.current, {
+        ...debugBase,
         outcome: "incomplete",
       });
     }
   }, []);
 
-  const getDebugLog = useCallback(() => [...debugLogRef.current], []);
+  const getDebugLog = useCallback(
+    () => readDebugBuffer(debugBufferRef.current),
+    [],
+  );
 
   return {
     active,
