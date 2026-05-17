@@ -48,9 +48,9 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
     const beat = e.beat >= 0 ? e.beat.toFixed(2) : "—";
     lines.push(
       `+${rel}s  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}` +
-        `  pt=${e.pointIndex} beat=${beat}` +
-        `  exp=[${expStr}]  held=[${heldStr}]` +
-        `  +${e.msSinceAdvance}ms  → ${e.outcome.toUpperCase()}`,
+        `  waitPoint=${e.pointIndex} beat=${beat}` +
+        `  expected=[${expStr}]  held=[${heldStr}]` +
+        `  msSinceAdvance=${e.msSinceAdvance}  → ${e.outcome.toUpperCase()}`,
     );
   }
   return lines.join("\n");
