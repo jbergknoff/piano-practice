@@ -13,6 +13,8 @@ interface SettingsDrawerProps {
   onTrackToggle: (idx: number) => void;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
+  playalongTimingBeats: number;
+  onPlayalongTimingChange: (beats: number) => void;
 }
 
 function sensitivityLabel(ms: number): string {
@@ -42,6 +44,8 @@ export function SettingsDrawer({
   onTrackToggle,
   noteSensitivityMilliseconds,
   onSensitivityChange,
+  playalongTimingBeats,
+  onPlayalongTimingChange,
 }: SettingsDrawerProps) {
   const connected = bluetooth.status === "connected";
 
@@ -181,6 +185,39 @@ export function SettingsDrawer({
           >
             <span>Strict</span>
             <span>Lenient</span>
+          </div>
+        </DrawerRow>
+
+        {/* Playalong timing window */}
+        <DrawerRow
+          theme={theme}
+          label="Playalong timing window"
+          hint={`±${playalongTimingBeats.toFixed(2)} beats`}
+        >
+          <input
+            type="range"
+            min={0.1}
+            max={1.0}
+            step={0.05}
+            value={playalongTimingBeats}
+            onInput={(e) =>
+              onPlayalongTimingChange(
+                Number((e.target as HTMLInputElement).value),
+              )
+            }
+            style={{ width: "100%", accentColor: accent }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 10,
+              color: theme.inkSoft,
+              marginTop: -2,
+            }}
+          >
+            <span>Tight</span>
+            <span>Loose</span>
           </div>
         </DrawerRow>
 

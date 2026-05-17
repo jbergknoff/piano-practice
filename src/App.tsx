@@ -74,6 +74,7 @@ export function App() {
   const [mode, setMode] = useState<"wait" | "race" | "listen">("wait");
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
+  const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
   const [completionModal, setCompletionModal] = useState<{
     history: WaitModeAttempt[];
     selectionLabel: string;
@@ -222,6 +223,7 @@ export function App() {
     musicxml,
     measureRange,
     currentBeatRef,
+    playalongTimingBeats,
     handlePlayalongComplete,
   );
 
@@ -275,6 +277,7 @@ export function App() {
       selectedTrackIndices: selectedTracks,
       currentBeat,
       noteSensitivityMilliseconds,
+      playalongTimingBeats,
     };
     snapshotRef.current = { hash: fileHash, history };
     const timer = setTimeout(() => saveFileHistory(fileHash, history), 500);
@@ -289,6 +292,7 @@ export function App() {
     selectedTracks,
     currentBeat,
     noteSensitivityMilliseconds,
+    playalongTimingBeats,
   ]);
 
   // Save synchronously on page close/refresh so cursor position isn't lost.
@@ -578,6 +582,9 @@ export function App() {
         setMeasureRange(history.measureRange);
         setMode(history.mode);
         setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
+        if (history.playalongTimingBeats !== undefined) {
+          setPlayalongTimingBeats(history.playalongTimingBeats);
+        }
         pendingSeekRef.current = history.currentBeat;
         pendingModeRef.current = history.mode;
       } else {
@@ -651,7 +658,7 @@ export function App() {
         const id = `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
         if (playalong.hitNoteIds.has(id)) {
           colors[id] = "#2e7d32"; // green: correctly played
-        } else if (note.startBeat < effectiveBeat - 0.4) {
+        } else if (note.startBeat < effectiveBeat - playalongTimingBeats) {
           colors[id] = "#c62828"; // red: missed
         }
       }
@@ -682,6 +689,7 @@ export function App() {
     musicxml,
     measureRange,
     currentBeat,
+    playalongTimingBeats,
     accent,
   ]);
 
@@ -741,6 +749,8 @@ export function App() {
         onGoToLanding={handleGoToLanding}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
         onSensitivityChange={setNoteSensitivityMilliseconds}
+        playalongTimingBeats={playalongTimingBeats}
+        onPlayalongTimingChange={setPlayalongTimingBeats}
         fileHash={fileHash}
       />
       {completionModal && (

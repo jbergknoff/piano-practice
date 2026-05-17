@@ -7,8 +7,6 @@ import {
 } from "preact/hooks";
 import type { MidiConversionResult, PlaybackNote } from "./midi-to-musicxml";
 
-const TOLERANCE_BEATS = 0.4;
-
 export interface PlayalongStats {
   score: number; // 0–100
 }
@@ -34,6 +32,7 @@ export function usePlayalongMode(
   musicxml: MidiConversionResult | null,
   measureRange: { from: number; to: number } | null,
   currentBeatRef: { current: number },
+  toleranceBeats: number,
   onComplete: (stats: PlayalongStats) => void,
 ): PlayalongModeHandle {
   const [phase, setPhase] = useState<PlayalongPhase>("idle");
@@ -41,10 +40,15 @@ export function usePlayalongMode(
 
   const phaseRef = useRef<PlayalongPhase>("idle");
   const hitNoteIdsRef = useRef<Set<string>>(new Set());
+  const extraNoteCountRef = useRef(0);
+  const toleranceBeatRef = useRef(toleranceBeats);
   const measureRangeRef = useRef(measureRange);
   const musicxmlRef = useRef(musicxml);
   const onCompleteRef = useRef(onComplete);
 
+  useEffect(() => {
+    toleranceBeatRef.current = toleranceBeats;
+  }, [toleranceBeats]);
   useEffect(() => {
     measureRangeRef.current = measureRange;
   }, [measureRange]);
@@ -62,6 +66,7 @@ export function usePlayalongMode(
     setPhase("idle");
     hitNoteIdsRef.current = new Set();
     setHitNoteIds(new Set());
+    extraNoteCountRef.current = 0;
   }, [musicxml]);
 
   // Notes in the current selection (not tie-continuations).
@@ -84,21 +89,31 @@ export function usePlayalongMode(
     selectionNotesRef.current = selectionNotes;
   }, [selectionNotes]);
 
+  // F1-style score: harmonic mean of precision and recall.
+  // precision = matched / (matched + extra)  →  penalises wrong notes
+  // recall    = matched / expected           →  penalises missed notes
+  // score     = 2 * matched / (expected + matched + extra)
   function computeScore(): number {
     const notes = selectionNotesRef.current;
     if (notes.length === 0) {
       return 100;
     }
-    const hits = notes.filter((n) =>
+    const matched = notes.filter((n) =>
       hitNoteIdsRef.current.has(noteKey(n)),
     ).length;
-    return Math.round((hits / notes.length) * 100);
+    const extra = extraNoteCountRef.current;
+    const expected = notes.length;
+    if (matched === 0) {
+      return 0;
+    }
+    return Math.round(((2 * matched) / (expected + matched + extra)) * 100);
   }
 
   function startCountIn() {
     const empty = new Set<string>();
     hitNoteIdsRef.current = empty;
     setHitNoteIds(empty);
+    extraNoteCountRef.current = 0;
     phaseRef.current = "counting-in";
     setPhase("counting-in");
   }
@@ -117,6 +132,7 @@ export function usePlayalongMode(
     const empty = new Set<string>();
     hitNoteIdsRef.current = empty;
     setHitNoteIds(empty);
+    extraNoteCountRef.current = 0;
   }
 
   function notifyEnd() {
@@ -137,6 +153,7 @@ export function usePlayalongMode(
 
     const beat = currentBeatRef.current;
     const notes = selectionNotesRef.current;
+    const tol = toleranceBeatRef.current;
 
     let matched = false;
     const newHits = new Set(hitNoteIdsRef.current);
@@ -144,7 +161,7 @@ export function usePlayalongMode(
     for (const note of notes) {
       if (
         note.noteNumber === noteNumber &&
-        Math.abs(note.startBeat - beat) <= TOLERANCE_BEATS
+        Math.abs(note.startBeat - beat) <= tol
       ) {
         const id = noteKey(note);
         if (!newHits.has(id)) {
@@ -157,6 +174,8 @@ export function usePlayalongMode(
     if (matched) {
       hitNoteIdsRef.current = newHits;
       setHitNoteIds(newHits);
+    } else {
+      extraNoteCountRef.current += 1;
     }
   }, []);
 
