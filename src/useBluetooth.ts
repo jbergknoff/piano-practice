@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   BLE_MIDI_CHARACTERISTIC,
   BLE_MIDI_SERVICE,
+  buildBLEMIDIBatch,
   buildBLEMIDINote,
   parseBLEMIDI,
 } from "./ble-midi";
@@ -18,6 +19,10 @@ export interface BluetoothState {
     note: number,
     velocity: number,
     durationMs: number,
+    channel?: number,
+  ) => void;
+  sendNotesBatch: (
+    notes: { note: number; velocity: number; durationMs: number }[],
     channel?: number,
   ) => void;
 }
@@ -145,5 +150,32 @@ export function useBluetooth(
     } catch {}
   }
 
-  return { status, deviceName, error, connect, sendNote };
+  function sendNotesBatch(
+    notes: { note: number; velocity: number; durationMs: number }[],
+    channel = 0,
+  ) {
+    const char = charRef.current;
+    if (!char || notes.length === 0) {
+      return;
+    }
+    try {
+      char.writeValueWithoutResponse(
+        buildBLEMIDIBatch(
+          notes.map((n) => ({ note: n.note, velocity: n.velocity })),
+          channel,
+        ),
+      );
+      for (const { note, durationMs } of notes) {
+        setTimeout(() => {
+          try {
+            charRef.current?.writeValueWithoutResponse(
+              buildBLEMIDINote(note, 0, channel),
+            );
+          } catch {}
+        }, durationMs);
+      }
+    } catch {}
+  }
+
+  return { status, deviceName, error, connect, sendNote, sendNotesBatch };
 }

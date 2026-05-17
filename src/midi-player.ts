@@ -34,15 +34,11 @@ export class MidiPlayer {
   /** When true, skip Web Audio synthesis (phone speaker) for scheduled notes. */
   skipWebAudio = false;
   /**
-   * When set, called for each note as it is scheduled. delayMs is how far in
-   * the future (from now) the note should sound; durationMs is the note length.
-   * Use this to mirror playback to an external device (e.g. via BLE MIDI).
+   * When set, called once per chord (group of notes at the same beat) as they
+   * are scheduled. Use this to mirror playback to an external device (e.g. via BLE MIDI).
    */
   onNoteScheduled?: (
-    noteNumber: number,
-    velocity: number,
-    delayMs: number,
-    durationMs: number,
+    notes: { noteNumber: number; velocity: number; durationMs: number }[],
   ) => void;
 
   constructor(notes: PlaybackNote[], totalBeats: number, bpm = 120) {
@@ -155,24 +151,53 @@ export class MidiPlayer {
     if (!this.audioCtx) {
       return;
     }
+    const ctx = this.audioCtx;
     const secsPerBeat = 60 / this._bpm;
-    const horizon = this.audioCtx.currentTime + SCHEDULE_AHEAD;
+    const horizon = ctx.currentTime + SCHEDULE_AHEAD;
 
     while (this.playQueueIndex < this.playQueue.length) {
-      const note = this.playQueue[this.playQueueIndex];
-      const noteStart = this.startAudioTime + note.startBeat * secsPerBeat;
-      if (noteStart > horizon) {
+      const first = this.playQueue[this.playQueueIndex];
+      const firstStart = this.startAudioTime + first.startBeat * secsPerBeat;
+      if (firstStart > horizon) {
         break;
       }
 
-      const durationSecs = note.durationBeats * secsPerBeat;
-      this.scheduleNote(
-        note.noteNumber,
-        noteStart,
-        durationSecs,
-        note.velocity,
-      );
-      this.playQueueIndex++;
+      // Collect all notes at the same beat (chord) within the horizon.
+      const beatStart = first.startBeat;
+      const chord: {
+        noteNumber: number;
+        velocity: number;
+        durationMs: number;
+      }[] = [];
+
+      while (
+        this.playQueueIndex < this.playQueue.length &&
+        this.playQueue[this.playQueueIndex].startBeat === beatStart
+      ) {
+        const note = this.playQueue[this.playQueueIndex];
+        const noteStart = this.startAudioTime + note.startBeat * secsPerBeat;
+        const durationSecs = note.durationBeats * secsPerBeat;
+        this.scheduleNote(
+          note.noteNumber,
+          noteStart,
+          durationSecs,
+          note.velocity,
+        );
+        chord.push({
+          noteNumber: note.noteNumber,
+          velocity: note.velocity,
+          durationMs: durationSecs * 1000,
+        });
+        this.playQueueIndex++;
+      }
+
+      if (this.onNoteScheduled && chord.length > 0) {
+        const delayMs = Math.max(0, (firstStart - ctx.currentTime) * 1000);
+        const timer = setTimeout(() => {
+          this.onNoteScheduled?.(chord);
+        }, delayMs);
+        this.extraTimers.push(timer);
+      }
     }
   }
 
@@ -209,15 +234,6 @@ export class MidiPlayer {
     const ctx = this.audioCtx;
     if (!ctx) {
       return;
-    }
-
-    if (this.onNoteScheduled) {
-      const delayMs = Math.max(0, (startTime - ctx.currentTime) * 1000);
-      const durationMs = duration * 1000;
-      const timer = setTimeout(() => {
-        this.onNoteScheduled?.(midiNote, velocity, 0, durationMs);
-      }, delayMs);
-      this.extraTimers.push(timer);
     }
 
     if (this.skipWebAudio) {

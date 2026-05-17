@@ -34,6 +34,7 @@ interface PracticeScreenProps {
   bluetooth: ReturnType<typeof useBluetooth>;
   mode: "wait" | "playalong" | "listen";
   playalongPhase: "idle" | "counting-in" | "playing" | "complete";
+  countInBeat: { beat: number; timeSigNum: number } | null;
   tracks: TrackInfo[];
   selectedTracks: number[];
   fileHash: string | null;
@@ -73,6 +74,7 @@ export function PracticeScreen({
   bluetooth,
   mode,
   playalongPhase,
+  countInBeat,
   tracks,
   selectedTracks,
   onPlayPause,
@@ -91,6 +93,10 @@ export function PracticeScreen({
   onPlayalongPianoAudioChange,
   fileHash,
 }: PracticeScreenProps) {
+  const playalongActive =
+    mode === "playalong" &&
+    (playalongPhase === "counting-in" || playalongPhase === "playing");
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
@@ -212,50 +218,52 @@ export function PracticeScreen({
       />
 
       {/* TOP LEFT: back button + piece title */}
-      <div
-        style={{
-          position: "absolute",
-          top: 18,
-          left: 22,
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        <button
-          type="button"
-          onClick={onGoToLanding}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Back"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <button
-          type="button"
-          onClick={() => setPieceInfoOpen(true)}
+      {!playalongActive && (
+        <div
           style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
-            textAlign: "left",
+            position: "absolute",
+            top: 18,
+            left: 22,
+            zIndex: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
           }}
         >
-          <div
+          <button
+            type="button"
+            onClick={onGoToLanding}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title="Back"
+          >
+            <ChevronLeftIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPieceInfoOpen(true)}
             style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontStyle: "italic",
-              fontSize: 28,
-              lineHeight: 1,
-              letterSpacing: "-0.01em",
-              color: theme.ink,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              textAlign: "left",
             }}
           >
-            {pieceTitle}
-          </div>
-        </button>
-      </div>
+            <div
+              style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontStyle: "italic",
+                fontSize: 28,
+                lineHeight: 1,
+                letterSpacing: "-0.01em",
+                color: theme.ink,
+              }}
+            >
+              {pieceTitle}
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
       <div
@@ -448,22 +456,48 @@ export function PracticeScreen({
             gap: 8,
           }}
         >
-          <div
-            style={{
-              background: "rgba(0,0,0,0.55)",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-              borderRadius: 16,
-              padding: "14px 28px",
-              color: "#fff",
-              fontSize: 15,
-              fontWeight: 600,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-            }}
-          >
-            Count in…
-          </div>
+          {(() => {
+            const beatDisplay = countInBeat
+              ? (countInBeat.beat % countInBeat.timeSigNum) + 1
+              : null;
+            return (
+              <div
+                style={{
+                  background: "rgba(0,0,0,0.55)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  borderRadius: 16,
+                  padding: "14px 28px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 72,
+                    fontWeight: 700,
+                    color: "#fff",
+                    lineHeight: 1,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {beatDisplay ?? ""}
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.7)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    marginTop: 8,
+                  }}
+                >
+                  Count in…
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

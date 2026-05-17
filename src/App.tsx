@@ -80,6 +80,10 @@ export function App() {
   useEffect(() => {
     playalongPianoAudioRef.current = playalongPianoAudio;
   }, [playalongPianoAudio]);
+  const [countInBeat, setCountInBeat] = useState<{
+    beat: number;
+    timeSigNum: number;
+  } | null>(null);
   const [completionModal, setCompletionModal] = useState<{
     history: WaitModeAttempt[];
     selectionLabel: string;
@@ -140,6 +144,13 @@ export function App() {
         note: number,
         velocity: number,
         durationMs: number,
+        channel?: number,
+      ) => void
+    >();
+  const sendNotesBatchRef =
+    useRef<
+      (
+        notes: { note: number; velocity: number; durationMs: number }[],
         channel?: number,
       ) => void
     >();
@@ -249,6 +260,7 @@ export function App() {
 
   const bluetooth = useBluetooth(combinedNoteEvent);
   sendNoteRef.current = bluetooth.sendNote;
+  sendNotesBatchRef.current = bluetooth.sendNotesBatch;
   // Stable ref so effects don't need waitMode.toggle in their dep arrays.
   const waitModeToggleRef = useRef(waitMode.toggle);
   waitModeToggleRef.current = waitMode.toggle;
@@ -423,6 +435,7 @@ export function App() {
       player.pause();
     }
     setIsPlaying(false);
+    setCountInBeat(null);
     playalong.abort();
     const range = measureRangeRef.current;
     const startBeat = range
@@ -473,11 +486,13 @@ export function App() {
           (i) => {
             const isDownbeat = i % mx.timeSigNum === 0;
             sendNoteRef.current?.(42, isDownbeat ? 80 : 55, 80, 9);
+            setCountInBeat({ beat: i, timeSigNum: mx.timeSigNum });
           },
         );
         playalongCancelRef.current = cancel;
 
         await done;
+        setCountInBeat(null);
 
         if ((playalong.phaseRef.current as string) !== "counting-in") {
           // Was stopped during count-in.
@@ -490,11 +505,13 @@ export function App() {
         // Route playback audio to the piano speaker if the option is on.
         if (playalongPianoAudioRef.current) {
           player.skipWebAudio = true;
-          player.onNoteScheduled = (note, velocity, _delay, durationMs) => {
-            sendNoteRef.current?.(
-              note,
-              Math.max(1, Math.round(velocity * 0.3)),
-              durationMs,
+          player.onNoteScheduled = (notes) => {
+            sendNotesBatchRef.current?.(
+              notes.map((n) => ({
+                note: n.noteNumber,
+                velocity: Math.max(1, Math.round(n.velocity * 0.3)),
+                durationMs: n.durationMs,
+              })),
             );
           };
         }
@@ -780,6 +797,7 @@ export function App() {
         bluetooth={bluetooth}
         mode={mode}
         playalongPhase={playalong.phase}
+        countInBeat={countInBeat}
         tracks={tracks}
         selectedTracks={selectedTracks}
         onPlayPause={handlePlayPause}
