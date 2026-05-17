@@ -465,12 +465,8 @@ function DebuggingTab({
   accent: string;
   getDebugLog: () => DebugBeatEvent[];
 }) {
-  const [log, setLog] = useState<string>(() => formatDebugLog(getDebugLog()));
+  const log = formatDebugLog(getDebugLog());
   const [copied, setCopied] = useState(false);
-
-  function refresh() {
-    setLog(formatDebugLog(getDebugLog()));
-  }
 
   async function copyToClipboard() {
     try {
@@ -498,23 +494,6 @@ function DebuggingTab({
       </p>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button
-          type="button"
-          onClick={refresh}
-          style={{
-            padding: "5px 14px",
-            borderRadius: 20,
-            border: `0.5px solid ${theme.border}`,
-            background: "transparent",
-            color: theme.inkSoft,
-            fontSize: 12,
-            cursor: "pointer",
-            outline: "none",
-            fontFamily: "'Geist', sans-serif",
-          }}
-        >
-          Refresh
-        </button>
         <button
           type="button"
           onClick={copyToClipboard}
