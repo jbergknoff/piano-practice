@@ -1,20 +1,95 @@
+import { useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
 import type { useBluetooth } from "../useBluetooth";
 import { BluetoothIcon } from "./icons";
 
+const BT_SUPPORTED = typeof navigator !== "undefined" && !!navigator.bluetooth;
+
+// Coarse browser detection — only used to tailor the unsupported message.
+const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+const IS_BRAVE = "brave" in navigator;
+const IS_CHROME_LIKE = /Chrome\//.test(ua) && !/Edg\//.test(ua) && !IS_BRAVE;
+const IS_EDGE = /Edg\//.test(ua);
+const IS_FIREFOX = /Firefox\//.test(ua);
+const IS_SAFARI = /Safari\//.test(ua) && !/Chrome\//.test(ua);
+
+const BT_IMPL_STATUS_URL =
+  "https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md";
+
+function unsupportedBody(accent: string) {
+  const link = (
+    <a
+      href={BT_IMPL_STATUS_URL}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: accent, textDecoration: "none" }}
+    >
+      implementation status page ↗
+    </a>
+  );
+
+  if (IS_BRAVE) {
+    return (
+      <span>
+        Brave blocks Web Bluetooth by default. To enable it, open{" "}
+        <code style={{ fontSize: 11 }}>brave://flags</code>, search for{" "}
+        <code style={{ fontSize: 11 }}>
+          enable-experimental-web-platform-features
+        </code>
+        , set it to <strong>Enabled</strong>, then relaunch. See the {link} for
+        more detail.
+      </span>
+    );
+  }
+  if (IS_SAFARI || IS_FIREFOX) {
+    return (
+      <span>
+        Web Bluetooth is not supported in {IS_SAFARI ? "Safari" : "Firefox"}.
+        Please open this page in a Chromium-based browser. See the {link} for
+        the full picture.
+      </span>
+    );
+  }
+  if (IS_CHROME_LIKE || IS_EDGE) {
+    return (
+      <span>
+        Web Bluetooth doesn't appear to be available. Make sure you're using a
+        recent Chromium-based browser and that Bluetooth is enabled on your
+        device. See the {link} for more detail.
+      </span>
+    );
+  }
+  return (
+    <span>
+      Web Bluetooth is not available in this browser. Please use a
+      Chromium-based browser. See the {link} for the full picture.
+    </span>
+  );
+}
+
 export function ConnectionBadge({
   theme,
+  accent,
   bluetooth,
   compact,
 }: {
   theme: ThemeTokens;
+  accent: string;
   bluetooth: ReturnType<typeof useBluetooth>;
   compact: boolean;
 }) {
+  const [showUnsupportedModal, setShowUnsupportedModal] = useState(false);
+
   const connected = bluetooth.status === "connected";
   const connecting = bluetooth.status === "connecting";
-  const dotColor = connected ? "#5E8C5A" : theme.inkFaint;
+  const hasError = bluetooth.status === "error";
+
+  const dotColor = connected
+    ? "#5E8C5A"
+    : hasError
+      ? "#c62828"
+      : theme.inkFaint;
 
   const pillStyle = {
     height: 38,
@@ -27,7 +102,7 @@ export function ConnectionBadge({
     display: "inline-flex",
     alignItems: "center",
     cursor: connected ? "default" : "pointer",
-    color: theme.inkSoft,
+    color: hasError ? "#c62828" : theme.inkSoft,
     outline: "none",
   };
 
@@ -44,53 +119,152 @@ export function ConnectionBadge({
     />
   );
 
-  if (compact) {
-    return (
-      <button
-        type="button"
-        title={
-          connected
-            ? `Connected · ${bluetooth.deviceName}`
-            : connecting
-              ? "Connecting…"
-              : "Connect Bluetooth"
-        }
-        onClick={connected ? undefined : bluetooth.connect}
-        style={
-          { ...pillStyle, padding: "0 10px", gap: 6 } as Record<
-            string,
-            string | number
-          >
-        }
-      >
-        <BluetoothIcon size={11} />
-        {dot}
-      </button>
-    );
+  const title = connected
+    ? `Connected · ${bluetooth.deviceName}`
+    : connecting
+      ? "Connecting…"
+      : hasError
+        ? (bluetooth.error ?? "Connection failed")
+        : "Connect Bluetooth";
+
+  function handleClick() {
+    if (connected) {
+      return;
+    }
+    if (!BT_SUPPORTED) {
+      setShowUnsupportedModal(true);
+      return;
+    }
+    bluetooth.connect();
   }
 
   return (
-    <button
-      type="button"
-      onClick={connected ? undefined : bluetooth.connect}
-      style={
-        { ...pillStyle, padding: "0 12px", gap: 7, color: theme.ink } as Record<
-          string,
-          string | number
+    <>
+      {compact ? (
+        <button
+          type="button"
+          title={title}
+          onClick={handleClick}
+          style={
+            { ...pillStyle, padding: "0 10px", gap: 6 } as Record<
+              string,
+              string | number
+            >
+          }
         >
-      }
-    >
-      {dot}
-      <BluetoothIcon size={11} />
-      <span
-        style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: "0.01em" }}
-      >
-        {connected
-          ? (bluetooth.deviceName ?? "Connected")
-          : connecting
-            ? "Connecting…"
-            : "Connect"}
-      </span>
-    </button>
+          <BluetoothIcon size={11} />
+          {dot}
+        </button>
+      ) : (
+        <button
+          type="button"
+          title={title}
+          onClick={handleClick}
+          style={
+            {
+              ...pillStyle,
+              padding: "0 12px",
+              gap: 7,
+              color: hasError ? "#c62828" : theme.ink,
+            } as Record<string, string | number>
+          }
+        >
+          {dot}
+          <BluetoothIcon size={11} />
+          <span
+            style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: "0.01em" }}
+          >
+            {connected
+              ? (bluetooth.deviceName ?? "Connected")
+              : connecting
+                ? "Connecting…"
+                : hasError
+                  ? "Failed"
+                  : "Connect"}
+          </span>
+        </button>
+      )}
+
+      {showUnsupportedModal && (
+        <>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 299,
+              background: "rgba(0,0,0,0.3)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+            }}
+            onClick={() => setShowUnsupportedModal(false)}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 300,
+              background: theme.panelSolid,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 20,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              width: "min(360px, calc(100vw - 40px))",
+              padding: "24px 28px",
+              fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'Instrument Serif', serif",
+                  fontStyle: "italic",
+                  fontSize: 20,
+                  color: theme.ink,
+                }}
+              >
+                Bluetooth unavailable
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowUnsupportedModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: theme.inkSoft,
+                  cursor: "pointer",
+                  fontSize: 18,
+                  padding: 4,
+                  outline: "none",
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: theme.inkSoft,
+                lineHeight: 1.6,
+              }}
+            >
+              {unsupportedBody(accent)}
+            </p>
+          </div>
+        </>
+      )}
+    </>
   );
 }

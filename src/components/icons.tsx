@@ -193,6 +193,24 @@ export function PlusIcon({ size = 14 }: { size?: number }) {
   );
 }
 
+export function SectionsIcon({ size = 16 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        fontSize: size * 0.9,
+        lineHeight: 1,
+        fontFamily: "ui-monospace, 'Geist Mono', monospace",
+        letterSpacing: "-0.05em",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+    >
+      {"{}"}
+    </span>
+  );
+}
+
 export function UploadIcon({ size = 20 }: { size?: number }) {
   return (
     <svg

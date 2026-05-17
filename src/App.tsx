@@ -550,6 +550,7 @@ export function App() {
         onGoToLanding={handleGoToLanding}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
         onSensitivityChange={setNoteSensitivityMilliseconds}
+        fileHash={fileHash}
       />
       {completionModal && (
         <WaitModeResultModal

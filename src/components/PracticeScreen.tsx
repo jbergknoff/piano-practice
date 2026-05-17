@@ -6,6 +6,7 @@ import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
 import type { useBluetooth } from "../useBluetooth";
 import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
+import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
 import {
   ChevronLeftIcon,
@@ -13,6 +14,7 @@ import {
   PauseIcon,
   PlayIcon,
   ResetIcon,
+  SectionsIcon,
 } from "./icons";
 
 interface PracticeScreenProps {
@@ -32,6 +34,7 @@ interface PracticeScreenProps {
   mode: "wait" | "race" | "listen";
   tracks: TrackInfo[];
   selectedTracks: number[];
+  fileHash: string | null;
   onPlayPause: () => void;
   onReset: () => void;
   onBpmChange: (bpm: number) => void;
@@ -75,8 +78,10 @@ export function PracticeScreen({
   onGoToLanding,
   noteSensitivityMilliseconds,
   onSensitivityChange,
+  fileHash,
 }: PracticeScreenProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
   // Imperative handle into SheetMusicDisplay's scroll logic — calling this
   // bypasses Preact state entirely, so the view responds in the same frame as
@@ -250,6 +255,14 @@ export function PracticeScreen({
         <div class="bl-transport">
           <button
             type="button"
+            onClick={() => setRangesDrawerOpen(true)}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title="Select section"
+          >
+            <SectionsIcon />
+          </button>
+          <button
+            type="button"
             onClick={onReset}
             style={cornerBtnStyle(theme) as Record<string, string | number>}
             title={
@@ -408,7 +421,12 @@ export function PracticeScreen({
         {bluetooth.status !== "connected" && (
           <BluetoothHelpBadge theme={theme} accent={accent} />
         )}
-        <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={true} />
+        <ConnectionBadge
+          theme={theme}
+          accent={accent}
+          bluetooth={bluetooth}
+          compact={true}
+        />
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -598,6 +616,18 @@ export function PracticeScreen({
         </>
       )}
 
+      <SelectionRangesDrawer
+        open={rangesDrawerOpen}
+        onClose={() => setRangesDrawerOpen(false)}
+        theme={theme}
+        accent={accent}
+        totalMeasures={
+          musicxml ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum) : 1
+        }
+        measureRange={measureRange}
+        onMeasureRangeChange={onMeasureRangeChange}
+        fileHash={fileHash}
+      />
       <SettingsDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}

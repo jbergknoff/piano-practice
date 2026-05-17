@@ -54,20 +54,25 @@ export function LandingScreen({
         }}
       />
 
-      {/* Connection badge + help — top right */}
+      {/* Connection badge + help — bottom right, matching practice screen */}
       <div
         style={{
           position: "absolute",
-          top: 22,
-          right: 24,
+          bottom: 20,
+          right: 22,
           zIndex: 3,
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: 10,
         }}
       >
         {!connected && <BluetoothHelpBadge theme={theme} accent={accent} />}
-        <ConnectionBadge theme={theme} bluetooth={bluetooth} compact={false} />
+        <ConnectionBadge
+          theme={theme}
+          accent={accent}
+          bluetooth={bluetooth}
+          compact={true}
+        />
       </div>
 
       {/* Centered drop zone */}
