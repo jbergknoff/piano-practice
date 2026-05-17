@@ -21,12 +21,12 @@ The log is cleared whenever a new file is loaded.
 Each line represents one note event:
 
 ```
-+0.091s  ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
+2026-05-17T14:23:01.091Z  ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
 ```
 
 | Field | Meaning |
 |---|---|
-| `+0.091s` | Time since the first event in this buffer |
+| `2026-05-17T14:23:01.091Z` | UTC timestamp with millisecond precision (ISO 8601) |
 | `ON` / `OFF` | Note pressed or released |
 | `G4(67)` | Note name and MIDI number of the key that triggered this event |
 | `waitPoint=3` | Index of the wait point the app was sitting on at the time |

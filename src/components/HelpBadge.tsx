@@ -33,7 +33,6 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
   if (events.length === 0) {
     return "(no events yet — play some notes in Wait mode to populate this log)";
   }
-  const t0 = events[0].t;
   const lines: string[] = [
     "=== Piano Practice Debug Log ===",
     `Version: ${GIT_COMMIT}`,
@@ -42,14 +41,14 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
     "",
   ];
   for (const e of events) {
-    const rel = ((e.t - t0) / 1000).toFixed(3);
+    const ts = new Date(e.t).toISOString();
     const nn = `${noteName(e.note)}(${e.note})`;
     const expStr = e.expected.map((n) => `${noteName(n)}(${n})`).join(",");
     const heldStr = e.held.map((n) => `${noteName(n)}(${n})`).join(",");
     const loc =
       e.measure >= 0 ? `measure=${e.measure} beat=${e.beat.toFixed(2)}` : "—";
     lines.push(
-      `+${rel}s  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}` +
+      `${ts}  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}` +
         `  waitPoint=${e.pointIndex} ${loc}` +
         `  expected=[${expStr}]  held=[${heldStr}]` +
         `  msSinceAdvance=${e.msSinceAdvance}  → ${e.outcome.toUpperCase()}`,
