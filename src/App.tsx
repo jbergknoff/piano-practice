@@ -8,10 +8,9 @@ import {
   useState,
 } from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
+import { PlayalongResultModal } from "./components/PlayalongResultModal";
 import { PracticeScreen } from "./components/PracticeScreen";
 import { WaitModeResultModal } from "./components/WaitModeResultModal";
-import { PlayalongResultModal } from "./components/PlayalongResultModal";
-import { useWakeLock } from "./useWakeLock";
 import { MidiPlayer } from "./midi-player";
 import {
   type MidiConversionResult,
@@ -21,9 +20,6 @@ import {
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
-import { useWaitMode } from "./use-wait-mode";
-import { type PlayalongPhase, usePlayalongMode } from "./use-playalong-mode";
-import { useBluetooth } from "./useBluetooth";
 import {
   type FileHistory,
   type PlayalongAttempt,
@@ -38,6 +34,10 @@ import {
   savePlayalongAttempt,
   saveRecentFile,
 } from "./use-file-history";
+import { type PlayalongPhase, usePlayalongMode } from "./use-playalong-mode";
+import { useWaitMode } from "./use-wait-mode";
+import { useBluetooth } from "./useBluetooth";
+import { useWakeLock } from "./useWakeLock";
 
 function prettyTitle(filename: string): string {
   return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");
@@ -71,7 +71,7 @@ export function App() {
   // UI state
   const themeName: ThemeName = "cream";
   const accent = ACCENT_COLORS[0];
-  const [mode, setMode] = useState<"wait" | "playalong" | "listen">("wait");
+  const [mode, setMode] = useState<"wait" | "playalong" | "listen">("listen");
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
@@ -247,6 +247,13 @@ export function App() {
   const waitModeToggleRef = useRef(waitMode.toggle);
   waitModeToggleRef.current = waitMode.toggle;
   useWakeLock(musicxml !== null);
+
+  // Force listen mode when no piano is connected — wait and playalong require MIDI input.
+  useEffect(() => {
+    if (bluetooth.status !== "connected") {
+      setMode((m) => (m === "wait" || m === "playalong" ? "listen" : m));
+    }
+  }, [bluetooth.status]);
 
   // On startup, reload the most recently opened file automatically.
   useEffect(() => {
@@ -441,9 +448,13 @@ export function App() {
         setIsPlaying(true); // show stop button during count-in
 
         const countInBeats = 2 * mx.timeSigNum;
-        const { cancel, done } = await player.playCountIn(
+        const { cancel, done } = player.playCountIn(
           countInBeats,
           mx.timeSigNum,
+          (i) => {
+            const isDownbeat = i % mx.timeSigNum === 0;
+            sendNoteRef.current?.(42, isDownbeat ? 80 : 55, 80, 9);
+          },
         );
         playalongCancelRef.current = cancel;
 
@@ -550,7 +561,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setMode("wait");
+    setMode("listen");
     setFileHash(null);
     pendingSeekRef.current = 0;
 
@@ -623,7 +634,7 @@ export function App() {
     setIsPlaying(false);
     setCurrentBeat(0);
     setMeasureRange(null);
-    setMode("wait");
+    setMode("listen");
   }
 
   // Note colors

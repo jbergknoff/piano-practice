@@ -385,17 +385,20 @@ export function PracticeScreen({
             boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
           }}
         >
-          {(["wait", "playalong", "listen"] as const).map((m) => {
+          {(["listen", "wait", "playalong"] as const).map((m) => {
             const active = mode === m;
+            const requiresPiano = m === "wait" || m === "playalong";
+            const disabled = requiresPiano && bluetooth.status !== "connected";
             const labels: Record<string, string> = {
+              listen: "Listen",
               wait: "Wait",
               playalong: "Playalong",
-              listen: "Listen",
             };
             return (
               <button
                 key={m}
                 type="button"
+                disabled={disabled}
                 onClick={() => onModeChange(m)}
                 style={{
                   ...(miniBtnStyle(theme) as Record<string, string | number>),
@@ -409,10 +412,14 @@ export function PracticeScreen({
                   boxShadow: active
                     ? `0 2px 8px ${hexA(accent, 0.35)}`
                     : undefined,
-                  cursor: "pointer",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.35 : 1,
                   justifyContent: "center",
                 }}
                 aria-pressed={active}
+                title={
+                  disabled ? "Connect a piano to use this mode" : undefined
+                }
               >
                 {labels[m]}
               </button>

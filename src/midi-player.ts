@@ -256,83 +256,54 @@ export class MidiPlayer {
   }
 
   /**
-   * Schedule a metronome count-in. Returns a cancel function and a promise
+   * Schedule a metronome count-in. Fires onBeat(i) at each beat so the caller
+   * can send audio (e.g. via BLE MIDI). Returns a cancel function and a promise
    * that resolves when the count-in finishes. Call cancel() to stop early.
    */
-  async playCountIn(
+  playCountIn(
     beats: number,
     timeSigNum: number,
-  ): Promise<{ cancel: () => void; done: Promise<void> }> {
-    if (!this.audioCtx) {
-      this.audioCtx = new AudioContext();
-    }
-    await this.audioCtx.resume();
+    onBeat: (beatIndex: number) => void,
+  ): { cancel: () => void; done: Promise<void> } {
+    const msPerBeat = (60 / this._bpm) * 1000;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let canceled = false;
 
-    const ctx = this.audioCtx;
-    const secsPerBeat = 60 / this._bpm;
-    const startTime = ctx.currentTime + 0.05;
-    const sources: AudioBufferSourceNode[] = [];
+    let resolvePromise!: () => void;
+    const done = new Promise<void>((resolve) => {
+      resolvePromise = resolve;
+    });
 
     for (let i = 0; i < beats; i++) {
-      const t = startTime + i * secsPerBeat;
-      const isDownbeat = i % timeSigNum === 0;
-      sources.push(this.scheduleClick(ctx, t, isDownbeat ? 0.5 : 0.3));
+      timers.push(
+        setTimeout(() => {
+          if (!canceled) {
+            onBeat(i);
+          }
+        }, i * msPerBeat),
+      );
     }
 
-    let canceled = false;
-    const done = new Promise<void>((resolve) => {
+    timers.push(
       setTimeout(
         () => {
           if (!canceled) {
-            resolve();
+            resolvePromise();
           }
         },
-        beats * secsPerBeat * 1000 + 80,
-      );
-    });
+        beats * msPerBeat + 80,
+      ),
+    );
 
     const cancel = () => {
       canceled = true;
-      for (const src of sources) {
-        try {
-          src.stop(0);
-        } catch {}
+      for (const t of timers) {
+        clearTimeout(t);
       }
+      resolvePromise();
     };
 
     return { cancel, done };
-  }
-
-  private scheduleClick(
-    ctx: AudioContext,
-    time: number,
-    volume: number,
-  ): AudioBufferSourceNode {
-    const sr = ctx.sampleRate;
-    const len = Math.ceil(sr * 0.06);
-    const buf = ctx.createBuffer(1, len, sr);
-    const data = buf.getChannelData(0);
-    const tau = sr * 0.012;
-    for (let i = 0; i < len; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / tau);
-    }
-
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-
-    const hp = ctx.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 6000;
-
-    const gain = ctx.createGain();
-    gain.gain.value = volume;
-
-    src.connect(hp);
-    hp.connect(gain);
-    gain.connect(ctx.destination);
-    src.start(time);
-
-    return src;
   }
 
   /** Seek to a beat position. If playing, restarts audio from that beat. */

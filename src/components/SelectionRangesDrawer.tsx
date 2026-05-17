@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import { type WaitModeAttempt, loadAttemptHistory } from "../use-file-history";
 import type { ThemeTokens } from "../theme";
+import { type WaitModeAttempt, loadAttemptHistory } from "../use-file-history";
 
 interface SelectionRangesDrawerProps {
   open: boolean;
