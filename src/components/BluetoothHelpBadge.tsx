@@ -46,10 +46,11 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
     const nn = `${noteName(e.note)}(${e.note})`;
     const expStr = e.expected.map((n) => `${noteName(n)}(${n})`).join(",");
     const heldStr = e.held.map((n) => `${noteName(n)}(${n})`).join(",");
-    const beat = e.beat >= 0 ? e.beat.toFixed(2) : "—";
+    const loc =
+      e.measure >= 0 ? `measure=${e.measure} beat=${e.beat.toFixed(2)}` : "—";
     lines.push(
       `+${rel}s  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}` +
-        `  waitPoint=${e.pointIndex} beat=${beat}` +
+        `  waitPoint=${e.pointIndex} ${loc}` +
         `  expected=[${expStr}]  held=[${heldStr}]` +
         `  msSinceAdvance=${e.msSinceAdvance}  → ${e.outcome.toUpperCase()}`,
     );

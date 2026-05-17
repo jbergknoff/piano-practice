@@ -20,6 +20,8 @@ export interface DebugBeatEvent {
   kind: "on" | "off";
   /** Wait-point index at the time of this event. */
   pointIndex: number;
+  /** Measure number of the current wait point (-1 when out of range). */
+  measure: number;
   /** Beat of the current wait point (-1 when out of range). */
   beat: number;
   /** Expected note numbers at the current wait point. */
@@ -339,12 +341,15 @@ export function useWaitMode(
         timeSigNumRef.current,
       );
       const wp = idx < end ? points[idx] : null;
+      const offBeat = wp?.beat ?? -1;
+      const tSig = timeSigNumRef.current;
       appendDebugEvent(debugLogRef.current, {
         t: now,
         note: noteNumber,
         kind: "off",
         pointIndex: idx,
-        beat: wp?.beat ?? -1,
+        measure: offBeat >= 0 ? Math.floor(offBeat / tSig) + 1 : -1,
+        beat: offBeat,
         expected: wp ? [...wp.noteNumbers] : [],
         held: [...held],
         msSinceAdvance,
@@ -368,6 +373,7 @@ export function useWaitMode(
     const wp = points[idx];
     const expected = wp.noteNumbers;
     const beat = wp.beat;
+    const measure = Math.floor(beat / timeSigNumRef.current) + 1;
     // Snapshot held *after* adding the new note, for the debug log.
     const heldSnapshot = [...held];
     const expectedSnapshot = [...expected];
@@ -376,6 +382,7 @@ export function useWaitMode(
       note: noteNumber,
       kind: "on" as const,
       pointIndex: idx,
+      measure,
       beat,
       expected: expectedSnapshot,
       held: heldSnapshot,

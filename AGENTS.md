@@ -57,6 +57,16 @@ Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persis
 
 
 
+## Debug log
+
+`useWaitMode` maintains a rolling buffer (last 50 events) of every note event processed in Wait mode. Each `DebugBeatEvent` (exported from `src/use-wait-mode.ts`) captures the note, kind (on/off), current wait-point index, measure number, absolute beat, expected chord, all held notes, milliseconds since the last advance, and a classified outcome (`advance`, `wrong`, `grace`, `incomplete`, `debounce`, `off`).
+
+The log is exposed via `waitMode.getDebugLog()` and rendered in the **Debugging** tab of the Help (?) modal (`src/components/BluetoothHelpBadge.tsx`). Users copy it from there and paste it into bug reports.
+
+See `docs/debug-log.md` for the full format reference and a field-by-field guide to diagnosing the two main failure modes (false negative: correct chord not recognised; false positive: wrong chord accepted).
+
+When investigating a note-matching bug from a submitted log, the key fields are `expected` vs `held` at the failing event, and `msSinceAdvance` to determine whether grace-period or debounce logic was involved.
+
 ## Local development
 
 The only local requirements are `make` and `docker`. Bun, Node, and Biome are all run inside a Docker container via `docker-compose`; nothing needs to be installed on the host.

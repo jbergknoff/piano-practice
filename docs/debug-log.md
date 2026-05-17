@@ -21,7 +21,7 @@ The log is cleared whenever a new file is loaded.
 Each line represents one note event:
 
 ```
-+0.091s  ON   G4(67)      waitPoint=3 beat=5.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
++0.091s  ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
 ```
 
 | Field | Meaning |
@@ -30,7 +30,8 @@ Each line represents one note event:
 | `ON` / `OFF` | Note pressed or released |
 | `G4(67)` | Note name and MIDI number of the key that triggered this event |
 | `waitPoint=3` | Index of the wait point the app was sitting on at the time |
-| `beat=5.00` | Score beat corresponding to that wait point |
+| `measure=3` | Measure number corresponding to that wait point |
+| `beat=9.00` | Absolute score beat (from the start of the piece) corresponding to that wait point |
 | `expected=[…]` | Notes the app required to be held to advance |
 | `held=[…]` | All keys physically held down after this event |
 | `msSinceAdvance` | Milliseconds since the last successful advance (relevant for grace-period and debounce logic) |
