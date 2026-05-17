@@ -106,7 +106,9 @@ export function loadPlayalongAttemptHistory(
 ): PlayalongAttemptHistory {
   try {
     const raw = localStorage.getItem(PLAYALONG_ATTEMPTS_PREFIX + hash);
-    if (!raw) { return {}; }
+    if (!raw) {
+      return {};
+    }
     return JSON.parse(raw) as PlayalongAttemptHistory;
   } catch {
     return {};

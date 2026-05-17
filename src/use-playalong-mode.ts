@@ -66,10 +66,14 @@ export function usePlayalongMode(
 
   // Notes in the current selection (not tie-continuations).
   const selectionNotes = useMemo<PlaybackNote[]>(() => {
-    if (!musicxml) { return []; }
+    if (!musicxml) {
+      return [];
+    }
     const range = measureRange;
     const startBeat = range ? (range.from - 1) * musicxml.timeSigNum : 0;
-    const endBeat = range ? range.to * musicxml.timeSigNum : musicxml.totalBeats;
+    const endBeat = range
+      ? range.to * musicxml.timeSigNum
+      : musicxml.totalBeats;
     return musicxml.notes.filter(
       (n) => !n.tieStop && n.startBeat >= startBeat && n.startBeat < endBeat,
     );
@@ -82,8 +86,12 @@ export function usePlayalongMode(
 
   function computeScore(): number {
     const notes = selectionNotesRef.current;
-    if (notes.length === 0) { return 100; }
-    const hits = notes.filter((n) => hitNoteIdsRef.current.has(noteKey(n))).length;
+    if (notes.length === 0) {
+      return 100;
+    }
+    const hits = notes.filter((n) =>
+      hitNoteIdsRef.current.has(noteKey(n)),
+    ).length;
     return Math.round((hits / notes.length) * 100);
   }
 
@@ -96,7 +104,9 @@ export function usePlayalongMode(
   }
 
   function startPlaying() {
-    if (phaseRef.current !== "counting-in") { return; }
+    if (phaseRef.current !== "counting-in") {
+      return;
+    }
     phaseRef.current = "playing";
     setPhase("playing");
   }
@@ -110,7 +120,9 @@ export function usePlayalongMode(
   }
 
   function notifyEnd() {
-    if (phaseRef.current !== "playing") { return; }
+    if (phaseRef.current !== "playing") {
+      return;
+    }
     phaseRef.current = "complete";
     setPhase("complete");
     const score = computeScore();
@@ -118,36 +130,35 @@ export function usePlayalongMode(
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reads only from refs; stable by design
-  const onNoteEvent = useCallback(
-    (noteNumber: number, kind: "on" | "off") => {
-      if (phaseRef.current !== "playing" || kind !== "on") { return; }
+  const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
+    if (phaseRef.current !== "playing" || kind !== "on") {
+      return;
+    }
 
-      const beat = currentBeatRef.current;
-      const notes = selectionNotesRef.current;
+    const beat = currentBeatRef.current;
+    const notes = selectionNotesRef.current;
 
-      let matched = false;
-      const newHits = new Set(hitNoteIdsRef.current);
+    let matched = false;
+    const newHits = new Set(hitNoteIdsRef.current);
 
-      for (const note of notes) {
-        if (
-          note.noteNumber === noteNumber &&
-          Math.abs(note.startBeat - beat) <= TOLERANCE_BEATS
-        ) {
-          const id = noteKey(note);
-          if (!newHits.has(id)) {
-            newHits.add(id);
-            matched = true;
-          }
+    for (const note of notes) {
+      if (
+        note.noteNumber === noteNumber &&
+        Math.abs(note.startBeat - beat) <= TOLERANCE_BEATS
+      ) {
+        const id = noteKey(note);
+        if (!newHits.has(id)) {
+          newHits.add(id);
+          matched = true;
         }
       }
+    }
 
-      if (matched) {
-        hitNoteIdsRef.current = newHits;
-        setHitNoteIds(newHits);
-      }
-    },
-    [],
-  );
+    if (matched) {
+      hitNoteIdsRef.current = newHits;
+      setHitNoteIds(newHits);
+    }
+  }, []);
 
   return {
     phase,

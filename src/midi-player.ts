@@ -283,7 +283,9 @@ export class MidiPlayer {
     const done = new Promise<void>((resolve) => {
       setTimeout(
         () => {
-          if (!canceled) { resolve(); }
+          if (!canceled) {
+            resolve();
+          }
         },
         beats * secsPerBeat * 1000 + 80,
       );

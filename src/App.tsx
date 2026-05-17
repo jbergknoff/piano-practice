@@ -1,6 +1,12 @@
 import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
 import { PracticeScreen } from "./components/PracticeScreen";
 import { WaitModeResultModal } from "./components/WaitModeResultModal";
@@ -176,7 +182,9 @@ export function App() {
   function handlePlayalongComplete(stats: { score: number }) {
     const hash = fileHashRef.current;
     const mx = musicxmlRef.current;
-    if (!hash || !mx) { return; }
+    if (!hash || !mx) {
+      return;
+    }
 
     const range = measureRangeRef.current;
     const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
@@ -415,7 +423,9 @@ export function App() {
         handlePlayalongStop();
       } else if (playalong.phaseRef.current === "idle") {
         const mx = musicxmlRef.current;
-        if (!mx) { return; }
+        if (!mx) {
+          return;
+        }
 
         // Seek to range start before count-in.
         const range = measureRangeRef.current;
@@ -619,17 +629,25 @@ export function App() {
       mode === "race" &&
       (playalong.phase === "playing" || playalong.phase === "complete")
     ) {
-      if (!musicxml) { return {}; }
+      if (!musicxml) {
+        return {};
+      }
       const range = measureRange;
       const startBeat = range ? (range.from - 1) * musicxml.timeSigNum : 0;
-      const endBeat = range ? range.to * musicxml.timeSigNum : musicxml.totalBeats;
+      const endBeat = range
+        ? range.to * musicxml.timeSigNum
+        : musicxml.totalBeats;
       // In complete phase, treat all selection notes as past.
       const effectiveBeat =
         playalong.phase === "complete" ? Number.POSITIVE_INFINITY : currentBeat;
       const colors: Record<string, string> = {};
       for (const note of musicxml.notes) {
-        if (note.tieStop) { continue; }
-        if (note.startBeat < startBeat || note.startBeat >= endBeat) { continue; }
+        if (note.tieStop) {
+          continue;
+        }
+        if (note.startBeat < startBeat || note.startBeat >= endBeat) {
+          continue;
+        }
         const id = `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
         if (playalong.hitNoteIds.has(id)) {
           colors[id] = "#2e7d32"; // green: correctly played
