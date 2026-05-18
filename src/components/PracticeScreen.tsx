@@ -320,7 +320,7 @@ export function PracticeScreen({
               )}
             </button>
           )}
-          {mode !== "wait" && !(mode === "playalong") && (
+          {mode !== "wait" && !playalongActive && (
             <div
               style={{
                 height: 38,
