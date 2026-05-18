@@ -58,7 +58,12 @@ export function PlayalongResultModal({
   onClose,
 }: PlayalongResultModalProps) {
   const latest = history[history.length - 1];
-  const prior = history.slice(0, -1).reverse().slice(0, 9);
+  const currentBpm = latest?.bpm;
+  const tableEntries = history
+    .filter((a) => a.bpm === currentBpm)
+    .slice()
+    .reverse()
+    .slice(0, 10);
 
   return (
     <>
@@ -186,7 +191,7 @@ export function PlayalongResultModal({
         )}
 
         {/* History table */}
-        {prior.length > 0 && (
+        {tableEntries.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div
               style={{
@@ -196,7 +201,7 @@ export function PlayalongResultModal({
                 textTransform: "uppercase",
               }}
             >
-              Previous attempts
+              {currentBpm ? `Attempts at ${currentBpm} BPM` : "Attempts"}
             </div>
             <div
               style={{
@@ -208,13 +213,13 @@ export function PlayalongResultModal({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 64px 64px",
+                  gridTemplateColumns: "1fr 64px",
                   padding: "7px 12px",
                   background: hexA(theme.ink, 0.04),
                   borderBottom: `0.5px solid ${theme.border}`,
                 }}
               >
-                {(["When", "Tempo", "Score"] as string[]).map((h) => (
+                {(["When", "Score"] as string[]).map((h) => (
                   <span
                     key={h}
                     style={{
@@ -228,35 +233,36 @@ export function PlayalongResultModal({
                   </span>
                 ))}
               </div>
-              {prior.map((a, i) => (
-                <div
-                  key={a.timestamp}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 64px 64px",
-                    padding: "7px 12px",
-                    borderBottom:
-                      i < prior.length - 1
-                        ? `0.5px solid ${theme.border}`
-                        : undefined,
-                    alignItems: "center",
-                  }}
-                >
-                  <span style={{ fontSize: 12, color: theme.inkSoft }}>
-                    {formatDate(a.timestamp)}
-                  </span>
-                  <span
+              {tableEntries.map((a, i) => {
+                const isNew = a.timestamp === latest?.timestamp;
+                return (
+                  <div
+                    key={a.timestamp}
                     style={{
-                      fontSize: 12,
-                      color: theme.inkSoft,
-                      fontVariantNumeric: "tabular-nums",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 64px",
+                      padding: "7px 12px",
+                      borderBottom:
+                        i < tableEntries.length - 1
+                          ? `0.5px solid ${theme.border}`
+                          : undefined,
+                      alignItems: "center",
+                      background: isNew ? hexA(accent, 0.06) : undefined,
                     }}
                   >
-                    {a.bpm ?? "—"}
-                  </span>
-                  <ScoreChip score={a.score} />
-                </div>
-              ))}
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: isNew ? theme.ink : theme.inkSoft,
+                        fontWeight: isNew ? 500 : 400,
+                      }}
+                    >
+                      {isNew ? "Now" : formatDate(a.timestamp)}
+                    </span>
+                    <ScoreChip score={a.score} />
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
