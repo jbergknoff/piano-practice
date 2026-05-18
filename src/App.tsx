@@ -581,23 +581,37 @@ export function App() {
     if (newMode === mode) {
       return;
     }
-    // Abort any in-progress playalong when leaving race mode.
-    if (mode === "playalong" && playalong.phaseRef.current !== "idle") {
-      handlePlayalongStop();
+
+    const player = playerRef.current;
+    const range = measureRangeRef.current;
+    const startBeat = range
+      ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
+      : 0;
+
+    // Tear down current mode's active state.
+    if (mode === "playalong") {
+      playalongCancelRef.current?.();
+      playalongCancelRef.current = null;
+      setCountInBeat(null);
+      if (player) {
+        clearPlayalongAudio(player);
+      }
+      playalong.abort();
     }
+    if (mode === "wait" && waitMode.active) {
+      waitMode.toggle(startBeat);
+    }
+
+    // Stop playback and reset cursor to start of selection.
+    player?.pause();
+    setIsPlaying(false);
+    player?.seek(startBeat);
+    setCurrentBeat(startBeat);
+
     setMode(newMode);
-    const becomingWait = newMode === "wait";
-    const wasWait = mode === "wait";
-    if (becomingWait && !wasWait) {
-      playerRef.current?.pause();
-      setIsPlaying(false);
-      if (!waitMode.active) {
-        waitMode.toggle(currentBeat);
-      }
-    } else if (!becomingWait && wasWait) {
-      if (waitMode.active) {
-        waitMode.toggle(currentBeat);
-      }
+
+    if (newMode === "wait" && !waitMode.active) {
+      waitMode.toggle(startBeat);
     }
   }
 
