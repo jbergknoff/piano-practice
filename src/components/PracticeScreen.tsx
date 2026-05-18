@@ -119,6 +119,23 @@ export function PracticeScreen({
     }
   }, [mode]);
 
+  // Scroll to the cursor whenever playalong starts (cursor jumps to range start)
+  // or stops (cursor returns to range start after abort).
+  const prevPlayalongPhaseRef = useRef(playalongPhase);
+  useEffect(() => {
+    const prev = prevPlayalongPhaseRef.current;
+    prevPlayalongPhaseRef.current = playalongPhase;
+    const shouldScroll =
+      ((prev === "idle" || prev === "complete") &&
+        playalongPhase === "counting-in") ||
+      ((prev === "counting-in" || prev === "playing") &&
+        playalongPhase === "idle");
+    if (shouldScroll && playbackBeatRef.current !== undefined) {
+      viewScrollRef.current?.(playbackBeatRef.current);
+      viewScrollRef.current?.(null);
+    }
+  }, [playalongPhase]);
+
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
     clientY: number;
