@@ -794,8 +794,7 @@ export function App() {
     accent,
   ]);
 
-  const playbackBeat =
-    currentBeat > 0 || waitMode.active ? currentBeat : undefined;
+  const playbackBeat = musicxml !== null ? currentBeat : undefined;
 
   const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
 
