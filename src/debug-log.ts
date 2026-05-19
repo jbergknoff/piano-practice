@@ -1,3 +1,5 @@
+import { CircularBuffer } from "../lib/circular-buffer";
+
 export const DEBUG_LOG_MAX = 50;
 
 interface DebugEventBase {
@@ -42,34 +44,6 @@ export interface PlayalongDebugEvent extends DebugEventBase {
 
 export type DebugBeatEvent = WaitModeDebugEvent | PlayalongDebugEvent;
 
-export interface DebugCircularBuffer {
-  entries: DebugBeatEvent[];
-  /** Index of the next write slot. */
-  head: number;
-  /** Number of valid entries (0 – DEBUG_LOG_MAX). */
-  count: number;
-}
-
-export function newDebugBuffer(): DebugCircularBuffer {
-  return { entries: [], head: 0, count: 0 };
-}
-
-export function appendDebugEvent(
-  buffer: DebugCircularBuffer,
-  event: DebugBeatEvent,
-) {
-  buffer.entries[buffer.head] = event;
-  buffer.head = (buffer.head + 1) % DEBUG_LOG_MAX;
-  if (buffer.count < DEBUG_LOG_MAX) {
-    buffer.count += 1;
-  }
-}
-
-export function readDebugBuffer(buffer: DebugCircularBuffer): DebugBeatEvent[] {
-  const start = buffer.count < DEBUG_LOG_MAX ? 0 : buffer.head;
-  const result: DebugBeatEvent[] = [];
-  for (let i = 0; i < buffer.count; i++) {
-    result.push(buffer.entries[(start + i) % DEBUG_LOG_MAX]);
-  }
-  return result;
+export function newDebugBuffer(): CircularBuffer<DebugBeatEvent> {
+  return new CircularBuffer<DebugBeatEvent>(DEBUG_LOG_MAX);
 }

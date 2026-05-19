@@ -6,13 +6,7 @@ import {
   useState,
 } from "preact/hooks";
 import type { MidiConversionResult, PlaybackNote } from "./midi-to-musicxml";
-import {
-  appendDebugEvent,
-  newDebugBuffer,
-  readDebugBuffer,
-  type DebugBeatEvent,
-  type DebugCircularBuffer,
-} from "./debug-log";
+import { newDebugBuffer, type DebugBeatEvent } from "./debug-log";
 
 export interface PlayalongStats {
   score: number; // 0–100
@@ -53,7 +47,7 @@ export function usePlayalongMode(
   const measureRangeRef = useRef(measureRange);
   const musicxmlRef = useRef(musicxml);
   const onCompleteRef = useRef(onComplete);
-  const debugBufferRef = useRef<DebugCircularBuffer>(newDebugBuffer());
+  const debugBufferRef = useRef(newDebugBuffer());
   const heldNotesRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
@@ -167,7 +161,7 @@ export function usePlayalongMode(
 
     if (kind === "off") {
       held.delete(noteNumber);
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         mode: "playalong",
         t: now,
         note: noteNumber,
@@ -183,7 +177,7 @@ export function usePlayalongMode(
     held.add(noteNumber);
 
     if (phaseRef.current !== "playing") {
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         mode: "playalong",
         t: now,
         note: noteNumber,
@@ -222,7 +216,7 @@ export function usePlayalongMode(
       extraNoteCountRef.current += 1;
     }
 
-    appendDebugEvent(debugBufferRef.current, {
+    debugBufferRef.current.append({
       mode: "playalong",
       t: now,
       note: noteNumber,
@@ -234,10 +228,7 @@ export function usePlayalongMode(
     });
   }, []);
 
-  const getDebugLog = useCallback(
-    () => readDebugBuffer(debugBufferRef.current),
-    [],
-  );
+  const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
 
   return {
     phase,

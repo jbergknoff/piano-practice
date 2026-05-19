@@ -8,11 +8,8 @@ import {
 import type { MidiConversionResult } from "./midi-to-musicxml";
 import {
   type DebugBeatEvent,
-  type DebugCircularBuffer,
   type WaitModeDebugEvent,
-  appendDebugEvent,
   newDebugBuffer,
-  readDebugBuffer,
 } from "./debug-log";
 
 export type { DebugBeatEvent } from "./debug-log";
@@ -102,7 +99,7 @@ export function useWaitMode(
   const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
   const onWrongNoteRef = useRef(onWrongNote);
   const onCompleteRef = useRef(onComplete);
-  const debugBufferRef = useRef<DebugCircularBuffer>(newDebugBuffer());
+  const debugBufferRef = useRef(newDebugBuffer());
 
   useEffect(() => {
     onWrongNoteRef.current = onWrongNote;
@@ -317,7 +314,7 @@ export function useWaitMode(
       const wp = idx < end ? points[idx] : null;
       const offBeat = wp?.beat ?? -1;
       const tSig = timeSigNumRef.current;
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         mode: "wait",
         t: now,
         note: noteNumber,
@@ -371,7 +368,7 @@ export function useWaitMode(
       !expected.has(noteNumber) &&
       msSinceAdvance < noteSensitivityMillisecondsRef.current
     ) {
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         ...debugBase,
         outcome: "grace",
       });
@@ -390,7 +387,7 @@ export function useWaitMode(
         setWrongNoteFlash(false);
         wrongNoteTimerRef.current = null;
       }, 600);
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         ...debugBase,
         outcome: "wrong",
       });
@@ -400,7 +397,7 @@ export function useWaitMode(
     // Ignore events within 100 ms of the last advance so that repeated
     // identical chords don't race ahead, while still allowing fast playing.
     if (msSinceAdvance < 100) {
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         ...debugBase,
         outcome: "debounce",
       });
@@ -430,22 +427,19 @@ export function useWaitMode(
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
       }
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         ...debugBase,
         outcome: "advance",
       });
     } else {
-      appendDebugEvent(debugBufferRef.current, {
+      debugBufferRef.current.append({
         ...debugBase,
         outcome: "incomplete",
       });
     }
   }, []);
 
-  const getDebugLog = useCallback(
-    () => readDebugBuffer(debugBufferRef.current),
-    [],
-  );
+  const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
 
   return {
     active,

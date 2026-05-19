@@ -61,16 +61,16 @@ Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persis
 
 Both `useWaitMode` and `usePlayalongMode` maintain independent rolling buffers (last 50 events each) of every note event they process. `App.tsx` merges and time-sorts both buffers before passing them to the UI, producing a single chronological timeline across modes.
 
-The shared types and buffer implementation live in `src/debug-log.ts`:
+The shared types live in `src/debug-log.ts`:
 
-- `DebugCircularBuffer` — O(1) append via a `head` index and a `count`; `readDebugBuffer` reconstructs oldest-first order.
 - `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `debounce`, `off`).
 - `PlayalongDebugEvent` — captures note, kind, measure, beat, held notes, and outcome (`matched`, `extra`, `off`, `inactive`).
 - Both share the `DebugBeatEvent` discriminated union, keyed on the `mode` field.
+- `newDebugBuffer()` returns a `CircularBuffer<DebugBeatEvent>` pre-sized to `DEBUG_LOG_MAX`.
+
+The underlying O(1) ring buffer is a generic `CircularBuffer<T>` class in `lib/circular-buffer/index.ts`. It exposes two methods: `append(item)` and `read()` (returns entries oldest-first). Unit tests are in `lib/circular-buffer/index.test.ts` (run with `bun test`).
 
 The log is exposed via `waitMode.getDebugLog()` and `playalong.getDebugLog()`, then rendered in the **Debugging** tab of the Help (?) modal by `src/components/DebugLogTab.tsx`. Users copy it from there and paste it into bug reports.
-
-Unit tests for the circular buffer are in `src/debug-log.test.ts` (run with `bun test`).
 
 See `docs/debug-log.md` for the full format reference and a field-by-field guide to the three main diagnostic cases: (1) correct chord not recognised in Wait mode, (2) wrong chord accepted in Wait mode, (3) correct note scored as EXTRA in Playalong mode.
 
