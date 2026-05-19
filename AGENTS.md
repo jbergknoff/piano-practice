@@ -38,7 +38,7 @@ Three modes stored as `"wait" | "playalong" | "listen"` in `App.tsx` state and p
 - **Playalong** — the app plays back while the user plays along; notes are scored as hit or missed in real time.
 - **Listen** — normal playback; `useWaitMode` inactive. Play/Pause and BPM controls shown.
 
-`useWaitMode` always starts with `active = true`; `handleModeChange` in App.tsx calls `waitMode.toggle()` to keep the hook in sync when the mode changes.
+`useWaitMode` starts with `active = false` and resets to `false` whenever `musicxml` changes. A `useEffect([musicxml])` in `App.tsx` calls `waitMode.toggle()` to activate it when the target mode is `"wait"` (covering both initial load and track-selection changes). `handleModeChange` also calls `toggle()` to keep the hook in sync when the user switches modes.
 
 ### Cursor and scroll system
 

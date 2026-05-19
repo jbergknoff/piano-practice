@@ -361,15 +361,18 @@ export function App() {
     return () => window.removeEventListener("beforeunload", save);
   }, []);
 
-  // Apply restored mode once musicxml is available.
+  // Activate wait mode when musicxml is ready if the target mode is "wait".
+  // useWaitMode resets to inactive on every musicxml change, so this effect
+  // is the single place that turns it on — for both history restores and
+  // track-selection changes while already in wait mode.
   useEffect(() => {
-    const pending = pendingModeRef.current;
-    if (musicxml === null || pending === null) {
+    if (musicxml === null) {
       return;
     }
+    const pending = pendingModeRef.current;
     pendingModeRef.current = null;
-    // useWaitMode initializes active=true; toggle off if mode is not "wait".
-    if (pending !== "wait") {
+    const targetMode = pending ?? modeRef.current;
+    if (targetMode === "wait") {
       waitModeToggleRef.current(0);
     }
   }, [musicxml]);

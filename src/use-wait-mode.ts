@@ -74,11 +74,11 @@ export function useWaitMode(
   onCursorAdvance?: (beat: number) => void,
   appendToDebugLog: (event: DebugBeatEvent) => void = () => {},
 ): WaitModeHandle {
-  const [active, setActive] = useState(true);
+  const [active, setActive] = useState(false);
   const [pointIndex, setPointIndex] = useState(0);
   const [wrongNoteFlash, setWrongNoteFlash] = useState(false);
 
-  const activeRef = useRef(true);
+  const activeRef = useRef(false);
   const pointIndexRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
@@ -156,11 +156,12 @@ export function useWaitMode(
     waitPointsRef.current = waitPoints;
   }, [waitPoints]);
 
-  // Reset all state whenever the piece changes; always start in wait mode.
+  // Reset all state whenever the piece changes. Active state is controlled by
+  // the caller via toggle(); start inactive so App.tsx can decide the mode.
   // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml is the trigger; ref mutations don't need to be listed
   useEffect(() => {
-    setActive(true);
-    activeRef.current = true;
+    setActive(false);
+    activeRef.current = false;
     setPointIndex(0);
     pointIndexRef.current = 0;
     setWrongNoteFlash(false);
