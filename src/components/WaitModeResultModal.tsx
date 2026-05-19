@@ -25,23 +25,26 @@ function formatDate(timestamp: number): string {
     : `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${timeStr}`;
 }
 
-function RatioChip({
-  elapsedMs,
-  expectedMs,
-  accent,
-}: { elapsedMs: number; expectedMs: number; accent: string }) {
-  const ratio = expectedMs > 0 ? elapsedMs / expectedMs : 1;
-  const label = ratio <= 1.05 ? `${ratio.toFixed(2)}×` : `${ratio.toFixed(2)}×`;
-  const color = ratio <= 1.1 ? "#2e7d32" : ratio <= 1.5 ? "#e65100" : "#c62828";
+function scoreColor(score: number): string {
+  if (score >= 80) {
+    return "#2e7d32";
+  }
+  if (score >= 50) {
+    return "#e65100";
+  }
+  return "#c62828";
+}
+
+function ScoreChip({ score }: { score: number }) {
   return (
     <span
       style={{
         fontVariantNumeric: "tabular-nums",
-        color,
+        color: scoreColor(score),
         fontWeight: 600,
       }}
     >
-      {label}
+      {score}%
     </span>
   );
 }
@@ -125,7 +128,7 @@ export function WaitModeResultModal({
           </div>
         </div>
 
-        {/* Latest attempt stats */}
+        {/* Latest attempt */}
         {latest && (
           <div
             style={{
@@ -133,55 +136,13 @@ export function WaitModeResultModal({
               border: `0.5px solid ${hexA(accent, 0.2)}`,
               borderRadius: 12,
               padding: "14px 16px",
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
-            {(
-              [
-                ["Wrong notes", String(latest.wrongNotes)],
-                ["Time", formatTime(latest.elapsedMs)],
-                ["Expected", formatTime(expectedDurationMs)],
-              ] as [string, string][]
-            ).map(([label, value]) => (
-              <div
-                key={label}
-                style={{ display: "flex", flexDirection: "column", gap: 3 }}
-              >
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: theme.inkSoft,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {label}
-                </span>
-                <span
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 600,
-                    color: theme.ink,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {value}
-                </span>
-              </div>
-            ))}
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
-                paddingTop: 10,
-                marginTop: 4,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
+            {/* Score hero */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <span
                 style={{
                   fontSize: 10,
@@ -190,24 +151,82 @@ export function WaitModeResultModal({
                   textTransform: "uppercase",
                 }}
               >
-                Pace
+                Score
               </span>
-              <span style={{ fontSize: 15, fontWeight: 500, color: theme.ink }}>
-                <RatioChip
-                  elapsedMs={latest.elapsedMs}
-                  expectedMs={expectedDurationMs}
-                  accent={accent}
-                />{" "}
-                <span
-                  style={{
-                    color: theme.inkSoft,
-                    fontWeight: 400,
-                    fontSize: 13,
-                  }}
+              <span
+                style={{
+                  fontSize: 40,
+                  fontWeight: 700,
+                  color: scoreColor(latest.score),
+                  fontVariantNumeric: "tabular-nums",
+                  lineHeight: 1,
+                }}
+              >
+                {latest.score}%
+              </span>
+            </div>
+
+            {/* Detail stats */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 8,
+                borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
+                paddingTop: 10,
+              }}
+            >
+              {(
+                [
+                  ["Wrong notes", String(latest.wrongNotes)],
+                  ["Time", formatTime(latest.elapsedMs)],
+                  ["Expected", formatTime(expectedDurationMs)],
+                ] as [string, string][]
+              ).map(([label, value]) => (
+                <div
+                  key={label}
+                  style={{ display: "flex", flexDirection: "column", gap: 3 }}
                 >
-                  expected time
-                </span>
-              </span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: theme.inkSoft,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: theme.ink,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Motivational message */}
+            <div
+              style={{
+                borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
+                paddingTop: 10,
+                fontSize: 13,
+                color: theme.inkSoft,
+              }}
+            >
+              {latest.score === 100
+                ? "Perfect — every note right on time!"
+                : latest.score >= 80
+                  ? "Great playing — keep it up."
+                  : latest.score >= 50
+                    ? "Good effort — practice makes perfect."
+                    : "Keep practicing — you'll get there!"}
             </div>
           </div>
         )}
@@ -236,13 +255,13 @@ export function WaitModeResultModal({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 72px 60px 52px",
+                  gridTemplateColumns: "1fr 72px 52px",
                   padding: "7px 12px",
                   background: hexA(theme.ink, 0.04),
                   borderBottom: `0.5px solid ${theme.border}`,
                 }}
               >
-                {(["When", "Wrong", "Time", "Pace"] as string[]).map((h) => (
+                {(["When", "Wrong", "Score"] as string[]).map((h) => (
                   <span
                     key={h}
                     style={{
@@ -261,7 +280,7 @@ export function WaitModeResultModal({
                   key={a.timestamp}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 72px 60px 52px",
+                    gridTemplateColumns: "1fr 72px 52px",
                     padding: "7px 12px",
                     borderBottom:
                       i < prior.length - 1
@@ -282,20 +301,7 @@ export function WaitModeResultModal({
                   >
                     {a.wrongNotes}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: theme.ink,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {formatTime(a.elapsedMs)}
-                  </span>
-                  <RatioChip
-                    elapsedMs={a.elapsedMs}
-                    expectedMs={expectedDurationMs}
-                    accent={accent}
-                  />
+                  <ScoreChip score={a.score ?? 0} />
                 </div>
               ))}
             </div>

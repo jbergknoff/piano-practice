@@ -185,6 +185,7 @@ export function App() {
   function handleWaitModeComplete(stats: {
     wrongNotes: number;
     elapsedMs: number;
+    totalPoints: number;
   }) {
     const hash = fileHashRef.current;
     const mx = musicxmlRef.current;
@@ -202,10 +203,21 @@ export function App() {
 
     const expectedDurationMs = (selectionBeats / currentBpm) * 60_000;
 
+    const accuracy =
+      stats.totalPoints > 0
+        ? Math.max(0, 1 - stats.wrongNotes / stats.totalPoints)
+        : 1;
+    const tempo =
+      expectedDurationMs > 0
+        ? Math.min(1, expectedDurationMs / stats.elapsedMs)
+        : 1;
+    const score = Math.round(0.7 * accuracy * 100 + 0.3 * tempo * 100);
+
     const attempt: WaitModeAttempt = {
       timestamp: Date.now(),
       wrongNotes: stats.wrongNotes,
       elapsedMs: stats.elapsedMs,
+      score,
     };
     saveAttempt(hash, selectionKey, attempt);
     const allAttempts = loadAttemptHistory(hash)[selectionKey] ?? [];

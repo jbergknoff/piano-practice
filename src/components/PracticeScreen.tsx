@@ -715,6 +715,7 @@ export function PracticeScreen({
         measureRange={measureRange}
         onMeasureRangeChange={onMeasureRangeChange}
         fileHash={fileHash}
+        markedBpm={baseBpm}
       />
       <SettingsDrawer
         open={drawerOpen}
