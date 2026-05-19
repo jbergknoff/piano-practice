@@ -1,4 +1,4 @@
-import { memo } from "preact/compat";
+import { forwardRef, memo, useImperativeHandle } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
@@ -227,12 +227,15 @@ function computeCursorX(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+export type SheetMusicHandle = {
+  setCursorBeat(beat: number | undefined): void;
+};
+
 interface SheetMusicDisplayProps {
   musicxml: string;
   layout?: LayoutConfig;
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
-  playbackBeat?: number;
   /** Color of the playback cursor line. Defaults to blue (#1976d2). */
   cursorColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
@@ -267,525 +270,566 @@ interface SheetMusicDisplayProps {
   }) => void;
 }
 
-export function SheetMusicDisplay({
-  musicxml,
-  layout: layoutConfig,
-  noteColors = {},
-  visibleParts,
-  playbackBeat,
-  cursorColor = "#1976d2",
-  glyphFontSize,
-  inkColor = "black",
-  containerStyle,
-  focusRange,
-  focusColor,
-  onFocusRangeChange,
-  snapBeatRef,
-  snapGeneration,
-  scrollLocked = false,
-  onSheetContextMenu,
-}: SheetMusicDisplayProps) {
-  const result = useMemo(() => {
-    try {
-      const score = parseScore(musicxml);
-      const layout = resolveLayout(score, layoutConfig);
-      return { score, layout, error: null };
-    } catch (e) {
-      return { score: null, layout: null, error: String(e) };
-    }
-  }, [musicxml, layoutConfig]);
+export const SheetMusicDisplay = memo(
+  forwardRef<SheetMusicHandle, SheetMusicDisplayProps>(
+    function SheetMusicDisplay(
+      {
+        musicxml,
+        layout: layoutConfig,
+        noteColors = {},
+        visibleParts,
+        cursorColor = "#1976d2",
+        glyphFontSize,
+        inkColor = "black",
+        containerStyle,
+        focusRange,
+        focusColor,
+        onFocusRangeChange,
+        snapBeatRef,
+        snapGeneration,
+        scrollLocked = false,
+        onSheetContextMenu,
+      }: SheetMusicDisplayProps,
+      ref,
+    ) {
+      const result = useMemo(() => {
+        try {
+          const score = parseScore(musicxml);
+          const layout = resolveLayout(score, layoutConfig);
+          return { score, layout, error: null };
+        } catch (e) {
+          return { score: null, layout: null, error: String(e) };
+        }
+      }, [musicxml, layoutConfig]);
 
-  if (result.error) {
-    return <p style="color:red">{result.error}</p>;
-  }
-  if (!result.score || !result.layout) {
-    return null;
-  }
-  const { score, layout } = result;
-  if (score.parts.length === 0 || score.numMeasures === 0) {
-    return <p>No music to display.</p>;
-  }
-
-  const fontSize = glyphFontSize ?? layout.staffSpace * 4;
-
-  const cursorX =
-    playbackBeat !== undefined
-      ? computeCursorX(playbackBeat, score, layout)
-      : null;
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const scrollTargetRef = useRef<number | null>(null);
-  const scrollRafRef = useRef<number | null>(null);
-  // Set true when the user manually scrolls; suppresses cursor-following until
-  // a snap or until the cursor scrolls back into the visible viewport.
-  const detachedRef = useRef(false);
-  // Mirrors the scrollLocked prop so the event handlers (set up once in a
-  // useEffect([])) can read the current value without a stale closure.
-  const scrollLockedRef = useRef(scrollLocked);
-  scrollLockedRef.current = scrollLocked;
-
-  // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
-  // Reads the target beat from snapBeatRef and computes the scroll position via
-  // computeCursorX directly — bypassing playbackBeat — so the snap works even
-  // when playbackBeat is undefined (e.g. beat 0 in listen mode, where cursorX
-  // would be null). snapGeneration increments on every jump so this effect
-  // always fires even when the beat is unchanged from the previous jump.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: snapBeatRef is a stable ref; score/layout are used to compute position
-  useEffect(() => {
-    if (!snapBeatRef || snapBeatRef.current === null) {
-      return;
-    }
-    const beat = snapBeatRef.current;
-    snapBeatRef.current = null;
-
-    const el = containerRef.current;
-    if (!el) {
-      return;
-    }
-    if (scrollRafRef.current !== null) {
-      cancelAnimationFrame(scrollRafRef.current);
-      scrollRafRef.current = null;
-    }
-    scrollTargetRef.current = null;
-    const x = computeCursorX(beat, score, layout);
-    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
-    el.scrollLeft =
-      x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
-    detachedRef.current = false;
-  }, [snapGeneration, score, layout]);
-
-  // Smooth cursor-following animation during playback.
-  useEffect(() => {
-    if (!containerRef.current || cursorX === null) {
-      return;
-    }
-    const el = containerRef.current;
-
-    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
-    const cursorScrollPos = leftPad + cursorX;
-
-    if (detachedRef.current) {
-      // Re-attach automatically once the cursor scrolls back into the viewport.
-      const visible =
-        cursorScrollPos >= el.scrollLeft &&
-        cursorScrollPos <= el.scrollLeft + el.clientWidth;
-      if (!visible) {
-        return;
+      if (result.error) {
+        return <p style="color:red">{result.error}</p>;
       }
-      detachedRef.current = false;
-    }
-
-    scrollTargetRef.current = Math.max(
-      0,
-      cursorScrollPos - el.clientWidth * 0.38,
-    );
-
-    if (scrollRafRef.current !== null) {
-      return; // animation loop already running
-    }
-
-    const step = () => {
-      const target = scrollTargetRef.current;
-      if (target === null || !containerRef.current) {
-        scrollRafRef.current = null;
-        return;
+      if (!result.score || !result.layout) {
+        return null;
       }
-      const diff = target - containerRef.current.scrollLeft;
-      if (Math.abs(diff) < 0.5) {
-        containerRef.current.scrollLeft = target;
+      const { score, layout } = result;
+      if (score.parts.length === 0 || score.numMeasures === 0) {
+        return <p>No music to display.</p>;
+      }
+
+      const fontSize = glyphFontSize ?? layout.staffSpace * 4;
+
+      const containerRef = useRef<HTMLDivElement>(null);
+      const cursorLineRef = useRef<SVGLineElement>(null);
+      const scrollTargetRef = useRef<number | null>(null);
+      const scrollRafRef = useRef<number | null>(null);
+      // Set true when the user manually scrolls; suppresses cursor-following until
+      // a snap or until the cursor scrolls back into the visible viewport.
+      const detachedRef = useRef(false);
+      // Mirrors the scrollLocked prop so the event handlers (set up once in a
+      // useEffect([])) can read the current value without a stale closure.
+      const scrollLockedRef = useRef(scrollLocked);
+      scrollLockedRef.current = scrollLocked;
+
+      // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
+      // Reads the target beat from snapBeatRef and computes the scroll position via
+      // computeCursorX directly — bypassing playbackBeat — so the snap works even
+      // when playbackBeat is undefined (e.g. beat 0 in listen mode, where cursorX
+      // would be null). snapGeneration increments on every jump so this effect
+      // always fires even when the beat is unchanged from the previous jump.
+      // biome-ignore lint/correctness/useExhaustiveDependencies: snapBeatRef is a stable ref; score/layout are used to compute position
+      useEffect(() => {
+        if (!snapBeatRef || snapBeatRef.current === null) {
+          return;
+        }
+        const beat = snapBeatRef.current;
+        snapBeatRef.current = null;
+
+        const el = containerRef.current;
+        if (!el) {
+          return;
+        }
+        if (scrollRafRef.current !== null) {
+          cancelAnimationFrame(scrollRafRef.current);
+          scrollRafRef.current = null;
+        }
         scrollTargetRef.current = null;
-        scrollRafRef.current = null;
-        return;
-      }
-      containerRef.current.scrollLeft += diff * 0.12;
-      scrollRafRef.current = requestAnimationFrame(step);
-    };
-    scrollRafRef.current = requestAnimationFrame(step);
-  }, [cursorX]);
+        const x = computeCursorX(beat, score, layout);
+        const leftPad =
+          Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
+        el.scrollLeft =
+          x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
+        detachedRef.current = false;
+      }, [snapGeneration, score, layout]);
 
-  // Focus handle drag state — ref tracks the live value between renders, state
-  // drives visual feedback.
-  const svgRef = useRef<SVGSVGElement>(null);
-  const focusDragRef = useRef<{ handle: "left" | "right" } | null>(null);
-  const dragFocusRangeRef = useRef<{ from: number; to: number } | null>(null);
-  const [dragFocusRange, setDragFocusRange] = useState<{
-    from: number;
-    to: number;
-  } | null>(null);
+      // Cursor position and smooth scroll-following are driven imperatively via the
+      // ref handle rather than through React props, so App's 60fps setCurrentBeat
+      // updates bypass the reconciler entirely for this component.
+      useImperativeHandle(
+        ref,
+        () => ({
+          setCursorBeat(beat: number | undefined) {
+            const cursorX =
+              beat !== undefined ? computeCursorX(beat, score, layout) : null;
 
-  const snapToMeasureStart = (svgX: number): number => {
-    let best = 0;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < layout.measureXs.length; i++) {
-      const d = Math.abs(layout.measureXs[i] - svgX);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    }
-    return best + 1;
-  };
+            const line = cursorLineRef.current;
+            if (line) {
+              if (cursorX !== null) {
+                line.setAttribute("x1", String(cursorX));
+                line.setAttribute("x2", String(cursorX));
+                line.style.visibility = "visible";
+              } else {
+                line.style.visibility = "hidden";
+              }
+            }
 
-  const snapToMeasureEnd = (svgX: number): number => {
-    let best = 0;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < layout.measureXs.length; i++) {
-      const d = Math.abs(layout.measureXs[i] + layout.measureWidths[i] - svgX);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    }
-    return best + 1;
-  };
+            const el = containerRef.current;
+            if (!el || cursorX === null) {
+              return;
+            }
 
-  const onHandlePointerDown = (e: PointerEvent, handle: "left" | "right") => {
-    if (!focusRange) {
-      return;
-    }
-    // preventDefault stops the browser from starting a native pan gesture,
-    // which would fire pointercancel and kill the drag on touch devices.
-    e.preventDefault();
-    e.stopPropagation();
-    focusDragRef.current = { handle };
-    (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    dragFocusRangeRef.current = { ...focusRange };
-    setDragFocusRange({ ...focusRange });
-  };
+            const leftPad =
+              Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
+            const cursorScrollPos = leftPad + cursorX;
 
-  const onHandlePointerMove = (e: PointerEvent) => {
-    const drag = focusDragRef.current;
-    if (!drag || !focusRange) {
-      return;
-    }
-    const svgX =
-      e.clientX - (svgRef.current?.getBoundingClientRect().left ?? 0);
-    const current = dragFocusRangeRef.current ?? focusRange;
-    const next =
-      drag.handle === "left"
-        ? {
-            from: Math.min(snapToMeasureStart(svgX), current.to),
-            to: current.to,
-          }
-        : {
-            from: current.from,
-            to: Math.max(snapToMeasureEnd(svgX), current.from),
-          };
-    dragFocusRangeRef.current = next;
-    setDragFocusRange(next);
-  };
+            if (detachedRef.current) {
+              const visible =
+                cursorScrollPos >= el.scrollLeft &&
+                cursorScrollPos <= el.scrollLeft + el.clientWidth;
+              if (!visible) {
+                return;
+              }
+              detachedRef.current = false;
+            }
 
-  const onHandlePointerUp = () => {
-    const range = dragFocusRangeRef.current;
-    if (range && onFocusRangeChange) {
-      onFocusRangeChange(range);
-    }
-    focusDragRef.current = null;
-    dragFocusRangeRef.current = null;
-    setDragFocusRange(null);
-  };
+            scrollTargetRef.current = Math.max(
+              0,
+              cursorScrollPos - el.clientWidth * 0.38,
+            );
 
-  // Pointer-drag to scroll (mouse and touch via pointer events).
-  const dragRef = useRef<{ startX: number; scrollLeft: number } | null>(null);
+            if (scrollRafRef.current !== null) {
+              return;
+            }
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) {
-      return;
-    }
+            const step = () => {
+              const target = scrollTargetRef.current;
+              if (target === null || !containerRef.current) {
+                scrollRafRef.current = null;
+                return;
+              }
+              const diff = target - containerRef.current.scrollLeft;
+              if (Math.abs(diff) < 0.5) {
+                containerRef.current.scrollLeft = target;
+                scrollTargetRef.current = null;
+                scrollRafRef.current = null;
+                return;
+              }
+              containerRef.current.scrollLeft += diff * 0.12;
+              scrollRafRef.current = requestAnimationFrame(step);
+            };
+            scrollRafRef.current = requestAnimationFrame(step);
+          },
+        }),
+        [score, layout],
+      );
 
-    const onPointerDown = (e: PointerEvent) => {
-      if (scrollLockedRef.current) {
-        return;
-      }
-      // Cancel any running auto-scroll so the manual drag always wins.
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
-      el.setPointerCapture(e.pointerId);
-      detachedRef.current = true;
-    };
+      // Focus handle drag state — ref tracks the live value between renders, state
+      // drives visual feedback.
+      const svgRef = useRef<SVGSVGElement>(null);
+      const focusDragRef = useRef<{ handle: "left" | "right" } | null>(null);
+      const dragFocusRangeRef = useRef<{ from: number; to: number } | null>(
+        null,
+      );
+      const [dragFocusRange, setDragFocusRange] = useState<{
+        from: number;
+        to: number;
+      } | null>(null);
 
-    const onPointerMove = (e: PointerEvent) => {
-      if (!dragRef.current) {
-        return;
-      }
-      el.scrollLeft =
-        dragRef.current.scrollLeft - (e.clientX - dragRef.current.startX);
-    };
-
-    const onPointerUp = () => {
-      dragRef.current = null;
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      if (scrollLockedRef.current) {
-        e.preventDefault();
-        return;
-      }
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      detachedRef.current = true;
-    };
-
-    el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("pointermove", onPointerMove);
-    el.addEventListener("pointerup", onPointerUp);
-    el.addEventListener("pointerleave", onPointerUp);
-    // passive: false so we can call preventDefault() to block wheel scroll during playback.
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => {
-      el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("pointermove", onPointerMove);
-      el.removeEventListener("pointerup", onPointerUp);
-      el.removeEventListener("pointerleave", onPointerUp);
-      el.removeEventListener("wheel", onWheel);
-    };
-  }, []);
-
-  const cursorY1 =
-    layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[0] - 4 * layout.staffSpace
-      : 0;
-  const cursorY2 =
-    layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
-      : layout.totalHeight;
-
-  // Compute focus highlight rect bounds (measure indices are 1-indexed in focusRange).
-  // Use dragFocusRange during an active handle drag for live visual feedback.
-  const displayedFocusRange = dragFocusRange ?? focusRange;
-  let focusX1: number | null = null;
-  let focusX2: number | null = null;
-  if (displayedFocusRange) {
-    const fromIdx = displayedFocusRange.from - 1;
-    const toIdx = displayedFocusRange.to - 1;
-    if (fromIdx >= 0 && fromIdx < layout.measureXs.length) {
-      focusX1 = layout.measureXs[fromIdx];
-    }
-    if (toIdx >= 0 && toIdx < layout.measureXs.length) {
-      focusX2 = layout.measureXs[toIdx] + layout.measureWidths[toIdx];
-    }
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        overflowX: "auto",
-        userSelect: "none",
-        touchAction: "pan-x",
-        cursor: dragFocusRange ? "ew-resize" : "grab",
-        // Horizontal padding gives the focus-range scrubber pills room to render
-        // at the very first and last measure without being clipped by the container.
-        paddingInline: 8,
-        ...(containerStyle as Record<string, string | number> | undefined),
-      }}
-      onContextMenu={(e) => {
-        if (!onSheetContextMenu) {
-          return;
-        }
-        e.preventDefault();
-        dragRef.current = null;
-        const containerEl = containerRef.current;
-        if (!containerEl) {
-          return;
-        }
-        const me = e as unknown as MouseEvent;
-        const svgX =
-          me.clientX -
-          containerEl.getBoundingClientRect().left +
-          containerEl.scrollLeft -
-          Number.parseFloat(getComputedStyle(containerEl).paddingLeft);
-        let measureIndex = 0;
+      const snapToMeasureStart = (svgX: number): number => {
+        let best = 0;
+        let bestDist = Number.POSITIVE_INFINITY;
         for (let i = 0; i < layout.measureXs.length; i++) {
-          if (layout.measureXs[i] <= svgX) {
-            measureIndex = i;
+          const d = Math.abs(layout.measureXs[i] - svgX);
+          if (d < bestDist) {
+            bestDist = d;
+            best = i;
           }
         }
-        const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
-        const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
-        const measureX = layout.measureXs[measureIndex];
-        const measureW = layout.measureWidths[measureIndex];
-        const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
-        onSheetContextMenu({
-          measureNumber: measureIndex + 1,
-          beat: (measureIndex + frac) * beatsPerMeasure,
-          clientX: me.clientX,
-          clientY: me.clientY,
-        });
-      }}
-    >
-      {/*
+        return best + 1;
+      };
+
+      const snapToMeasureEnd = (svgX: number): number => {
+        let best = 0;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < layout.measureXs.length; i++) {
+          const d = Math.abs(
+            layout.measureXs[i] + layout.measureWidths[i] - svgX,
+          );
+          if (d < bestDist) {
+            bestDist = d;
+            best = i;
+          }
+        }
+        return best + 1;
+      };
+
+      const onHandlePointerDown = (
+        e: PointerEvent,
+        handle: "left" | "right",
+      ) => {
+        if (!focusRange) {
+          return;
+        }
+        // preventDefault stops the browser from starting a native pan gesture,
+        // which would fire pointercancel and kill the drag on touch devices.
+        e.preventDefault();
+        e.stopPropagation();
+        focusDragRef.current = { handle };
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+        dragFocusRangeRef.current = { ...focusRange };
+        setDragFocusRange({ ...focusRange });
+      };
+
+      const onHandlePointerMove = (e: PointerEvent) => {
+        const drag = focusDragRef.current;
+        if (!drag || !focusRange) {
+          return;
+        }
+        const svgX =
+          e.clientX - (svgRef.current?.getBoundingClientRect().left ?? 0);
+        const current = dragFocusRangeRef.current ?? focusRange;
+        const next =
+          drag.handle === "left"
+            ? {
+                from: Math.min(snapToMeasureStart(svgX), current.to),
+                to: current.to,
+              }
+            : {
+                from: current.from,
+                to: Math.max(snapToMeasureEnd(svgX), current.from),
+              };
+        dragFocusRangeRef.current = next;
+        setDragFocusRange(next);
+      };
+
+      const onHandlePointerUp = () => {
+        const range = dragFocusRangeRef.current;
+        if (range && onFocusRangeChange) {
+          onFocusRangeChange(range);
+        }
+        focusDragRef.current = null;
+        dragFocusRangeRef.current = null;
+        setDragFocusRange(null);
+      };
+
+      // Pointer-drag to scroll (mouse and touch via pointer events).
+      const dragRef = useRef<{ startX: number; scrollLeft: number } | null>(
+        null,
+      );
+
+      useEffect(() => {
+        const el = containerRef.current;
+        if (!el) {
+          return;
+        }
+
+        const onPointerDown = (e: PointerEvent) => {
+          if (scrollLockedRef.current) {
+            return;
+          }
+          // Cancel any running auto-scroll so the manual drag always wins.
+          if (scrollRafRef.current !== null) {
+            cancelAnimationFrame(scrollRafRef.current);
+            scrollRafRef.current = null;
+          }
+          scrollTargetRef.current = null;
+          dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
+          el.setPointerCapture(e.pointerId);
+          detachedRef.current = true;
+        };
+
+        const onPointerMove = (e: PointerEvent) => {
+          if (!dragRef.current) {
+            return;
+          }
+          el.scrollLeft =
+            dragRef.current.scrollLeft - (e.clientX - dragRef.current.startX);
+        };
+
+        const onPointerUp = () => {
+          dragRef.current = null;
+        };
+
+        const onWheel = (e: WheelEvent) => {
+          if (scrollLockedRef.current) {
+            e.preventDefault();
+            return;
+          }
+          if (scrollRafRef.current !== null) {
+            cancelAnimationFrame(scrollRafRef.current);
+            scrollRafRef.current = null;
+          }
+          scrollTargetRef.current = null;
+          detachedRef.current = true;
+        };
+
+        el.addEventListener("pointerdown", onPointerDown);
+        el.addEventListener("pointermove", onPointerMove);
+        el.addEventListener("pointerup", onPointerUp);
+        el.addEventListener("pointerleave", onPointerUp);
+        // passive: false so we can call preventDefault() to block wheel scroll during playback.
+        el.addEventListener("wheel", onWheel, { passive: false });
+        return () => {
+          el.removeEventListener("pointerdown", onPointerDown);
+          el.removeEventListener("pointermove", onPointerMove);
+          el.removeEventListener("pointerup", onPointerUp);
+          el.removeEventListener("pointerleave", onPointerUp);
+          el.removeEventListener("wheel", onWheel);
+        };
+      }, []);
+
+      const cursorY1 =
+        layout.staffBottomYs.length > 0
+          ? layout.staffBottomYs[0] - 4 * layout.staffSpace
+          : 0;
+      const cursorY2 =
+        layout.staffBottomYs.length > 0
+          ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
+          : layout.totalHeight;
+
+      // Compute focus highlight rect bounds (measure indices are 1-indexed in focusRange).
+      // Use dragFocusRange during an active handle drag for live visual feedback.
+      const displayedFocusRange = dragFocusRange ?? focusRange;
+      let focusX1: number | null = null;
+      let focusX2: number | null = null;
+      if (displayedFocusRange) {
+        const fromIdx = displayedFocusRange.from - 1;
+        const toIdx = displayedFocusRange.to - 1;
+        if (fromIdx >= 0 && fromIdx < layout.measureXs.length) {
+          focusX1 = layout.measureXs[fromIdx];
+        }
+        if (toIdx >= 0 && toIdx < layout.measureXs.length) {
+          focusX2 = layout.measureXs[toIdx] + layout.measureWidths[toIdx];
+        }
+      }
+
+      return (
+        <div
+          ref={containerRef}
+          style={{
+            overflowX: "auto",
+            userSelect: "none",
+            touchAction: "pan-x",
+            cursor: dragFocusRange ? "ew-resize" : "grab",
+            // Horizontal padding gives the focus-range scrubber pills room to render
+            // at the very first and last measure without being clipped by the container.
+            paddingInline: 8,
+            ...(containerStyle as Record<string, string | number> | undefined),
+          }}
+          onContextMenu={(e) => {
+            if (!onSheetContextMenu) {
+              return;
+            }
+            e.preventDefault();
+            dragRef.current = null;
+            const containerEl = containerRef.current;
+            if (!containerEl) {
+              return;
+            }
+            const me = e as unknown as MouseEvent;
+            const svgX =
+              me.clientX -
+              containerEl.getBoundingClientRect().left +
+              containerEl.scrollLeft -
+              Number.parseFloat(getComputedStyle(containerEl).paddingLeft);
+            let measureIndex = 0;
+            for (let i = 0; i < layout.measureXs.length; i++) {
+              if (layout.measureXs[i] <= svgX) {
+                measureIndex = i;
+              }
+            }
+            const timeSig = score.parts[0]?.timeSig ?? {
+              beats: 4,
+              beatType: 4,
+            };
+            const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
+            const measureX = layout.measureXs[measureIndex];
+            const measureW = layout.measureWidths[measureIndex];
+            const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
+            onSheetContextMenu({
+              measureNumber: measureIndex + 1,
+              beat: (measureIndex + frac) * beatsPerMeasure,
+              clientX: me.clientX,
+              clientY: me.clientY,
+            });
+          }}
+        >
+          {/*
         Wrapper gives a positioning context for the HTML handle overlays.
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
         (e.g. TimeSig) override via their own attributes.
       */}
-      <div
-        style={{ position: "relative", display: "inline-block", flexShrink: 0 }}
-      >
-        <svg
-          ref={svgRef}
-          width={layout.totalWidth}
-          height={layout.totalHeight}
-          overflow="visible"
-          style={{
-            display: "block",
-            fontFamily: BRAVURA,
-            fontSize: fontSize,
-          }}
-          role="img"
-          aria-label="Sheet music"
-        >
-          {/* Focus range background */}
-          {focusX1 !== null && focusX2 !== null && focusColor && (
-            <rect
-              x={focusX1}
-              y={cursorY1 - 4}
-              width={focusX2 - focusX1}
-              height={cursorY2 - cursorY1 + 8}
-              fill={focusColor}
-              rx={8}
-            />
-          )}
-          {score.parts.map((part, p) => (
-            <Staff
-              key={part.id}
-              part={part}
-              partIndex={p}
-              layout={layout}
-              staffBottomY={layout.staffBottomYs[p]}
-              noteColors={noteColors}
-              visible={visibleParts ? visibleParts.has(part.id) : true}
-              inkColor={inkColor}
-            />
-          ))}
-          {cursorX !== null && (
-            <line
-              x1={cursorX}
-              x2={cursorX}
-              y1={cursorY1 - 4}
-              y2={cursorY2 + 4}
-              stroke={cursorColor}
-              stroke-width="2"
-              stroke-opacity="0.85"
-            />
-          )}
-          {/* Visible handle bars — SVG only, no pointer events */}
-          {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
-            <g style={{ pointerEvents: "none" }}>
-              {([focusX1, focusX2] as const).map((x) => {
-                const midY = (cursorY1 + cursorY2) / 2;
-                return (
-                  <g key={x}>
-                    {/* Thin edge line */}
-                    <rect
-                      x={x - 1}
-                      y={cursorY1 - 4}
-                      width={2}
-                      height={cursorY2 - cursorY1 + 8}
-                      fill={cursorColor}
-                      opacity={0.35}
-                    />
-                    {/* Pill thumb */}
-                    <rect
-                      x={x - 6}
-                      y={midY - 18}
-                      width={12}
-                      height={36}
-                      rx={6}
-                      fill={cursorColor}
-                      opacity={0.9}
-                    />
-                    {/* Grip lines */}
-                    <line
-                      x1={x - 3}
-                      y1={midY - 6}
-                      x2={x + 3}
-                      y2={midY - 6}
-                      stroke="white"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                    />
-                    <line
-                      x1={x - 3}
-                      y1={midY}
-                      x2={x + 3}
-                      y2={midY}
-                      stroke="white"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                    />
-                    <line
-                      x1={x - 3}
-                      y1={midY + 6}
-                      x2={x + 3}
-                      y2={midY + 6}
-                      stroke="white"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                    />
-                  </g>
-                );
-              })}
-            </g>
-          )}
-        </svg>
-        {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
+          <div
+            style={{
+              position: "relative",
+              display: "inline-block",
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              ref={svgRef}
+              width={layout.totalWidth}
+              height={layout.totalHeight}
+              overflow="visible"
+              style={{
+                display: "block",
+                fontFamily: BRAVURA,
+                fontSize: fontSize,
+              }}
+              role="img"
+              aria-label="Sheet music"
+            >
+              {/* Focus range background */}
+              {focusX1 !== null && focusX2 !== null && focusColor && (
+                <rect
+                  x={focusX1}
+                  y={cursorY1 - 4}
+                  width={focusX2 - focusX1}
+                  height={cursorY2 - cursorY1 + 8}
+                  fill={focusColor}
+                  rx={8}
+                />
+              )}
+              {score.parts.map((part, p) => (
+                <Staff
+                  key={part.id}
+                  part={part}
+                  partIndex={p}
+                  layout={layout}
+                  staffBottomY={layout.staffBottomYs[p]}
+                  noteColors={noteColors}
+                  visible={visibleParts ? visibleParts.has(part.id) : true}
+                  inkColor={inkColor}
+                />
+              ))}
+              <line
+                ref={cursorLineRef}
+                x1={0}
+                x2={0}
+                y1={cursorY1 - 4}
+                y2={cursorY2 + 4}
+                stroke={cursorColor}
+                stroke-width="2"
+                stroke-opacity="0.85"
+                style={{ visibility: "hidden" }}
+              />
+              {/* Visible handle bars — SVG only, no pointer events */}
+              {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
+                <g style={{ pointerEvents: "none" }}>
+                  {([focusX1, focusX2] as const).map((x) => {
+                    const midY = (cursorY1 + cursorY2) / 2;
+                    return (
+                      <g key={x}>
+                        {/* Thin edge line */}
+                        <rect
+                          x={x - 1}
+                          y={cursorY1 - 4}
+                          width={2}
+                          height={cursorY2 - cursorY1 + 8}
+                          fill={cursorColor}
+                          opacity={0.35}
+                        />
+                        {/* Pill thumb */}
+                        <rect
+                          x={x - 6}
+                          y={midY - 18}
+                          width={12}
+                          height={36}
+                          rx={6}
+                          fill={cursorColor}
+                          opacity={0.9}
+                        />
+                        {/* Grip lines */}
+                        <line
+                          x1={x - 3}
+                          y1={midY - 6}
+                          x2={x + 3}
+                          y2={midY - 6}
+                          stroke="white"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                        <line
+                          x1={x - 3}
+                          y1={midY}
+                          x2={x + 3}
+                          y2={midY}
+                          stroke="white"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                        <line
+                          x1={x - 3}
+                          y1={midY + 6}
+                          x2={x + 3}
+                          y2={midY + 6}
+                          stroke="white"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
+            </svg>
+            {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
             HTML elements have reliable touch-action support unlike SVG elements. */}
-        {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
-          <>
-            <div
-              style={{
-                position: "absolute",
-                top: cursorY1 - 4,
-                left: focusX1 - 14,
-                width: 28,
-                height: cursorY2 - cursorY1 + 8,
-                cursor: "ew-resize",
-                touchAction: "none",
-              }}
-              onPointerDown={(e) =>
-                onHandlePointerDown(e as unknown as PointerEvent, "left")
-              }
-              onPointerMove={(e) =>
-                onHandlePointerMove(e as unknown as PointerEvent)
-              }
-              onPointerUp={onHandlePointerUp}
-              onPointerCancel={onHandlePointerUp}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: cursorY1 - 4,
-                left: focusX2 - 14,
-                width: 28,
-                height: cursorY2 - cursorY1 + 8,
-                cursor: "ew-resize",
-                touchAction: "none",
-              }}
-              onPointerDown={(e) =>
-                onHandlePointerDown(e as unknown as PointerEvent, "right")
-              }
-              onPointerMove={(e) =>
-                onHandlePointerMove(e as unknown as PointerEvent)
-              }
-              onPointerUp={onHandlePointerUp}
-              onPointerCancel={onHandlePointerUp}
-            />
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+            {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: cursorY1 - 4,
+                    left: focusX1 - 14,
+                    width: 28,
+                    height: cursorY2 - cursorY1 + 8,
+                    cursor: "ew-resize",
+                    touchAction: "none",
+                  }}
+                  onPointerDown={(e) =>
+                    onHandlePointerDown(e as unknown as PointerEvent, "left")
+                  }
+                  onPointerMove={(e) =>
+                    onHandlePointerMove(e as unknown as PointerEvent)
+                  }
+                  onPointerUp={onHandlePointerUp}
+                  onPointerCancel={onHandlePointerUp}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: cursorY1 - 4,
+                    left: focusX2 - 14,
+                    width: 28,
+                    height: cursorY2 - cursorY1 + 8,
+                    cursor: "ew-resize",
+                    touchAction: "none",
+                  }}
+                  onPointerDown={(e) =>
+                    onHandlePointerDown(e as unknown as PointerEvent, "right")
+                  }
+                  onPointerMove={(e) =>
+                    onHandlePointerMove(e as unknown as PointerEvent)
+                  }
+                  onPointerUp={onHandlePointerUp}
+                  onPointerCancel={onHandlePointerUp}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      );
+    },
+  ),
+);
 
 // ── Staff ─────────────────────────────────────────────────────────────────────
 

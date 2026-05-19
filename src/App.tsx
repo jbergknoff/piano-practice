@@ -10,6 +10,7 @@ import {
 import { LandingScreen } from "./components/LandingScreen";
 import { PlayalongResultModal } from "./components/PlayalongResultModal";
 import { PracticeScreen } from "./components/PracticeScreen";
+import type { SheetMusicHandle } from "./SheetMusicDisplay";
 import { WaitModeResultModal } from "./components/WaitModeResultModal";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { MidiPlayer } from "./midi-player";
@@ -103,9 +104,12 @@ export function App() {
   const snapBeatRef = useRef<number | null>(null);
   const [snapGeneration, setSnapGeneration] = useState(0);
 
+  const sheetMusicRef = useRef<SheetMusicHandle>(null);
+
   // Single point of truth for advancing the cursor. "jump" snaps the scroll
   // instantly; "smooth" lets the cursor-following animation handle it.
   function setCursor(beat: number, behavior: "jump" | "smooth") {
+    sheetMusicRef.current?.setCursorBeat(beat);
     setCurrentBeat(beat);
     if (behavior === "jump") {
       snapBeatRef.current = beat;
@@ -855,7 +859,7 @@ export function App() {
         pieceTitle={pieceTitle}
         musicxml={musicxml}
         noteColors={noteColors}
-        playbackBeat={playbackBeat}
+        sheetMusicRef={sheetMusicRef}
         cursorColor={accent}
         isPlaying={isPlaying}
         bpm={bpm}

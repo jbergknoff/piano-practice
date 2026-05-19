@@ -1,5 +1,7 @@
-import { useState } from "preact/hooks";
+import { useCallback, useState } from "preact/hooks";
+import type { RefObject } from "preact";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
+import type { SheetMusicHandle } from "../SheetMusicDisplay";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
 import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
@@ -18,6 +20,16 @@ import {
   StopIcon,
 } from "./icons";
 
+const sheetMusicContainerStyle = {
+  position: "absolute",
+  inset: 0,
+  overflowX: "auto",
+  overflowY: "hidden",
+  padding: "56px 60px 64px",
+  display: "flex",
+  alignItems: "center",
+} as const;
+
 interface PracticeScreenProps {
   theme: ThemeTokens;
   accent: string;
@@ -25,7 +37,7 @@ interface PracticeScreenProps {
   pieceTitle: string;
   musicxml: MidiConversionResult | null;
   noteColors: Record<string, string>;
-  playbackBeat: number | undefined;
+  sheetMusicRef: RefObject<SheetMusicHandle>;
   cursorColor: string;
   isPlaying: boolean;
   bpm: number;
@@ -68,7 +80,7 @@ export function PracticeScreen({
   pieceTitle,
   musicxml,
   noteColors,
-  playbackBeat,
+  sheetMusicRef,
   cursorColor,
   isPlaying,
   bpm,
@@ -113,6 +125,18 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
+
+  const onSheetContextMenu = useCallback(
+    (info: {
+      measureNumber: number;
+      beat: number;
+      clientX: number;
+      clientY: number;
+    }) => {
+      setContextMenu(info);
+    },
+    [],
+  );
   return (
     <div
       style={{
@@ -140,9 +164,9 @@ export function PracticeScreen({
       {/* Sheet music — full bleed */}
       {musicxml ? (
         <SheetMusicDisplay
+          ref={sheetMusicRef}
           musicxml={musicxml.musicxml}
           noteColors={noteColors}
-          playbackBeat={playbackBeat}
           cursorColor={cursorColor}
           inkColor={theme.ink}
           focusRange={measureRange}
@@ -151,18 +175,8 @@ export function PracticeScreen({
           snapBeatRef={snapBeatRef}
           snapGeneration={snapGeneration}
           scrollLocked={isPlaying}
-          onSheetContextMenu={(info) => {
-            setContextMenu(info);
-          }}
-          containerStyle={{
-            position: "absolute",
-            inset: 0,
-            overflowX: "auto",
-            overflowY: "hidden",
-            padding: "56px 60px 64px",
-            display: "flex",
-            alignItems: "center",
-          }}
+          onSheetContextMenu={onSheetContextMenu}
+          containerStyle={sheetMusicContainerStyle}
         />
       ) : (
         <div
