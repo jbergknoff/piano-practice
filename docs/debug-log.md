@@ -1,43 +1,59 @@
 # Using the debug log
 
 The **Debugging** tab in the Help (?) modal captures a rolling record of
-the last 50 note events processed by Wait mode. Use it to report cases
-where note matching behaves incorrectly.
+the last 50 note events processed by Wait and Playalong modes. Use it to
+report cases where note matching behaves incorrectly.
 
 ## How to capture a log
 
-1. Open a piece and enter **Wait mode**.
+1. Open a piece and enter **Wait** or **Playalong** mode.
 2. Play until you observe incorrect behavior.
-3. Immediately tap **?** → **Debugging** → **Refresh** (so the buffer
-   reflects what just happened), then tap **Copy**.
+3. Immediately tap **?** → **Debugging** → **Copy**.
 4. Paste the log into your bug report.
 
-The log is cleared whenever a new file is loaded.
+The log is cleared whenever a new file is loaded. Events from both modes
+are merged into a single chronological timeline.
 
 ---
 
 ## Reading the log
 
-Each line represents one note event:
+Each line represents one note event. The format differs slightly between
+modes.
+
+### Wait mode
 
 ```
-2026-05-17T14:23:01.091Z  ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
+2026-05-17T14:23:01.091Z  [wait]      ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
 ```
+
+### Playalong mode
+
+```
+2026-05-17T14:23:02.500Z  [playalong]  ON   C5(72)      measure=4 beat=12.00  held=[C5(72)]  → MATCHED
+```
+
+### Field reference
 
 | Field | Meaning |
 |---|---|
 | `2026-05-17T14:23:01.091Z` | UTC timestamp with millisecond precision (ISO 8601) |
+| `[wait]` / `[playalong]` | Which mode was active when the event was recorded |
 | `ON` / `OFF` | Note pressed or released |
 | `G4(67)` | Note name and MIDI number of the key that triggered this event |
-| `waitPoint=3` | Index of the wait point the app was sitting on at the time |
-| `measure=3` | Measure number corresponding to that wait point |
-| `beat=9.00` | Absolute score beat (from the start of the piece) corresponding to that wait point |
-| `expected=[…]` | Notes the app required to be held to advance |
+| `waitPoint=3` | *(Wait only)* Index of the wait point the app was sitting on |
+| `measure=3` | Measure number at the time of the event |
+| `beat=9.00` | Absolute score beat from the start of the piece |
+| `expected=[…]` | *(Wait only)* Notes required to be held simultaneously to advance |
 | `held=[…]` | All keys physically held down after this event |
-| `msSinceAdvance` | Milliseconds since the last successful advance (relevant for grace-period and debounce logic) |
+| `msSinceAdvance=…` | *(Wait only)* Milliseconds since the last successful advance — relevant for grace-period and debounce diagnosis |
 | `→ OUTCOME` | Decision made for this event (see below) |
 
-### Outcomes
+---
+
+## Outcomes
+
+### Wait mode
 
 | Outcome | Meaning |
 |---|---|
@@ -47,6 +63,15 @@ Each line represents one note event:
 | `GRACE` | Wrong note, but ignored because it arrived within the grace period after the previous advance (`msSinceAdvance < noteSensitivityMilliseconds`) |
 | `DEBOUNCE` | A correct note that would have triggered an advance, but arrived within 100 ms of the last advance and was ignored to prevent double-advancing on the same chord |
 | `OFF` | Note-release event — no matching logic runs, logged for timeline completeness |
+
+### Playalong mode
+
+| Outcome | Meaning |
+|---|---|
+| `MATCHED` | The note matched a score note within the timing tolerance window |
+| `EXTRA` | The note did not match any score note at the current beat (wrong note or mistimed) |
+| `OFF` | Note-release event, logged for timeline completeness |
+| `INACTIVE` | Note pressed while playalong was not in the playing phase (e.g. during count-in or after completion) |
 
 ---
 
@@ -109,3 +134,22 @@ Find the `ADVANCE` event and look at its `expected` and `held` fields.
   grace window don't count as wrong and don't block progression. If the
   grace window is too wide, reducing the note-sensitivity setting
   (Settings drawer) will shorten it.
+
+---
+
+## Case 3: Playalong scored a note as EXTRA when I think I played it correctly
+
+Find the `EXTRA` event and check the `beat` field.
+
+**Things to check:**
+
+- **`beat` is far from the expected note's position** — Playalong
+  matching is time-based: a note is accepted only if it falls within
+  the timing tolerance window (configurable in Settings) of the score's
+  beat. If you played the right note but too early or too late, it will
+  appear as `EXTRA`.
+
+- **`beat` looks correct but still `EXTRA`** — The note may already have
+  been matched by an earlier event (duplicate note-on from the piano, or
+  the same note appearing in multiple voices). Look for a preceding
+  `MATCHED` event for the same note number at the same beat.
