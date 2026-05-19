@@ -333,7 +333,8 @@ export function SheetMusicDisplay({
 
     if (detachedRef.current) {
       // Re-attach automatically once the cursor scrolls back into the viewport.
-      const visible = cursorX >= el.scrollLeft && cursorX <= el.scrollLeft + el.clientWidth;
+      const visible =
+        cursorX >= el.scrollLeft && cursorX <= el.scrollLeft + el.clientWidth;
       if (!visible) {
         return;
       }
