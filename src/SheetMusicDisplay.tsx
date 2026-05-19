@@ -246,10 +246,17 @@ interface SheetMusicDisplayProps {
   focusColor?: string;
   /** Called when the user finishes dragging a focus boundary handle. */
   onFocusRangeChange?: (range: { from: number; to: number }) => void;
-  /** When provided, SheetMusicDisplay writes a scroll function into this ref.
-   *  Calling ref.current(beat) immediately scrolls to that beat without touching
-   *  playback; calling ref.current(null) releases scrub control back to cursor-following. */
-  viewScrollRef?: { current: ((beat: number | null) => void) | null };
+  /** Ref written by the caller before each jump (reset/seek/mode change).
+   *  The snap effect reads the beat, computes scroll position via
+   *  computeCursorX, and clears the ref. Using the beat directly (rather
+   *  than cursorX) means the snap works even when playbackBeat is undefined
+   *  (e.g. beat 0 in listen mode) and fires even if cursorX did not change. */
+  snapBeatRef?: { current: number | null };
+  /** Incremented by the caller on every jump. The snap effect depends on this
+   *  so it always fires — even if the beat is identical to the previous jump. */
+  snapGeneration?: number;
+  /** When true, user scroll (drag and wheel) is disabled. Set while music is playing. */
+  scrollLocked?: boolean;
   /** Called on right-click or long-press with the measure and beat at that position. */
   onSheetContextMenu?: (info: {
     measureNumber: number;
@@ -272,7 +279,9 @@ export function SheetMusicDisplay({
   focusRange,
   focusColor,
   onFocusRangeChange,
-  viewScrollRef,
+  snapBeatRef,
+  snapGeneration,
+  scrollLocked = false,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -306,22 +315,69 @@ export function SheetMusicDisplay({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTargetRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
-  const isScrubbingRef = useRef(false);
+  // Set true when the user manually scrolls; suppresses cursor-following until
+  // a snap or until the cursor scrolls back into the visible viewport.
+  const detachedRef = useRef(false);
+  // Mirrors the scrollLocked prop so the event handlers (set up once in a
+  // useEffect([])) can read the current value without a stale closure.
+  const scrollLockedRef = useRef(scrollLocked);
+  scrollLockedRef.current = scrollLocked;
 
-  // Smooth cursor-following animation — suppressed while the scrubber has control.
+  // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
+  // Reads the target beat from snapBeatRef and computes the scroll position via
+  // computeCursorX directly — bypassing playbackBeat — so the snap works even
+  // when playbackBeat is undefined (e.g. beat 0 in listen mode, where cursorX
+  // would be null). snapGeneration increments on every jump so this effect
+  // always fires even when the beat is unchanged from the previous jump.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapBeatRef is a stable ref; score/layout are used to compute position
   useEffect(() => {
-    if (isScrubbingRef.current) {
+    if (!snapBeatRef || snapBeatRef.current === null) {
       return;
     }
-    if (!containerRef.current) {
+    const beat = snapBeatRef.current;
+    snapBeatRef.current = null;
+
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = null;
+    }
+    scrollTargetRef.current = null;
+    const x = computeCursorX(beat, score, layout);
+    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    el.scrollLeft =
+      x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
+    detachedRef.current = false;
+  }, [snapGeneration, score, layout]);
+
+  // Smooth cursor-following animation during playback.
+  useEffect(() => {
+    if (!containerRef.current || cursorX === null) {
       return;
     }
     const el = containerRef.current;
 
-    if (cursorX === null) {
-      return; // no cursor to follow — leave scroll position as-is
+    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    const cursorScrollPos = leftPad + cursorX;
+
+    if (detachedRef.current) {
+      // Re-attach automatically once the cursor scrolls back into the viewport.
+      const visible =
+        cursorScrollPos >= el.scrollLeft &&
+        cursorScrollPos <= el.scrollLeft + el.clientWidth;
+      if (!visible) {
+        return;
+      }
+      detachedRef.current = false;
     }
-    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
+
+    scrollTargetRef.current = Math.max(
+      0,
+      cursorScrollPos - el.clientWidth * 0.38,
+    );
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running
@@ -345,35 +401,6 @@ export function SheetMusicDisplay({
     };
     scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
-
-  // Populate the imperative scroll ref so the scrubber can drive the view
-  // synchronously without going through Preact state.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable; score/layout are the only values captured that can change
-  useEffect(() => {
-    if (!viewScrollRef) {
-      return;
-    }
-    viewScrollRef.current = (beat: number | null) => {
-      const el = containerRef.current;
-      if (!el) {
-        return;
-      }
-      if (beat === null) {
-        isScrubbingRef.current = false;
-        return;
-      }
-      isScrubbingRef.current = true;
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      const x = computeCursorX(beat, score, layout);
-      if (x !== null) {
-        el.scrollLeft = Math.max(0, x - el.clientWidth / 2);
-      }
-    };
-  }, [score, layout]);
 
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -467,6 +494,9 @@ export function SheetMusicDisplay({
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      if (scrollLockedRef.current) {
+        return;
+      }
       // Cancel any running auto-scroll so the manual drag always wins.
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
@@ -475,6 +505,7 @@ export function SheetMusicDisplay({
       scrollTargetRef.current = null;
       dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
       el.setPointerCapture(e.pointerId);
+      detachedRef.current = true;
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -489,15 +520,31 @@ export function SheetMusicDisplay({
       dragRef.current = null;
     };
 
+    const onWheel = (e: WheelEvent) => {
+      if (scrollLockedRef.current) {
+        e.preventDefault();
+        return;
+      }
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
+      detachedRef.current = true;
+    };
+
     el.addEventListener("pointerdown", onPointerDown);
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointerleave", onPointerUp);
+    // passive: false so we can call preventDefault() to block wheel scroll during playback.
+    el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointerleave", onPointerUp);
+      el.removeEventListener("wheel", onWheel);
     };
   }, []);
 

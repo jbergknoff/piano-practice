@@ -32,13 +32,32 @@ MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiCo
 
 ### Mode system
 
-Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persisted in `FileHistory`.
+Three modes stored as `"wait" | "playalong" | "listen"` in `App.tsx` state and persisted in `FileHistory`.
 
 - **Wait** — score halts; `useWaitMode` is active and listens for correct piano chords before advancing. Play/Pause and BPM controls hidden.
-- **Playalong** (`"race"`) — not yet implemented; reserved. Behaves like Listen for now.
+- **Playalong** — the app plays back while the user plays along; notes are scored as hit or missed in real time.
 - **Listen** — normal playback; `useWaitMode` inactive. Play/Pause and BPM controls shown.
 
-`useWaitMode` always starts with `active = true`; `handleModeChange` in App.tsx calls `waitMode.toggle()` to keep the hook in sync when the mode changes.
+`useWaitMode` starts with `active = false` and resets to `false` whenever `musicxml` changes. A `useEffect([musicxml])` in `App.tsx` calls `waitMode.toggle()` to activate it when the target mode is `"wait"` (covering both initial load and track-selection changes). `handleModeChange` also calls `toggle()` to keep the hook in sync when the user switches modes.
+
+### Cursor and scroll system
+
+`currentBeat: number` in `App.tsx` is the **single cursor** shared by all three modes. Nothing else tracks cursor position.
+
+All cursor changes go through `setCursor(beat, "jump" | "smooth")` in `App.tsx`:
+
+- **`"smooth"`** — used for incremental playback ticks (`MidiPlayer.onPositionUpdate`) and wait-mode note-by-note advances. The sheet music scroll eases toward the cursor position over several animation frames.
+- **`"jump"`** — used for any discontinuous move: reset, seek (context menu), mode switch, playalong stop, end-of-piece. Writes the target beat into `snapBeatRef.current` and increments `snapGeneration` (React state). `SheetMusicDisplay` has a dedicated snap effect that depends on `snapGeneration`; it reads the beat from `snapBeatRef`, calls `computeCursorX` directly (bypassing `playbackBeat`), and sets `scrollLeft` instantly. Using the beat rather than `cursorX` ensures the snap fires even when `playbackBeat` is undefined — e.g. resetting to beat 0 in listen mode, where `cursorX` would be null.
+
+`useWaitMode` fires an `onCursorAdvance(beat)` callback synchronously inside `onNoteEvent` whenever the user plays a correct chord. This callback calls `setCurrentBeat` and `player.seek` directly, with no intermediate reactive state, eliminating the render-cycle lag that existed when cursor position was derived from a separate hook-internal state value.
+
+**Scroll detachment** — `SheetMusicDisplay` tracks a `detachedRef` boolean internally:
+- Set `true` by pointer-drag or wheel events on the scroll container (the user scrolled away manually).
+- While detached, the smooth-follow animation does not run.
+- Clears automatically when the cursor moves back into the visible viewport.
+- Also cleared immediately by any `"jump"` (the snap always re-attaches).
+
+The result: the scroll normally follows the cursor, jump-cuts snap instantly, and a user who scrolls away to look at a different passage will have the view re-attach as soon as the cursor catches up or a transport action (reset/seek) fires.
 
 ### Focus system
 
