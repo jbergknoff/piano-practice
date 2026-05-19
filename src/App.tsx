@@ -19,6 +19,7 @@ import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
+import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import {
   type FileHistory,
@@ -135,6 +136,16 @@ export function App() {
     musicxmlRef.current = musicxml;
   }, [musicxml]);
 
+  // Shared debug log — both modes append here; reset when the piece changes.
+  const debugBufferRef = useRef(newDebugBuffer());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml change is the reset trigger
+  useEffect(() => {
+    debugBufferRef.current = newDebugBuffer();
+  }, [musicxml]);
+  const appendToDebugLog = useCallback((event: DebugBeatEvent) => {
+    debugBufferRef.current.append(event);
+  }, []);
+
   // Ref breaks the dependency cycle: waitMode needs bluetooth.sendNote, but
   // bluetooth needs waitMode.onNoteEvent. The callback is only ever invoked
   // during async user interaction, so the ref is always current by then.
@@ -234,6 +245,7 @@ export function App() {
     () => sendNoteRef.current?.(42, 55, 80, 9),
     handleWaitModeComplete,
     accent,
+    appendToDebugLog,
   );
 
   const playalong = usePlayalongMode(
@@ -242,6 +254,7 @@ export function App() {
     currentBeatRef,
     playalongTimingBeats,
     handlePlayalongComplete,
+    appendToDebugLog,
   );
 
   // Stable combined note-event handler: routes to the active mode's handler.
@@ -829,14 +842,7 @@ export function App() {
         playalongPianoAudio={playalongPianoAudio}
         onPlayalongPianoAudioChange={setPlayalongPianoAudio}
         fileHash={fileHash}
-        getDebugLog={() => {
-          const allEvents = [
-            ...waitMode.getDebugLog(),
-            ...playalong.getDebugLog(),
-          ];
-          allEvents.sort((a, b) => a.t - b.t);
-          return allEvents;
-        }}
+        getDebugLog={() => debugBufferRef.current.read()}
       />
       {completionModal && (
         <WaitModeResultModal

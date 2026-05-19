@@ -6,11 +6,7 @@ import {
   useState,
 } from "preact/hooks";
 import type { MidiConversionResult } from "./midi-to-musicxml";
-import {
-  type DebugBeatEvent,
-  type WaitModeDebugEvent,
-  newDebugBuffer,
-} from "./debug-log";
+import type { DebugBeatEvent, WaitModeDebugEvent } from "./debug-log";
 
 export type { DebugBeatEvent } from "./debug-log";
 
@@ -48,8 +44,6 @@ export interface WaitModeHandle {
   rewind: () => void;
   /** Jump the wait-mode cursor to the first wait point at or after the given beat. */
   seekToBeat: (beat: number) => void;
-  /** Returns a snapshot of the rolling debug event log (up to 50 entries, oldest first). */
-  getDebugLog: () => DebugBeatEvent[];
 }
 
 /** Returns the first wait-point index inside the range and the exclusive end index. */
@@ -82,6 +76,7 @@ export function useWaitMode(
   onWrongNote?: () => void,
   onComplete?: (stats: { wrongNotes: number; elapsedMs: number }) => void,
   noteColor = "#E08A3E",
+  appendToDebugLog: (event: DebugBeatEvent) => void = () => {},
 ): WaitModeHandle {
   const [active, setActive] = useState(true);
   const [pointIndex, setPointIndex] = useState(0);
@@ -99,7 +94,7 @@ export function useWaitMode(
   const noteSensitivityMillisecondsRef = useRef(noteSensitivityMilliseconds);
   const onWrongNoteRef = useRef(onWrongNote);
   const onCompleteRef = useRef(onComplete);
-  const debugBufferRef = useRef(newDebugBuffer());
+  const appendToDebugLogRef = useRef(appendToDebugLog);
 
   useEffect(() => {
     onWrongNoteRef.current = onWrongNote;
@@ -108,6 +103,10 @@ export function useWaitMode(
   useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
+
+  useEffect(() => {
+    appendToDebugLogRef.current = appendToDebugLog;
+  }, [appendToDebugLog]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -168,7 +167,6 @@ export function useWaitMode(
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
-    debugBufferRef.current = newDebugBuffer();
     if (wrongNoteTimerRef.current !== null) {
       clearTimeout(wrongNoteTimerRef.current);
       wrongNoteTimerRef.current = null;
@@ -314,7 +312,7 @@ export function useWaitMode(
       const wp = idx < end ? points[idx] : null;
       const offBeat = wp?.beat ?? -1;
       const tSig = timeSigNumRef.current;
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         mode: "wait",
         t: now,
         note: noteNumber,
@@ -368,7 +366,7 @@ export function useWaitMode(
       !expected.has(noteNumber) &&
       msSinceAdvance < noteSensitivityMillisecondsRef.current
     ) {
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         ...debugBase,
         outcome: "grace",
       });
@@ -387,7 +385,7 @@ export function useWaitMode(
         setWrongNoteFlash(false);
         wrongNoteTimerRef.current = null;
       }, 600);
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         ...debugBase,
         outcome: "wrong",
       });
@@ -397,7 +395,7 @@ export function useWaitMode(
     // Ignore events within 100 ms of the last advance so that repeated
     // identical chords don't race ahead, while still allowing fast playing.
     if (msSinceAdvance < 100) {
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         ...debugBase,
         outcome: "debounce",
       });
@@ -427,19 +425,17 @@ export function useWaitMode(
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
       }
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         ...debugBase,
         outcome: "advance",
       });
     } else {
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         ...debugBase,
         outcome: "incomplete",
       });
     }
   }, []);
-
-  const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
 
   return {
     active,
@@ -451,6 +447,5 @@ export function useWaitMode(
     toggle,
     rewind,
     seekToBeat,
-    getDebugLog,
   };
 }

@@ -6,7 +6,7 @@ import {
   useState,
 } from "preact/hooks";
 import type { MidiConversionResult, PlaybackNote } from "./midi-to-musicxml";
-import { newDebugBuffer, type DebugBeatEvent } from "./debug-log";
+import type { DebugBeatEvent } from "./debug-log";
 
 export interface PlayalongStats {
   score: number; // 0–100
@@ -23,7 +23,6 @@ export interface PlayalongModeHandle {
   startPlaying: () => void;
   abort: () => void;
   notifyEnd: () => void;
-  getDebugLog: () => DebugBeatEvent[];
 }
 
 function noteKey(note: PlaybackNote): string {
@@ -36,6 +35,7 @@ export function usePlayalongMode(
   currentBeatRef: { current: number },
   toleranceBeats: number,
   onComplete: (stats: PlayalongStats) => void,
+  appendToDebugLog: (event: DebugBeatEvent) => void,
 ): PlayalongModeHandle {
   const [phase, setPhase] = useState<PlayalongPhase>("idle");
   const [hitNoteIds, setHitNoteIds] = useState<ReadonlySet<string>>(new Set());
@@ -47,7 +47,7 @@ export function usePlayalongMode(
   const measureRangeRef = useRef(measureRange);
   const musicxmlRef = useRef(musicxml);
   const onCompleteRef = useRef(onComplete);
-  const debugBufferRef = useRef(newDebugBuffer());
+  const appendToDebugLogRef = useRef(appendToDebugLog);
   const heldNotesRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
@@ -63,6 +63,10 @@ export function usePlayalongMode(
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
+  useEffect(() => {
+    appendToDebugLogRef.current = appendToDebugLog;
+  }, [appendToDebugLog]);
+
   // Reset when musicxml changes (new file loaded).
   // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml is the trigger; ref mutations don't need to be listed
   useEffect(() => {
@@ -71,7 +75,6 @@ export function usePlayalongMode(
     hitNoteIdsRef.current = new Set();
     setHitNoteIds(new Set());
     extraNoteCountRef.current = 0;
-    debugBufferRef.current = newDebugBuffer();
     heldNotesRef.current = new Set();
   }, [musicxml]);
 
@@ -161,7 +164,7 @@ export function usePlayalongMode(
 
     if (kind === "off") {
       held.delete(noteNumber);
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         mode: "playalong",
         t: now,
         note: noteNumber,
@@ -177,7 +180,7 @@ export function usePlayalongMode(
     held.add(noteNumber);
 
     if (phaseRef.current !== "playing") {
-      debugBufferRef.current.append({
+      appendToDebugLogRef.current({
         mode: "playalong",
         t: now,
         note: noteNumber,
@@ -216,7 +219,7 @@ export function usePlayalongMode(
       extraNoteCountRef.current += 1;
     }
 
-    debugBufferRef.current.append({
+    appendToDebugLogRef.current({
       mode: "playalong",
       t: now,
       note: noteNumber,
@@ -228,8 +231,6 @@ export function usePlayalongMode(
     });
   }, []);
 
-  const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
-
   return {
     phase,
     phaseRef,
@@ -239,6 +240,5 @@ export function usePlayalongMode(
     startPlaying,
     abort,
     notifyEnd,
-    getDebugLog,
   };
 }
