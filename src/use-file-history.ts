@@ -59,6 +59,7 @@ export interface WaitModeAttempt {
   timestamp: number;
   wrongNotes: number;
   elapsedMs: number;
+  score: number; // 0–100, computed at save time
 }
 
 type AttemptHistory = Record<string, WaitModeAttempt[]>;

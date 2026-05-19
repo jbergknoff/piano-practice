@@ -69,7 +69,11 @@ export function useWaitMode(
   measureRange: { from: number; to: number } | null,
   noteSensitivityMilliseconds = 150,
   onWrongNote?: () => void,
-  onComplete?: (stats: { wrongNotes: number; elapsedMs: number }) => void,
+  onComplete?: (stats: {
+    wrongNotes: number;
+    elapsedMs: number;
+    totalPoints: number;
+  }) => void,
   noteColor = "#E08A3E",
   onCursorAdvance?: (beat: number) => void,
   appendToDebugLog: (event: DebugBeatEvent) => void = () => {},
@@ -411,6 +415,7 @@ export function useWaitMode(
           onCompleteRef.current?.({
             wrongNotes: wrongNoteCountRef.current,
             elapsedMs: now - startTime,
+            totalPoints: end - first,
           });
         }
         // Restart from the beginning of the active range (or piece).
