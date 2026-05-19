@@ -150,6 +150,7 @@ export function PracticeScreen({
           onFocusRangeChange={onMeasureRangeChange}
           snapBeatRef={snapBeatRef}
           snapGeneration={snapGeneration}
+          scrollLocked={isPlaying}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
