@@ -829,7 +829,14 @@ export function App() {
         playalongPianoAudio={playalongPianoAudio}
         onPlayalongPianoAudioChange={setPlayalongPianoAudio}
         fileHash={fileHash}
-        getDebugLog={waitMode.getDebugLog}
+        getDebugLog={() => {
+          const allEvents = [
+            ...waitMode.getDebugLog(),
+            ...playalong.getDebugLog(),
+          ];
+          allEvents.sort((a, b) => a.t - b.t);
+          return allEvents;
+        }}
       />
       {completionModal && (
         <WaitModeResultModal

@@ -6,68 +6,20 @@ import {
   useState,
 } from "preact/hooks";
 import type { MidiConversionResult } from "./midi-to-musicxml";
+import {
+  type DebugBeatEvent,
+  type DebugCircularBuffer,
+  type WaitModeDebugEvent,
+  appendDebugEvent,
+  newDebugBuffer,
+  readDebugBuffer,
+} from "./debug-log";
+
+export type { DebugBeatEvent } from "./debug-log";
 
 interface WaitPoint {
   beat: number;
   noteNumbers: Set<number>;
-}
-
-export interface DebugBeatEvent {
-  /** Wall-clock timestamp (Date.now()). */
-  t: number;
-  /** MIDI note number (0–127). */
-  note: number;
-  kind: "on" | "off";
-  /** Wait-point index at the time of this event. */
-  pointIndex: number;
-  /** Measure number of the current wait point (-1 when out of range). */
-  measure: number;
-  /** Beat of the current wait point (-1 when out of range). */
-  beat: number;
-  /** Expected note numbers at the current wait point. */
-  expected: number[];
-  /** All held notes after this event is processed. */
-  held: number[];
-  /** Milliseconds elapsed since the last successful advance. */
-  msSinceAdvance: number;
-  outcome:
-    | "advance" // all expected notes held → advanced to next point
-    | "wrong" // note not in expected chord (outside grace period)
-    | "grace" // wrong note silently ignored within grace period
-    | "incomplete" // correct note pressed but not all expected notes held yet
-    | "debounce" // within 100 ms anti-race window after last advance
-    | "off"; // note-off event (no matching logic runs)
-}
-
-const DEBUG_LOG_MAX = 50;
-
-interface DebugCircularBuffer {
-  entries: DebugBeatEvent[];
-  /** Index of the next write slot. */
-  head: number;
-  /** Number of valid entries (0 – DEBUG_LOG_MAX). */
-  count: number;
-}
-
-function newDebugBuffer(): DebugCircularBuffer {
-  return { entries: [], head: 0, count: 0 };
-}
-
-function appendDebugEvent(buffer: DebugCircularBuffer, event: DebugBeatEvent) {
-  buffer.entries[buffer.head] = event;
-  buffer.head = (buffer.head + 1) % DEBUG_LOG_MAX;
-  if (buffer.count < DEBUG_LOG_MAX) {
-    buffer.count += 1;
-  }
-}
-
-function readDebugBuffer(buffer: DebugCircularBuffer): DebugBeatEvent[] {
-  const start = buffer.count < DEBUG_LOG_MAX ? 0 : buffer.head;
-  const result: DebugBeatEvent[] = [];
-  for (let i = 0; i < buffer.count; i++) {
-    result.push(buffer.entries[(start + i) % DEBUG_LOG_MAX]);
-  }
-  return result;
 }
 
 export interface WaitModeHandle {
@@ -366,6 +318,7 @@ export function useWaitMode(
       const offBeat = wp?.beat ?? -1;
       const tSig = timeSigNumRef.current;
       appendDebugEvent(debugBufferRef.current, {
+        mode: "wait",
         t: now,
         note: noteNumber,
         kind: "off",
@@ -399,10 +352,11 @@ export function useWaitMode(
     // Snapshot held *after* adding the new note, for the debug log.
     const heldSnapshot = [...held];
     const expectedSnapshot = [...expected];
-    const debugBase = {
+    const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
+      mode: "wait",
       t: now,
       note: noteNumber,
-      kind: "on" as const,
+      kind: "on",
       pointIndex: idx,
       measure,
       beat,

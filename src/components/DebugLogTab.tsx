@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import type { DebugBeatEvent } from "../use-wait-mode";
+import type { DebugBeatEvent } from "../debug-log";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
 
@@ -25,7 +25,7 @@ function noteName(midi: number): string {
 
 function formatDebugLog(events: DebugBeatEvent[]): string {
   if (events.length === 0) {
-    return "(no events yet — play some notes in Wait mode to populate this log)";
+    return "(no events yet — play some notes in Wait or Playalong mode to populate this log)";
   }
   const lines: string[] = [
     "=== Piano Practice Debug Log ===",
@@ -37,15 +37,23 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
   for (const e of events) {
     const ts = new Date(e.t).toISOString();
     const nn = `${noteName(e.note)}(${e.note})`;
-    const expStr = e.expected.map((n) => `${noteName(n)}(${n})`).join(",");
     const heldStr = e.held.map((n) => `${noteName(n)}(${n})`).join(",");
     const loc =
       e.measure >= 0 ? `measure=${e.measure} beat=${e.beat.toFixed(2)}` : "—";
-    lines.push(
-      `${ts}  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}` +
+
+    let modeFields: string;
+    if (e.mode === "wait") {
+      const expStr = e.expected.map((n) => `${noteName(n)}(${n})`).join(",");
+      modeFields =
         `  waitPoint=${e.pointIndex} ${loc}` +
         `  expected=[${expStr}]  held=[${heldStr}]` +
-        `  msSinceAdvance=${e.msSinceAdvance}  → ${e.outcome.toUpperCase()}`,
+        `  msSinceAdvance=${e.msSinceAdvance}`;
+    } else {
+      modeFields = `  ${loc}  held=[${heldStr}]`;
+    }
+
+    lines.push(
+      `${ts}  [${e.mode}]  ${e.kind.toUpperCase().padEnd(3)}  ${nn.padEnd(10)}${modeFields}  → ${e.outcome.toUpperCase()}`,
     );
   }
   return lines.join("\n");
