@@ -50,7 +50,8 @@ interface PracticeScreenProps {
     beat: number,
   ) => void;
   onGoToLanding: () => void;
-  snapPendingRef: { current: boolean };
+  snapBeatRef: { current: number | null };
+  snapGeneration: number;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
@@ -87,7 +88,8 @@ export function PracticeScreen({
   onModeChange,
   onTrackToggle,
   onGoToLanding,
-  snapPendingRef,
+  snapBeatRef,
+  snapGeneration,
   noteSensitivityMilliseconds,
   onSensitivityChange,
   playalongTimingBeats,
@@ -146,7 +148,8 @@ export function PracticeScreen({
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
           onFocusRangeChange={onMeasureRangeChange}
-          snapPendingRef={snapPendingRef}
+          snapBeatRef={snapBeatRef}
+          snapGeneration={snapGeneration}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}

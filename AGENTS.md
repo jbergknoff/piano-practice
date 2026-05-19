@@ -47,7 +47,7 @@ Three modes stored as `"wait" | "playalong" | "listen"` in `App.tsx` state and p
 All cursor changes go through `setCursor(beat, "jump" | "smooth")` in `App.tsx`:
 
 - **`"smooth"`** — used for incremental playback ticks (`MidiPlayer.onPositionUpdate`) and wait-mode note-by-note advances. The sheet music scroll eases toward the cursor position over several animation frames.
-- **`"jump"`** — used for any discontinuous move: reset, seek (context menu), mode switch, playalong stop, end-of-piece. Sets `snapPendingRef.current = true`, which `SheetMusicDisplay` reads on its next render and responds to with an instant `scrollLeft` assignment.
+- **`"jump"`** — used for any discontinuous move: reset, seek (context menu), mode switch, playalong stop, end-of-piece. Writes the target beat into `snapBeatRef.current` and increments `snapGeneration` (React state). `SheetMusicDisplay` has a dedicated snap effect that depends on `snapGeneration`; it reads the beat from `snapBeatRef`, calls `computeCursorX` directly (bypassing `playbackBeat`), and sets `scrollLeft` instantly. Using the beat rather than `cursorX` ensures the snap fires even when `playbackBeat` is undefined — e.g. resetting to beat 0 in listen mode, where `cursorX` would be null.
 
 `useWaitMode` fires an `onCursorAdvance(beat)` callback synchronously inside `onNoteEvent` whenever the user plays a correct chord. This callback calls `setCurrentBeat` and `player.seek` directly, with no intermediate reactive state, eliminating the render-cycle lag that existed when cursor position was derived from a separate hook-internal state value.
 

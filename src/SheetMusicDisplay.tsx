@@ -246,9 +246,15 @@ interface SheetMusicDisplayProps {
   focusColor?: string;
   /** Called when the user finishes dragging a focus boundary handle. */
   onFocusRangeChange?: (range: { from: number; to: number }) => void;
-  /** When set to true by the caller, the next cursorX update will snap the
-   *  scroll instantly instead of animating, then reset itself to false. */
-  snapPendingRef?: { current: boolean };
+  /** Ref written by the caller before each jump (reset/seek/mode change).
+   *  The snap effect reads the beat, computes scroll position via
+   *  computeCursorX, and clears the ref. Using the beat directly (rather
+   *  than cursorX) means the snap works even when playbackBeat is undefined
+   *  (e.g. beat 0 in listen mode) and fires even if cursorX did not change. */
+  snapBeatRef?: { current: number | null };
+  /** Incremented by the caller on every jump. The snap effect depends on this
+   *  so it always fires — even if the beat is identical to the previous jump. */
+  snapGeneration?: number;
   /** Called on right-click or long-press with the measure and beat at that position. */
   onSheetContextMenu?: (info: {
     measureNumber: number;
@@ -271,7 +277,8 @@ export function SheetMusicDisplay({
   focusRange,
   focusColor,
   onFocusRangeChange,
-  snapPendingRef,
+  snapBeatRef,
+  snapGeneration,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -309,27 +316,40 @@ export function SheetMusicDisplay({
   // a snap or until the cursor scrolls back into the visible viewport.
   const detachedRef = useRef(false);
 
-  // Cursor-following scroll. When snapPendingRef is true the scroll jumps
-  // instantly to the cursor; otherwise it eases smoothly.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: snapPendingRef is a stable ref object
+  // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
+  // Reads the target beat from snapBeatRef and computes the scroll position via
+  // computeCursorX directly — bypassing playbackBeat — so the snap works even
+  // when playbackBeat is undefined (e.g. beat 0 in listen mode, where cursorX
+  // would be null). snapGeneration increments on every jump so this effect
+  // always fires even when the beat is unchanged from the previous jump.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapBeatRef is a stable ref; score/layout are used to compute position
+  useEffect(() => {
+    if (!snapBeatRef || snapBeatRef.current === null) {
+      return;
+    }
+    const beat = snapBeatRef.current;
+    snapBeatRef.current = null;
+
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = null;
+    }
+    scrollTargetRef.current = null;
+    const x = computeCursorX(beat, score, layout);
+    el.scrollLeft = x !== null ? Math.max(0, x - el.clientWidth / 2) : 0;
+    detachedRef.current = false;
+  }, [snapGeneration, score, layout]);
+
+  // Smooth cursor-following animation during playback.
   useEffect(() => {
     if (!containerRef.current || cursorX === null) {
       return;
     }
     const el = containerRef.current;
-
-    // A jump was requested (reset, seek, mode change, etc.).
-    if (snapPendingRef?.current) {
-      snapPendingRef.current = false;
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
-      detachedRef.current = false;
-      return;
-    }
 
     if (detachedRef.current) {
       // Re-attach automatically once the cursor scrolls back into the viewport.

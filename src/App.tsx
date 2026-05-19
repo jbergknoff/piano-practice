@@ -97,16 +97,19 @@ export function App() {
 
   const theme = THEMES[themeName];
 
-  // When true, SheetMusicDisplay will snap the scroll to the cursor on its next
-  // render instead of animating. Set by setCursor("jump"), cleared by the display.
-  const snapPendingRef = useRef(false);
+  // The beat to snap the scroll to on the next SheetMusicDisplay render.
+  // snapGeneration increments on each jump so the effect always fires even if
+  // the beat is the same as the previous jump or cursorX happens to be null.
+  const snapBeatRef = useRef<number | null>(null);
+  const [snapGeneration, setSnapGeneration] = useState(0);
 
   // Single point of truth for advancing the cursor. "jump" snaps the scroll
   // instantly; "smooth" lets the cursor-following animation handle it.
   function setCursor(beat: number, behavior: "jump" | "smooth") {
     setCurrentBeat(beat);
     if (behavior === "jump") {
-      snapPendingRef.current = true;
+      snapBeatRef.current = beat;
+      setSnapGeneration((generation) => generation + 1);
     }
   }
 
@@ -846,7 +849,8 @@ export function App() {
         onModeChange={handleModeChange}
         onTrackToggle={onTrackToggle}
         onGoToLanding={handleGoToLanding}
-        snapPendingRef={snapPendingRef}
+        snapBeatRef={snapBeatRef}
+        snapGeneration={snapGeneration}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
         onSensitivityChange={setNoteSensitivityMilliseconds}
         playalongTimingBeats={playalongTimingBeats}
