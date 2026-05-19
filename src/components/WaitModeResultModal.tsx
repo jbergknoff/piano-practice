@@ -26,8 +26,12 @@ function formatDate(timestamp: number): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return "#2e7d32";
-  if (score >= 50) return "#e65100";
+  if (score >= 80) {
+    return "#2e7d32";
+  }
+  if (score >= 50) {
+    return "#e65100";
+  }
   return "#c62828";
 }
 
