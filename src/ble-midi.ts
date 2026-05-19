@@ -19,6 +19,33 @@ const NOTE_NAMES = [
   "B",
 ];
 
+// Builds a BLE MIDI packet with multiple Note On events (no running status).
+// Format: [header] ([ts][status][note][vel]) * N
+export function buildBLEMIDIBatch(
+  notes: { note: number; velocity: number }[],
+  channel = 0,
+): Uint8Array<ArrayBuffer> {
+  if (notes.length === 0) {
+    return new Uint8Array(new ArrayBuffer(0)) as Uint8Array<ArrayBuffer>;
+  }
+  if (notes.length === 1) {
+    return buildBLEMIDINote(notes[0].note, notes[0].velocity, channel);
+  }
+  const size = 1 + 4 * notes.length;
+  const buf = new ArrayBuffer(size);
+  const view = new Uint8Array(buf);
+  let offset = 0;
+  view[offset++] = 0x80;
+  const status = 0x90 | (channel & 0x0f);
+  for (const { note, velocity } of notes) {
+    view[offset++] = 0x80;
+    view[offset++] = status;
+    view[offset++] = note & 0x7f;
+    view[offset++] = velocity & 0x7f;
+  }
+  return view as Uint8Array<ArrayBuffer>;
+}
+
 // Our own data model for a parsed MIDI note event. The fields map directly to
 // what the MIDI spec calls Note On / Note Off messages (status, note number,
 // velocity), plus UI-convenience fields (id, time, name).

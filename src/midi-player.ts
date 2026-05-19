@@ -25,11 +25,21 @@ export class MidiPlayer {
   private notes: PlaybackNote[];
   private totalBeats: number;
   private _state: "stopped" | "playing" | "paused" = "stopped";
+  private extraTimers: ReturnType<typeof setTimeout>[] = [];
 
   onPositionUpdate?: (beat: number) => void;
   onEnd?: (beat: number) => void;
   /** When set, the player restarts from startBeat once beat reaches endBeat. */
   focusRange: { startBeat: number; endBeat: number } | null = null;
+  /** When true, skip Web Audio synthesis (phone speaker) for scheduled notes. */
+  skipWebAudio = false;
+  /**
+   * When set, called once per chord (group of notes at the same beat) as they
+   * are scheduled. Use this to mirror playback to an external device (e.g. via BLE MIDI).
+   */
+  onNoteScheduled?: (
+    notes: { noteNumber: number; velocity: number; durationMs: number }[],
+  ) => void;
 
   constructor(notes: PlaybackNote[], totalBeats: number, bpm = 120) {
     this.notes = notes;
@@ -141,24 +151,53 @@ export class MidiPlayer {
     if (!this.audioCtx) {
       return;
     }
+    const ctx = this.audioCtx;
     const secsPerBeat = 60 / this._bpm;
-    const horizon = this.audioCtx.currentTime + SCHEDULE_AHEAD;
+    const horizon = ctx.currentTime + SCHEDULE_AHEAD;
 
     while (this.playQueueIndex < this.playQueue.length) {
-      const note = this.playQueue[this.playQueueIndex];
-      const noteStart = this.startAudioTime + note.startBeat * secsPerBeat;
-      if (noteStart > horizon) {
+      const first = this.playQueue[this.playQueueIndex];
+      const firstStart = this.startAudioTime + first.startBeat * secsPerBeat;
+      if (firstStart > horizon) {
         break;
       }
 
-      const durationSecs = note.durationBeats * secsPerBeat;
-      this.scheduleNote(
-        note.noteNumber,
-        noteStart,
-        durationSecs,
-        note.velocity,
-      );
-      this.playQueueIndex++;
+      // Collect all notes at the same beat (chord) within the horizon.
+      const beatStart = first.startBeat;
+      const chord: {
+        noteNumber: number;
+        velocity: number;
+        durationMs: number;
+      }[] = [];
+
+      while (
+        this.playQueueIndex < this.playQueue.length &&
+        this.playQueue[this.playQueueIndex].startBeat === beatStart
+      ) {
+        const note = this.playQueue[this.playQueueIndex];
+        const noteStart = this.startAudioTime + note.startBeat * secsPerBeat;
+        const durationSecs = note.durationBeats * secsPerBeat;
+        this.scheduleNote(
+          note.noteNumber,
+          noteStart,
+          durationSecs,
+          note.velocity,
+        );
+        chord.push({
+          noteNumber: note.noteNumber,
+          velocity: note.velocity,
+          durationMs: durationSecs * 1000,
+        });
+        this.playQueueIndex++;
+      }
+
+      if (this.onNoteScheduled && chord.length > 0) {
+        const delayMs = Math.max(0, (firstStart - ctx.currentTime) * 1000);
+        const timer = setTimeout(() => {
+          this.onNoteScheduled?.(chord);
+        }, delayMs);
+        this.extraTimers.push(timer);
+      }
     }
   }
 
@@ -176,8 +215,12 @@ export class MidiPlayer {
     for (const node of this.activeGains) {
       node.disconnect();
     }
+    for (const t of this.extraTimers) {
+      clearTimeout(t);
+    }
     this.activeOscillators = [];
     this.activeGains = [];
+    this.extraTimers = [];
     this.playQueue = [];
     this.playQueueIndex = 0;
   }
@@ -190,6 +233,10 @@ export class MidiPlayer {
   ): void {
     const ctx = this.audioCtx;
     if (!ctx) {
+      return;
+    }
+
+    if (this.skipWebAudio) {
       return;
     }
 
@@ -253,6 +300,57 @@ export class MidiPlayer {
     osc3.start(startTime);
     osc3.stop(startTime + totalDuration);
     this.activeOscillators.push(osc3);
+  }
+
+  /**
+   * Schedule a metronome count-in. Fires onBeat(i) at each beat so the caller
+   * can send audio (e.g. via BLE MIDI). Returns a cancel function and a promise
+   * that resolves when the count-in finishes. Call cancel() to stop early.
+   */
+  playCountIn(
+    beats: number,
+    timeSigNum: number,
+    onBeat: (beatIndex: number) => void,
+  ): { cancel: () => void; done: Promise<void> } {
+    const msPerBeat = (60 / this._bpm) * 1000;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let canceled = false;
+
+    let resolvePromise!: () => void;
+    const done = new Promise<void>((resolve) => {
+      resolvePromise = resolve;
+    });
+
+    for (let i = 0; i < beats; i++) {
+      timers.push(
+        setTimeout(() => {
+          if (!canceled) {
+            onBeat(i);
+          }
+        }, i * msPerBeat),
+      );
+    }
+
+    timers.push(
+      setTimeout(
+        () => {
+          if (!canceled) {
+            resolvePromise();
+          }
+        },
+        beats * msPerBeat + 80,
+      ),
+    );
+
+    const cancel = () => {
+      canceled = true;
+      for (const t of timers) {
+        clearTimeout(t);
+      }
+      resolvePromise();
+    };
+
+    return { cancel, done };
   }
 
   /** Seek to a beat position. If playing, restarts audio from that beat. */

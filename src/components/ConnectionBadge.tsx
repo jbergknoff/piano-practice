@@ -80,6 +80,7 @@ export function ConnectionBadge({
   compact: boolean;
 }) {
   const [showUnsupportedModal, setShowUnsupportedModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
 
   const connected = bluetooth.status === "connected";
   const connecting = bluetooth.status === "connecting";
@@ -101,7 +102,7 @@ export function ConnectionBadge({
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     display: "inline-flex",
     alignItems: "center",
-    cursor: connected ? "default" : "pointer",
+    cursor: "pointer",
     color: hasError ? "#c62828" : theme.inkSoft,
     outline: "none",
   };
@@ -128,15 +129,54 @@ export function ConnectionBadge({
         : "Connect Bluetooth";
 
   function handleClick() {
-    if (connected) {
-      return;
-    }
     if (!BT_SUPPORTED) {
       setShowUnsupportedModal(true);
       return;
     }
+    if (connected) {
+      setShowStatusModal(true);
+      return;
+    }
     bluetooth.connect();
   }
+
+  const modalBaseStyle = {
+    position: "fixed" as const,
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    zIndex: 300,
+    background: theme.panelSolid,
+    border: `0.5px solid ${theme.border}`,
+    borderRadius: 20,
+    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+    width: "min(360px, calc(100vw - 40px))",
+    padding: "24px 28px",
+    fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 14,
+  };
+
+  const backdropStyle = {
+    position: "fixed" as const,
+    inset: 0,
+    zIndex: 299,
+    background: "rgba(0,0,0,0.3)",
+    backdropFilter: "blur(4px)",
+    WebkitBackdropFilter: "blur(4px)",
+  };
+
+  const closeBtnStyle = {
+    background: "transparent",
+    border: "none",
+    color: theme.inkSoft,
+    cursor: "pointer",
+    fontSize: 18,
+    padding: 4,
+    outline: "none",
+    lineHeight: 1,
+  };
 
   return (
     <>
@@ -189,35 +229,10 @@ export function ConnectionBadge({
         <>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
           <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 299,
-              background: "rgba(0,0,0,0.3)",
-              backdropFilter: "blur(4px)",
-              WebkitBackdropFilter: "blur(4px)",
-            }}
+            style={backdropStyle}
             onClick={() => setShowUnsupportedModal(false)}
           />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              zIndex: 300,
-              background: theme.panelSolid,
-              border: `0.5px solid ${theme.border}`,
-              borderRadius: 20,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-              width: "min(360px, calc(100vw - 40px))",
-              padding: "24px 28px",
-              fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-            }}
-          >
+          <div style={modalBaseStyle}>
             <div
               style={{
                 display: "flex",
@@ -238,16 +253,7 @@ export function ConnectionBadge({
               <button
                 type="button"
                 onClick={() => setShowUnsupportedModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: theme.inkSoft,
-                  cursor: "pointer",
-                  fontSize: 18,
-                  padding: 4,
-                  outline: "none",
-                  lineHeight: 1,
-                }}
+                style={closeBtnStyle}
               >
                 ✕
               </button>
@@ -262,6 +268,80 @@ export function ConnectionBadge({
             >
               {unsupportedBody(accent)}
             </p>
+          </div>
+        </>
+      )}
+
+      {showStatusModal && (
+        <>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
+          <div
+            style={backdropStyle}
+            onClick={() => setShowStatusModal(false)}
+          />
+          <div style={modalBaseStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'Instrument Serif', serif",
+                  fontStyle: "italic",
+                  fontSize: 20,
+                  color: theme.ink,
+                }}
+              >
+                Piano connection
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowStatusModal(false)}
+                style={closeBtnStyle}
+              >
+                ✕
+              </button>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                color: theme.ink,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#5E8C5A",
+                  flexShrink: 0,
+                }}
+              />
+              {bluetooth.deviceName}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowStatusModal(false)}
+              style={{
+                background: accent,
+                border: "none",
+                borderRadius: 10,
+                color: "#FFF7E5",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                padding: "8px 18px",
+                alignSelf: "flex-end",
+              }}
+            >
+              Done
+            </button>
           </div>
         </>
       )}

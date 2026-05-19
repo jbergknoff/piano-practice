@@ -15,6 +15,7 @@ import {
   PlayIcon,
   ResetIcon,
   SectionsIcon,
+  StopIcon,
 } from "./icons";
 
 interface PracticeScreenProps {
@@ -31,7 +32,9 @@ interface PracticeScreenProps {
   baseBpm: number;
   measureRange: { from: number; to: number } | null;
   bluetooth: ReturnType<typeof useBluetooth>;
-  mode: "wait" | "race" | "listen";
+  mode: "wait" | "playalong" | "listen";
+  playalongPhase: "idle" | "counting-in" | "playing" | "complete";
+  countInBeat: { beat: number; timeSigNum: number } | null;
   tracks: TrackInfo[];
   selectedTracks: number[];
   fileHash: string | null;
@@ -39,7 +42,7 @@ interface PracticeScreenProps {
   onReset: () => void;
   onBpmChange: (bpm: number) => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
-  onModeChange: (mode: "wait" | "race" | "listen") => void;
+  onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
   onContextMenuAction: (
     action: "focus" | "seek" | "clearFocus",
@@ -49,6 +52,10 @@ interface PracticeScreenProps {
   onGoToLanding: () => void;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
+  playalongTimingBeats: number;
+  onPlayalongTimingChange: (beats: number) => void;
+  playalongPianoAudio: boolean;
+  onPlayalongPianoAudioChange: (enabled: boolean) => void;
 }
 
 export function PracticeScreen({
@@ -66,6 +73,8 @@ export function PracticeScreen({
   measureRange,
   bluetooth,
   mode,
+  playalongPhase,
+  countInBeat,
   tracks,
   selectedTracks,
   onPlayPause,
@@ -78,8 +87,16 @@ export function PracticeScreen({
   onGoToLanding,
   noteSensitivityMilliseconds,
   onSensitivityChange,
+  playalongTimingBeats,
+  onPlayalongTimingChange,
+  playalongPianoAudio,
+  onPlayalongPianoAudioChange,
   fileHash,
 }: PracticeScreenProps) {
+  const playalongActive =
+    mode === "playalong" &&
+    (playalongPhase === "counting-in" || playalongPhase === "playing");
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
@@ -101,6 +118,23 @@ export function PracticeScreen({
       viewScrollRef.current?.(null);
     }
   }, [mode]);
+
+  // Scroll to the cursor whenever playalong starts (cursor jumps to range start)
+  // or stops (cursor returns to range start after abort).
+  const prevPlayalongPhaseRef = useRef(playalongPhase);
+  useEffect(() => {
+    const prev = prevPlayalongPhaseRef.current;
+    prevPlayalongPhaseRef.current = playalongPhase;
+    const shouldScroll =
+      ((prev === "idle" || prev === "complete") &&
+        playalongPhase === "counting-in") ||
+      ((prev === "counting-in" || prev === "playing") &&
+        playalongPhase === "idle");
+    if (shouldScroll && playbackBeatRef.current !== undefined) {
+      viewScrollRef.current?.(playbackBeatRef.current);
+      viewScrollRef.current?.(null);
+    }
+  }, [playalongPhase]);
 
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
@@ -201,50 +235,52 @@ export function PracticeScreen({
       />
 
       {/* TOP LEFT: back button + piece title */}
-      <div
-        style={{
-          position: "absolute",
-          top: 18,
-          left: 22,
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        <button
-          type="button"
-          onClick={onGoToLanding}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
-          title="Back"
-        >
-          <ChevronLeftIcon />
-        </button>
-        <button
-          type="button"
-          onClick={() => setPieceInfoOpen(true)}
+      {!playalongActive && (
+        <div
           style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 0,
-            textAlign: "left",
+            position: "absolute",
+            top: 18,
+            left: 22,
+            zIndex: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
           }}
         >
-          <div
+          <button
+            type="button"
+            onClick={onGoToLanding}
+            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            title="Back"
+          >
+            <ChevronLeftIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPieceInfoOpen(true)}
             style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontStyle: "italic",
-              fontSize: 28,
-              lineHeight: 1,
-              letterSpacing: "-0.01em",
-              color: theme.ink,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              textAlign: "left",
             }}
           >
-            {pieceTitle}
-          </div>
-        </button>
-      </div>
+            <div
+              style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontStyle: "italic",
+                fontSize: 28,
+                lineHeight: 1,
+                letterSpacing: "-0.01em",
+                color: theme.ink,
+              }}
+            >
+              {pieceTitle}
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
       <div
@@ -253,37 +289,55 @@ export function PracticeScreen({
       >
         {/* Reset + Play/Pause + BPM row */}
         <div class="bl-transport">
-          <button
-            type="button"
-            onClick={() => setRangesDrawerOpen(true)}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title="Select section"
-          >
-            <SectionsIcon />
-          </button>
-          <button
-            type="button"
-            onClick={onReset}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
-            title={
-              measureRange
-                ? "Return to start of selection. Click to reset."
-                : "Return to beginning. Click to reset."
-            }
-          >
-            <ResetIcon />
-          </button>
+          {!playalongActive && (
+            <button
+              type="button"
+              onClick={() => setRangesDrawerOpen(true)}
+              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              title="Select section"
+            >
+              <SectionsIcon />
+            </button>
+          )}
+          {mode !== "playalong" && (
+            <button
+              type="button"
+              onClick={onReset}
+              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              title={
+                measureRange
+                  ? "Return to start of selection. Click to reset."
+                  : "Return to beginning. Click to reset."
+              }
+            >
+              <ResetIcon />
+            </button>
+          )}
           {mode !== "wait" && (
             <button
               type="button"
               onClick={onPlayPause}
               style={cornerBtnStyle(theme) as Record<string, string | number>}
-              title={isPlaying ? "Pause" : "Play"}
+              title={
+                isPlaying || playalongPhase === "counting-in"
+                  ? mode === "playalong"
+                    ? "Stop"
+                    : "Pause"
+                  : "Play"
+              }
             >
-              {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+              {isPlaying || playalongPhase === "counting-in" ? (
+                mode === "playalong" ? (
+                  <StopIcon size={18} />
+                ) : (
+                  <PauseIcon size={22} />
+                )
+              ) : (
+                <PlayIcon size={22} />
+              )}
             </button>
           )}
-          {mode !== "wait" && (
+          {mode !== "wait" && !playalongActive && (
             <div
               style={{
                 height: 38,
@@ -347,64 +401,127 @@ export function PracticeScreen({
         </div>
 
         {/* Mode selector group */}
+        {!playalongActive && (
+          <div
+            class="bl-modes"
+            style={{
+              padding: "4px 6px",
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 12,
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+            }}
+          >
+            {(["listen", "wait", "playalong"] as const).map((m) => {
+              const active = mode === m;
+              const requiresPiano = m === "wait" || m === "playalong";
+              const disabled =
+                requiresPiano && bluetooth.status !== "connected";
+              const labels: Record<string, string> = {
+                listen: "Listen",
+                wait: "Wait",
+                playalong: "Playalong",
+              };
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onModeChange(m)}
+                  style={{
+                    ...(miniBtnStyle(theme) as Record<string, string | number>),
+                    padding: "0 14px",
+                    minWidth: 60,
+                    height: 30,
+                    background: active ? accent : "transparent",
+                    color: active ? "#FFF7E5" : theme.ink,
+                    fontWeight: active ? 600 : 400,
+                    fontSize: 12,
+                    boxShadow: active
+                      ? `0 2px 8px ${hexA(accent, 0.35)}`
+                      : undefined,
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    opacity: disabled ? 0.35 : 1,
+                    justifyContent: "center",
+                  }}
+                  aria-pressed={active}
+                  title={
+                    disabled ? "Connect a piano to use this mode" : undefined
+                  }
+                >
+                  {labels[m]}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Count-in overlay */}
+      {mode === "playalong" && playalongPhase === "counting-in" && (
         <div
-          class="bl-modes"
           style={{
-            padding: "4px 6px",
-            background: theme.panel,
-            border: `0.5px solid ${theme.border}`,
-            borderRadius: 12,
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 10,
+            pointerEvents: "none",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
-            gap: 2,
-            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+            gap: 8,
           }}
         >
-          {(["wait", "race", "listen"] as const).map((m) => {
-            const active = mode === m;
-            const labels: Record<string, string> = {
-              wait: "Wait",
-              race: "Playalong",
-              listen: "Listen",
-            };
+          {(() => {
+            const beatDisplay = countInBeat
+              ? (countInBeat.beat % countInBeat.timeSigNum) + 1
+              : null;
             return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => onModeChange(m)}
-                disabled={m === "race"}
+              <div
                 style={{
-                  ...(miniBtnStyle(theme) as Record<string, string | number>),
-                  padding: "0 14px",
-                  minWidth: 60,
-                  height: 30,
-                  background: active ? accent : "transparent",
-                  color: active
-                    ? "#FFF7E5"
-                    : m === "race"
-                      ? theme.inkFaint
-                      : theme.ink,
-                  fontWeight: active ? 600 : 400,
-                  fontSize: 12,
-                  boxShadow: active
-                    ? `0 2px 8px ${hexA(accent, 0.35)}`
-                    : undefined,
-                  cursor: m === "race" ? "not-allowed" : "pointer",
-                  justifyContent: "center",
+                  background: "rgba(0,0,0,0.55)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  borderRadius: 16,
+                  padding: "14px 28px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
                 }}
-                aria-pressed={active}
-                title={
-                  m === "race" ? "Playalong mode — coming soon" : undefined
-                }
               >
-                {labels[m]}
-              </button>
+                <div
+                  style={{
+                    fontSize: 72,
+                    fontWeight: 700,
+                    color: "#fff",
+                    lineHeight: 1,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {beatDisplay ?? ""}
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "rgba(255,255,255,0.7)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    marginTop: 8,
+                  }}
+                >
+                  Count in…
+                </div>
+              </div>
             );
-          })}
+          })()}
         </div>
-      </div>
+      )}
 
       {/* BOTTOM RIGHT: bluetooth + gear */}
       <div
@@ -635,10 +752,13 @@ export function PracticeScreen({
         accent={accent}
         tracks={tracks}
         selectedTracks={selectedTracks}
-        bluetooth={bluetooth}
         onTrackToggle={onTrackToggle}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
         onSensitivityChange={onSensitivityChange}
+        playalongTimingBeats={playalongTimingBeats}
+        onPlayalongTimingChange={onPlayalongTimingChange}
+        playalongPianoAudio={playalongPianoAudio}
+        onPlayalongPianoAudioChange={onPlayalongPianoAudioChange}
       />
     </div>
   );

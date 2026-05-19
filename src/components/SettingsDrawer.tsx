@@ -1,6 +1,6 @@
 import type { TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
-import type { useBluetooth } from "../useBluetooth";
+import { ResetIcon } from "./icons";
 
 interface SettingsDrawerProps {
   open: boolean;
@@ -9,10 +9,13 @@ interface SettingsDrawerProps {
   accent: string;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  bluetooth: ReturnType<typeof useBluetooth>;
   onTrackToggle: (idx: number) => void;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
+  playalongTimingBeats: number;
+  onPlayalongTimingChange: (beats: number) => void;
+  playalongPianoAudio: boolean;
+  onPlayalongPianoAudioChange: (enabled: boolean) => void;
 }
 
 function sensitivityLabel(ms: number): string {
@@ -38,13 +41,14 @@ export function SettingsDrawer({
   accent,
   tracks,
   selectedTracks,
-  bluetooth,
   onTrackToggle,
   noteSensitivityMilliseconds,
   onSensitivityChange,
+  playalongTimingBeats,
+  onPlayalongTimingChange,
+  playalongPianoAudio,
+  onPlayalongPianoAudioChange,
 }: SettingsDrawerProps) {
-  const connected = bluetooth.status === "connected";
-
   return (
     <>
       {/* Backdrop */}
@@ -158,6 +162,7 @@ export function SettingsDrawer({
           theme={theme}
           label="Note sensitivity"
           hint={sensitivityLabel(noteSensitivityMilliseconds)}
+          onReset={() => onSensitivityChange(150)}
         >
           <input
             type="range"
@@ -184,66 +189,66 @@ export function SettingsDrawer({
           </div>
         </DrawerRow>
 
-        {/* Footer — connection */}
-        <div
-          style={{
-            marginTop: "auto",
-            paddingTop: 14,
-            borderTop: `0.5px solid ${theme.border}`,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
+        {/* Playalong timing window */}
+        <DrawerRow
+          theme={theme}
+          label="Playalong timing window"
+          hint={`±${playalongTimingBeats.toFixed(2)} beats`}
+          onReset={() => onPlayalongTimingChange(0.4)}
         >
-          <span
+          <input
+            type="range"
+            min={0.1}
+            max={1.0}
+            step={0.05}
+            value={playalongTimingBeats}
+            onInput={(e) =>
+              onPlayalongTimingChange(
+                Number((e.target as HTMLInputElement).value),
+              )
+            }
+            style={{ width: "100%", accentColor: accent }}
+          />
+          <div
             style={{
+              display: "flex",
+              justifyContent: "space-between",
               fontSize: 10,
               color: theme.inkSoft,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
+              marginTop: -2,
             }}
           >
-            {connected ? "Connected" : "Not connected"}
-          </span>
-          {connected ? (
-            <span
-              style={{
-                fontSize: 11,
-                color: theme.ink,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: "#5E8C5A",
-                  flexShrink: 0,
-                }}
-              />
-              {bluetooth.deviceName}
+            <span>Tight</span>
+            <span>Loose</span>
+          </div>
+        </DrawerRow>
+
+        {/* Playalong piano audio toggle */}
+        <DrawerRow theme={theme} label="Piano plays along" hint="">
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={playalongPianoAudio}
+              onChange={(e) =>
+                onPlayalongPianoAudioChange(
+                  (e.target as HTMLInputElement).checked,
+                )
+              }
+              style={{ accentColor: accent }}
+            />
+            <span style={{ color: theme.inkSoft }}>
+              Play guide notes through the piano at low volume
             </span>
-          ) : (
-            <button
-              type="button"
-              onClick={bluetooth.connect}
-              style={{
-                fontSize: 11,
-                color: accent,
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                outline: "none",
-              }}
-            >
-              Connect piano…
-            </button>
-          )}
-        </div>
+          </label>
+        </DrawerRow>
       </div>
     </>
   );
@@ -253,11 +258,13 @@ function DrawerRow({
   theme,
   label,
   hint,
+  onReset,
   children,
 }: {
   theme: ThemeTokens;
   label: string;
   hint: string;
+  onReset?: () => void;
   children: preact.ComponentChildren;
 }) {
   return (
@@ -272,9 +279,28 @@ function DrawerRow({
         <span style={{ fontSize: 12, fontWeight: 500, color: theme.ink }}>
           {label}
         </span>
-        {hint && (
-          <span style={{ fontSize: 11, color: theme.inkSoft }}>{hint}</span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {hint && (
+            <span style={{ fontSize: 11, color: theme.inkSoft }}>{hint}</span>
+          )}
+          {onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: theme.inkSoft,
+                padding: 4,
+                lineHeight: 0,
+              }}
+              title="Reset to default"
+            >
+              <ResetIcon size={12} />
+            </button>
+          )}
+        </div>
       </div>
       {children}
     </div>
