@@ -11,6 +11,7 @@ import { LandingScreen } from "./components/LandingScreen";
 import { PlayalongResultModal } from "./components/PlayalongResultModal";
 import { PracticeScreen } from "./components/PracticeScreen";
 import { WaitModeResultModal } from "./components/WaitModeResultModal";
+import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { MidiPlayer } from "./midi-player";
 import {
   type MidiConversionResult,
@@ -19,7 +20,6 @@ import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
-import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import {
   type FileHistory,
@@ -730,6 +730,14 @@ export function App() {
   }
 
   // Note colors
+  //
+  // For listen mode, the active-note set changes at note boundaries (a few
+  // times per second), not on every rAF frame. We stabilize the returned
+  // object reference so that React.memo'd Staff/Measure subtrees can skip
+  // re-renders on frames where no note boundary was crossed.
+  const listenActiveKeyRef = useRef<string | null>(null);
+  const listenColorsRef = useRef<Record<string, string>>({});
+
   const noteColors = useMemo(() => {
     if (waitMode.active) {
       return waitMode.noteColors;
@@ -768,21 +776,38 @@ export function App() {
       return colors;
     }
 
+    // Listen mode: return a stable object reference when the active-note set
+    // is the same as last frame, so memo'd subtrees don't re-render needlessly.
     if (!musicxml || currentBeat === 0) {
-      return {};
+      if (listenActiveKeyRef.current !== null) {
+        listenActiveKeyRef.current = null;
+        listenColorsRef.current = {};
+      }
+      return listenColorsRef.current;
     }
-    const colors: Record<string, string> = {};
+    const activeIds: string[] = [];
     for (const note of musicxml.notes) {
       if (
         note.startBeat <= currentBeat &&
         currentBeat < note.startBeat + note.durationBeats
       ) {
-        colors[
-          `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-        ] = accent;
+        activeIds.push(
+          `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
+        );
       }
     }
-    return colors;
+    activeIds.sort();
+    const key = activeIds.join(",");
+    if (key === listenActiveKeyRef.current) {
+      return listenColorsRef.current;
+    }
+    listenActiveKeyRef.current = key;
+    const colors: Record<string, string> = {};
+    for (const id of activeIds) {
+      colors[id] = accent;
+    }
+    listenColorsRef.current = colors;
+    return listenColorsRef.current;
   }, [
     waitMode.active,
     waitMode.noteColors,

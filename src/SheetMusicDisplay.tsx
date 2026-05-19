@@ -1,3 +1,4 @@
+import { memo } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
@@ -798,7 +799,7 @@ interface StaffProps {
   inkColor: string;
 }
 
-function Staff({
+const Staff = memo(function Staff({
   part,
   partIndex,
   layout,
@@ -846,7 +847,7 @@ function Staff({
       )}
     </g>
   );
-}
+});
 
 // ── Staff Lines ───────────────────────────────────────────────────────────────
 
@@ -919,7 +920,7 @@ interface MeasureProps {
   inkColor: string;
 }
 
-function Measure({
+const Measure = memo(function Measure({
   measure,
   measureIndex: _measureIndex,
   partIndex,
@@ -1061,7 +1062,7 @@ function Measure({
       />
     </g>
   );
-}
+});
 
 // ── Clef ──────────────────────────────────────────────────────────────────────
 
