@@ -97,6 +97,19 @@ export function App() {
 
   const theme = THEMES[themeName];
 
+  // When true, SheetMusicDisplay will snap the scroll to the cursor on its next
+  // render instead of animating. Set by setCursor("jump"), cleared by the display.
+  const snapPendingRef = useRef(false);
+
+  // Single point of truth for advancing the cursor. "jump" snaps the scroll
+  // instantly; "smooth" lets the cursor-following animation handle it.
+  function setCursor(beat: number, behavior: "jump" | "smooth") {
+    setCurrentBeat(beat);
+    if (behavior === "jump") {
+      snapPendingRef.current = true;
+    }
+  }
+
   // Player + wait mode
   const playerRef = useRef<MidiPlayer | null>(null);
   const measureRangeRef = useRef(measureRange);
@@ -245,6 +258,10 @@ export function App() {
     () => sendNoteRef.current?.(42, 55, 80, 9),
     handleWaitModeComplete,
     accent,
+    (beat) => {
+      setCurrentBeat(beat);
+      playerRef.current?.seek(beat);
+    },
     appendToDebugLog,
   );
 
@@ -382,12 +399,12 @@ export function App() {
       }
       player.onPositionUpdate = (beat) => {
         if (!waitMode.activeRef.current) {
-          setCurrentBeat(beat);
+          setCursor(beat, "smooth");
         }
       };
       player.onEnd = (beat) => {
         setIsPlaying(false);
-        setCurrentBeat(beat);
+        setCursor(beat, "jump");
         if (modeRef.current === "playalong") {
           clearPlayalongAudio(player);
           playalong.notifyEnd();
@@ -401,16 +418,6 @@ export function App() {
       playerRef.current = null;
     };
   }, [musicxml]);
-
-  // Keep currentBeat and the player position in sync with the wait-mode cursor
-  // so that both modes drive the score cursor through the same value.
-  useEffect(() => {
-    if (waitMode.cursorBeat === null) {
-      return;
-    }
-    setCurrentBeat(waitMode.cursorBeat);
-    playerRef.current?.seek(waitMode.cursorBeat);
-  }, [waitMode.cursorBeat]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: waitMode.activeRef is a ref
   useEffect(() => {
@@ -427,7 +434,7 @@ export function App() {
         player.seek(startBeat);
       }
       if (!waitMode.activeRef.current) {
-        setCurrentBeat(startBeat);
+        setCursor(startBeat, "jump");
       }
     } else if (player) {
       player.focusRange = null;
@@ -455,7 +462,7 @@ export function App() {
       ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
       : 0;
     playerRef.current?.seek(startBeat);
-    setCurrentBeat(startBeat);
+    setCursor(startBeat, "jump");
   }
 
   async function handlePlayPause() {
@@ -487,7 +494,7 @@ export function App() {
         const range = measureRangeRef.current;
         const startBeat = range ? (range.from - 1) * mx.timeSigNum : 0;
         player.seek(startBeat);
-        setCurrentBeat(startBeat);
+        setCursor(startBeat, "jump");
 
         playalong.startCountIn();
         setIsPlaying(true); // show stop button during count-in
@@ -559,7 +566,7 @@ export function App() {
     playerRef.current?.pause();
     playerRef.current?.seek(startBeat);
     setIsPlaying(false);
-    setCurrentBeat(startBeat);
+    setCursor(startBeat, "jump");
   }
 
   function handleBpmChange(newBpm: number) {
@@ -584,10 +591,11 @@ export function App() {
   function handleSeek(beat: number) {
     if (mode === "wait") {
       waitMode.seekToBeat(beat);
+      setCursor(beat, "jump");
       return;
     }
     playerRef.current?.seek(beat);
-    setCurrentBeat(beat);
+    setCursor(beat, "jump");
   }
 
   function handleModeChange(newMode: "wait" | "playalong" | "listen") {
@@ -619,7 +627,7 @@ export function App() {
     player?.pause();
     setIsPlaying(false);
     player?.seek(startBeat);
-    setCurrentBeat(startBeat);
+    setCursor(startBeat, "jump");
 
     setMode(newMode);
 
@@ -835,6 +843,7 @@ export function App() {
         onModeChange={handleModeChange}
         onTrackToggle={onTrackToggle}
         onGoToLanding={handleGoToLanding}
+        snapPendingRef={snapPendingRef}
         noteSensitivityMilliseconds={noteSensitivityMilliseconds}
         onSensitivityChange={setNoteSensitivityMilliseconds}
         playalongTimingBeats={playalongTimingBeats}
@@ -869,7 +878,7 @@ export function App() {
               ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
               : 0;
             playerRef.current?.seek(startBeat);
-            setCurrentBeat(startBeat);
+            setCursor(startBeat, "jump");
           }}
         />
       )}

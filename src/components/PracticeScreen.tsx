@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
@@ -50,6 +50,7 @@ interface PracticeScreenProps {
     beat: number,
   ) => void;
   onGoToLanding: () => void;
+  snapPendingRef: { current: boolean };
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
@@ -86,6 +87,7 @@ export function PracticeScreen({
   onModeChange,
   onTrackToggle,
   onGoToLanding,
+  snapPendingRef,
   noteSensitivityMilliseconds,
   onSensitivityChange,
   playalongTimingBeats,
@@ -102,41 +104,6 @@ export function PracticeScreen({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
-  // Imperative handle into SheetMusicDisplay's scroll logic — calling this
-  // bypasses Preact state entirely, so the view responds in the same frame as
-  // the pointer event with no render-cycle lag.
-  const viewScrollRef = useRef<((beat: number | null) => void) | null>(null);
-
-  // When wait mode is enabled, snap the sheet to the cursor position so it's
-  // in view. Calling viewScrollRef with the beat then immediately with null
-  // performs an instant scroll and releases scrub-lock so cursor-following resumes.
-  const playbackBeatRef = useRef(playbackBeat);
-  useEffect(() => {
-    playbackBeatRef.current = playbackBeat;
-  });
-  useEffect(() => {
-    if (mode === "wait" && playbackBeatRef.current !== undefined) {
-      viewScrollRef.current?.(playbackBeatRef.current);
-      viewScrollRef.current?.(null);
-    }
-  }, [mode]);
-
-  // Scroll to the cursor whenever playalong starts (cursor jumps to range start)
-  // or stops (cursor returns to range start after abort).
-  const prevPlayalongPhaseRef = useRef(playalongPhase);
-  useEffect(() => {
-    const prev = prevPlayalongPhaseRef.current;
-    prevPlayalongPhaseRef.current = playalongPhase;
-    const shouldScroll =
-      ((prev === "idle" || prev === "complete") &&
-        playalongPhase === "counting-in") ||
-      ((prev === "counting-in" || prev === "playing") &&
-        playalongPhase === "idle");
-    if (shouldScroll && playbackBeatRef.current !== undefined) {
-      viewScrollRef.current?.(playbackBeatRef.current);
-      viewScrollRef.current?.(null);
-    }
-  }, [playalongPhase]);
 
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
@@ -179,7 +146,7 @@ export function PracticeScreen({
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
           onFocusRangeChange={onMeasureRangeChange}
-          viewScrollRef={viewScrollRef}
+          snapPendingRef={snapPendingRef}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}

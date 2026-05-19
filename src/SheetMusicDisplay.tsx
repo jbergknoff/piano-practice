@@ -246,10 +246,9 @@ interface SheetMusicDisplayProps {
   focusColor?: string;
   /** Called when the user finishes dragging a focus boundary handle. */
   onFocusRangeChange?: (range: { from: number; to: number }) => void;
-  /** When provided, SheetMusicDisplay writes a scroll function into this ref.
-   *  Calling ref.current(beat) immediately scrolls to that beat without touching
-   *  playback; calling ref.current(null) releases scrub control back to cursor-following. */
-  viewScrollRef?: { current: ((beat: number | null) => void) | null };
+  /** When set to true by the caller, the next cursorX update will snap the
+   *  scroll instantly instead of animating, then reset itself to false. */
+  snapPendingRef?: { current: boolean };
   /** Called on right-click or long-press with the measure and beat at that position. */
   onSheetContextMenu?: (info: {
     measureNumber: number;
@@ -272,7 +271,7 @@ export function SheetMusicDisplay({
   focusRange,
   focusColor,
   onFocusRangeChange,
-  viewScrollRef,
+  snapPendingRef,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -306,21 +305,41 @@ export function SheetMusicDisplay({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTargetRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
-  const isScrubbingRef = useRef(false);
+  // Set true when the user manually scrolls; suppresses cursor-following until
+  // a snap or until the cursor scrolls back into the visible viewport.
+  const detachedRef = useRef(false);
 
-  // Smooth cursor-following animation — suppressed while the scrubber has control.
+  // Cursor-following scroll. When snapPendingRef is true the scroll jumps
+  // instantly to the cursor; otherwise it eases smoothly.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapPendingRef is a stable ref object
   useEffect(() => {
-    if (isScrubbingRef.current) {
-      return;
-    }
-    if (!containerRef.current) {
+    if (!containerRef.current || cursorX === null) {
       return;
     }
     const el = containerRef.current;
 
-    if (cursorX === null) {
-      return; // no cursor to follow — leave scroll position as-is
+    // A jump was requested (reset, seek, mode change, etc.).
+    if (snapPendingRef?.current) {
+      snapPendingRef.current = false;
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
+      el.scrollLeft = Math.max(0, cursorX - el.clientWidth / 2);
+      detachedRef.current = false;
+      return;
     }
+
+    if (detachedRef.current) {
+      // Re-attach automatically once the cursor scrolls back into the viewport.
+      const visible = cursorX >= el.scrollLeft && cursorX <= el.scrollLeft + el.clientWidth;
+      if (!visible) {
+        return;
+      }
+      detachedRef.current = false;
+    }
+
     scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
 
     if (scrollRafRef.current !== null) {
@@ -345,35 +364,6 @@ export function SheetMusicDisplay({
     };
     scrollRafRef.current = requestAnimationFrame(step);
   }, [cursorX]);
-
-  // Populate the imperative scroll ref so the scrubber can drive the view
-  // synchronously without going through Preact state.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable; score/layout are the only values captured that can change
-  useEffect(() => {
-    if (!viewScrollRef) {
-      return;
-    }
-    viewScrollRef.current = (beat: number | null) => {
-      const el = containerRef.current;
-      if (!el) {
-        return;
-      }
-      if (beat === null) {
-        isScrubbingRef.current = false;
-        return;
-      }
-      isScrubbingRef.current = true;
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      const x = computeCursorX(beat, score, layout);
-      if (x !== null) {
-        el.scrollLeft = Math.max(0, x - el.clientWidth / 2);
-      }
-    };
-  }, [score, layout]);
 
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -475,6 +465,7 @@ export function SheetMusicDisplay({
       scrollTargetRef.current = null;
       dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
       el.setPointerCapture(e.pointerId);
+      detachedRef.current = true;
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -489,15 +480,26 @@ export function SheetMusicDisplay({
       dragRef.current = null;
     };
 
+    const onWheel = () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      scrollTargetRef.current = null;
+      detachedRef.current = true;
+    };
+
     el.addEventListener("pointerdown", onPointerDown);
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointerleave", onPointerUp);
+    el.addEventListener("wheel", onWheel, { passive: true });
     return () => {
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointerleave", onPointerUp);
+      el.removeEventListener("wheel", onWheel);
     };
   }, []);
 

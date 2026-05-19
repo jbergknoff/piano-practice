@@ -23,11 +23,6 @@ export interface WaitModeHandle {
    * callbacks (e.g. the MidiPlayer onPositionUpdate) without stale-closure risk.
    */
   activeRef: { current: boolean };
-  /**
-   * The beat the cursor should sit on while wait mode is active.
-   * `null` when wait mode is inactive.
-   */
-  cursorBeat: number | null;
   /** Amber note-color map for the expected chord; empty when inactive. */
   noteColors: Record<string, string>;
   /** True for ~600 ms after a wrong note is pressed; use for visual feedback. */
@@ -76,6 +71,7 @@ export function useWaitMode(
   onWrongNote?: () => void,
   onComplete?: (stats: { wrongNotes: number; elapsedMs: number }) => void,
   noteColor = "#E08A3E",
+  onCursorAdvance?: (beat: number) => void,
   appendToDebugLog: (event: DebugBeatEvent) => void = () => {},
 ): WaitModeHandle {
   const [active, setActive] = useState(true);
@@ -95,6 +91,7 @@ export function useWaitMode(
   const onWrongNoteRef = useRef(onWrongNote);
   const onCompleteRef = useRef(onComplete);
   const appendToDebugLogRef = useRef(appendToDebugLog);
+  const onCursorAdvanceRef = useRef(onCursorAdvance);
 
   useEffect(() => {
     onWrongNoteRef.current = onWrongNote;
@@ -107,6 +104,10 @@ export function useWaitMode(
   useEffect(() => {
     appendToDebugLogRef.current = appendToDebugLog;
   }, [appendToDebugLog]);
+
+  useEffect(() => {
+    onCursorAdvanceRef.current = onCursorAdvance;
+  }, [onCursorAdvance]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -191,11 +192,6 @@ export function useWaitMode(
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
   }, [measureRange]);
-
-  const cursorBeat =
-    active && waitPoints.length > 0
-      ? waitPoints[Math.min(pointIndex, waitPoints.length - 1)].beat
-      : null;
 
   const noteColors = useMemo<Record<string, string>>(() => {
     if (!active || !musicxml || waitPoints.length === 0) {
@@ -421,9 +417,11 @@ export function useWaitMode(
         attemptStartTimeRef.current = null;
         pointIndexRef.current = first;
         setPointIndex(first);
+        onCursorAdvanceRef.current?.(points[first].beat);
       } else {
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
+        onCursorAdvanceRef.current?.(points[nextIdx].beat);
       }
       appendToDebugLogRef.current({
         ...debugBase,
@@ -440,7 +438,6 @@ export function useWaitMode(
   return {
     active,
     activeRef,
-    cursorBeat,
     noteColors,
     wrongNoteFlash,
     onNoteEvent,
