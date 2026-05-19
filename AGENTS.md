@@ -59,11 +59,20 @@ Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persis
 
 ## Debug log
 
-`useWaitMode` maintains a rolling buffer (last 50 events) of every note event processed in Wait mode. Each `DebugBeatEvent` (exported from `src/use-wait-mode.ts`) captures the note, kind (on/off), current wait-point index, measure number, absolute beat, expected chord, all held notes, milliseconds since the last advance, and a classified outcome (`advance`, `wrong`, `grace`, `incomplete`, `debounce`, `off`).
+Both `useWaitMode` and `usePlayalongMode` maintain independent rolling buffers (last 50 events each) of every note event they process. `App.tsx` merges and time-sorts both buffers before passing them to the UI, producing a single chronological timeline across modes.
 
-The log is exposed via `waitMode.getDebugLog()` and rendered in the **Debugging** tab of the Help (?) modal (`src/components/HelpBadge.tsx`). Users copy it from there and paste it into bug reports.
+The shared types and buffer implementation live in `src/debug-log.ts`:
 
-See `docs/debug-log.md` for the full format reference and a field-by-field guide to diagnosing the two main failure modes (false negative: correct chord not recognised; false positive: wrong chord accepted).
+- `DebugCircularBuffer` — O(1) append via a `head` index and a `count`; `readDebugBuffer` reconstructs oldest-first order.
+- `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `debounce`, `off`).
+- `PlayalongDebugEvent` — captures note, kind, measure, beat, held notes, and outcome (`matched`, `extra`, `off`, `inactive`).
+- Both share the `DebugBeatEvent` discriminated union, keyed on the `mode` field.
+
+The log is exposed via `waitMode.getDebugLog()` and `playalong.getDebugLog()`, then rendered in the **Debugging** tab of the Help (?) modal by `src/components/DebugLogTab.tsx`. Users copy it from there and paste it into bug reports.
+
+Unit tests for the circular buffer are in `src/debug-log.test.ts` (run with `bun test`).
+
+See `docs/debug-log.md` for the full format reference and a field-by-field guide to the three main diagnostic cases: (1) correct chord not recognised in Wait mode, (2) wrong chord accepted in Wait mode, (3) correct note scored as EXTRA in Playalong mode.
 
 When investigating a note-matching bug from a submitted log, the key fields are `expected` vs `held` at the failing event, and `msSinceAdvance` to determine whether grace-period or debounce logic was involved.
 
