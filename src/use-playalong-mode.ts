@@ -6,6 +6,7 @@ import {
   useState,
 } from "preact/hooks";
 import type { MidiConversionResult, PlaybackNote } from "./midi-to-musicxml";
+import { newDebugBuffer, type DebugBeatEvent } from "./debug-log";
 
 export interface PlayalongStats {
   score: number; // 0–100
@@ -22,6 +23,7 @@ export interface PlayalongModeHandle {
   startPlaying: () => void;
   abort: () => void;
   notifyEnd: () => void;
+  getDebugLog: () => DebugBeatEvent[];
 }
 
 function noteKey(note: PlaybackNote): string {
@@ -45,6 +47,8 @@ export function usePlayalongMode(
   const measureRangeRef = useRef(measureRange);
   const musicxmlRef = useRef(musicxml);
   const onCompleteRef = useRef(onComplete);
+  const debugBufferRef = useRef(newDebugBuffer());
+  const heldNotesRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     toleranceBeatRef.current = toleranceBeats;
@@ -67,6 +71,8 @@ export function usePlayalongMode(
     hitNoteIdsRef.current = new Set();
     setHitNoteIds(new Set());
     extraNoteCountRef.current = 0;
+    debugBufferRef.current = newDebugBuffer();
+    heldNotesRef.current = new Set();
   }, [musicxml]);
 
   // Notes in the current selection (not tie-continuations).
@@ -147,11 +153,43 @@ export function usePlayalongMode(
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reads only from refs; stable by design
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
-    if (phaseRef.current !== "playing" || kind !== "on") {
+    const now = Date.now();
+    const beat = currentBeatRef.current;
+    const timeSigNum = musicxmlRef.current?.timeSigNum ?? 4;
+    const measure = beat >= 0 ? Math.floor(beat / timeSigNum) + 1 : -1;
+    const held = heldNotesRef.current;
+
+    if (kind === "off") {
+      held.delete(noteNumber);
+      debugBufferRef.current.append({
+        mode: "playalong",
+        t: now,
+        note: noteNumber,
+        kind: "off",
+        measure,
+        beat,
+        held: [...held],
+        outcome: "off",
+      });
       return;
     }
 
-    const beat = currentBeatRef.current;
+    held.add(noteNumber);
+
+    if (phaseRef.current !== "playing") {
+      debugBufferRef.current.append({
+        mode: "playalong",
+        t: now,
+        note: noteNumber,
+        kind: "on",
+        measure,
+        beat,
+        held: [...held],
+        outcome: "inactive",
+      });
+      return;
+    }
+
     const notes = selectionNotesRef.current;
     const tol = toleranceBeatRef.current;
 
@@ -177,7 +215,20 @@ export function usePlayalongMode(
     } else {
       extraNoteCountRef.current += 1;
     }
+
+    debugBufferRef.current.append({
+      mode: "playalong",
+      t: now,
+      note: noteNumber,
+      kind: "on",
+      measure,
+      beat,
+      held: [...held],
+      outcome: matched ? "matched" : "extra",
+    });
   }, []);
+
+  const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
 
   return {
     phase,
@@ -188,5 +239,6 @@ export function usePlayalongMode(
     startPlaying,
     abort,
     notifyEnd,
+    getDebugLog,
   };
 }

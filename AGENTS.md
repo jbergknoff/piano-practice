@@ -57,6 +57,25 @@ Three modes stored as `"wait" | "race" | "listen"` in `App.tsx` state and persis
 
 
 
+## Debug log
+
+Both `useWaitMode` and `usePlayalongMode` maintain independent rolling buffers (last 50 events each) of every note event they process. `App.tsx` merges and time-sorts both buffers before passing them to the UI, producing a single chronological timeline across modes.
+
+The shared types live in `src/debug-log.ts`:
+
+- `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `debounce`, `off`).
+- `PlayalongDebugEvent` — captures note, kind, measure, beat, held notes, and outcome (`matched`, `extra`, `off`, `inactive`).
+- Both share the `DebugBeatEvent` discriminated union, keyed on the `mode` field.
+- `newDebugBuffer()` returns a `CircularBuffer<DebugBeatEvent>` pre-sized to `DEBUG_LOG_MAX`.
+
+The underlying O(1) ring buffer is a generic `CircularBuffer<T>` class in `lib/circular-buffer/index.ts`. It exposes two methods: `append(item)` and `read()` (returns entries oldest-first). Unit tests are in `lib/circular-buffer/index.test.ts` (run with `bun test`).
+
+The log is exposed via `waitMode.getDebugLog()` and `playalong.getDebugLog()`, then rendered in the **Debugging** tab of the Help (?) modal by `src/components/DebugLogTab.tsx`. Users copy it from there and paste it into bug reports.
+
+See `docs/debug-log.md` for the full format reference and a field-by-field guide to the three main diagnostic cases: (1) correct chord not recognised in Wait mode, (2) wrong chord accepted in Wait mode, (3) correct note scored as EXTRA in Playalong mode.
+
+When investigating a note-matching bug from a submitted log, the key fields are `expected` vs `held` at the failing event, and `msSinceAdvance` to determine whether grace-period or debounce logic was involved.
+
 ## Local development
 
 The only local requirements are `make` and `docker`. Bun, Node, and Biome are all run inside a Docker container via `docker-compose`; nothing needs to be installed on the host.
@@ -78,6 +97,8 @@ The first run of any target will install dependencies into `node_modules/` (whic
 `dist/` is gitignored and excluded from Biome linting/formatting. `make build` must be run before `index.html` will work — it produces `dist/main.js`, which the page loads.
 
 ## Code style
+
+Always write out full words in variable, function, and type names. Never shorten names by dropping letters or syllables (e.g. `debugBase` not `dbgBase`, `temporary` not `tmp`, `index` not `idx`, `previous` not `prev`). Abbreviated names slow down readers who aren't already familiar with the code.
 
 Always use braces around conditional and loop bodies, even for single-line statements:
 

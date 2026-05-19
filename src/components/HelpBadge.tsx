@@ -1,19 +1,25 @@
 import { useState } from "preact/hooks";
+import type { DebugBeatEvent } from "../use-wait-mode";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
 import { BluetoothIcon } from "./icons";
+import { DebugLogTab } from "./DebugLogTab";
 
 const IS_MOBILE_BRAVE =
   "brave" in navigator && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-type Tab = "about" | "bluetooth";
+type Tab = "about" | "bluetooth" | "debugging";
 
-export function BluetoothHelpBadge({
+const emptyLog = (): DebugBeatEvent[] => [];
+
+export function HelpBadge({
   theme,
   accent,
+  getDebugLog = emptyLog,
 }: {
   theme: ThemeTokens;
   accent: string;
+  getDebugLog?: () => DebugBeatEvent[];
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("about");
@@ -130,11 +136,12 @@ export function BluetoothHelpBadge({
                 flexShrink: 0,
               }}
             >
-              {(["about", "bluetooth"] as Tab[]).map((t) => {
+              {(["about", "bluetooth", "debugging"] as Tab[]).map((t) => {
                 const active = tab === t;
                 const labels: Record<Tab, string> = {
                   about: "About",
                   bluetooth: "Bluetooth",
+                  debugging: "Debugging",
                 };
                 return (
                   <button
@@ -171,8 +178,14 @@ export function BluetoothHelpBadge({
             >
               {tab === "about" ? (
                 <AboutTab theme={theme} accent={accent} />
-              ) : (
+              ) : tab === "bluetooth" ? (
                 <BluetoothTab theme={theme} accent={accent} />
+              ) : (
+                <DebugLogTab
+                  theme={theme}
+                  accent={accent}
+                  getDebugLog={getDebugLog}
+                />
               )}
             </div>
           </div>

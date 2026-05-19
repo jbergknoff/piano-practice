@@ -4,7 +4,7 @@ import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
 import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
 import type { useBluetooth } from "../useBluetooth";
-import { BluetoothHelpBadge } from "./BluetoothHelpBadge";
+import { HelpBadge } from "./HelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
 import { SettingsDrawer } from "./SettingsDrawer";
@@ -56,6 +56,7 @@ interface PracticeScreenProps {
   onPlayalongTimingChange: (beats: number) => void;
   playalongPianoAudio: boolean;
   onPlayalongPianoAudioChange: (enabled: boolean) => void;
+  getDebugLog: () => import("../use-wait-mode").DebugBeatEvent[];
 }
 
 export function PracticeScreen({
@@ -92,6 +93,7 @@ export function PracticeScreen({
   playalongPianoAudio,
   onPlayalongPianoAudioChange,
   fileHash,
+  getDebugLog,
 }: PracticeScreenProps) {
   const playalongActive =
     mode === "playalong" &&
@@ -535,9 +537,7 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        {bluetooth.status !== "connected" && (
-          <BluetoothHelpBadge theme={theme} accent={accent} />
-        )}
+        <HelpBadge theme={theme} accent={accent} getDebugLog={getDebugLog} />
         <ConnectionBadge
           theme={theme}
           accent={accent}
