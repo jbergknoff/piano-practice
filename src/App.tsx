@@ -551,6 +551,8 @@ export function App() {
       player.pause();
       setIsPlaying(false);
     } else {
+      // Snap the view back to the cursor in case the user scrolled away while paused.
+      setCursor(currentBeatRef.current, "jump");
       await player.play();
       setIsPlaying(true);
     }
