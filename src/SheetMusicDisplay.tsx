@@ -255,6 +255,8 @@ interface SheetMusicDisplayProps {
   /** Incremented by the caller on every jump. The snap effect depends on this
    *  so it always fires — even if the beat is identical to the previous jump. */
   snapGeneration?: number;
+  /** When true, user scroll (drag and wheel) is disabled. Set while music is playing. */
+  scrollLocked?: boolean;
   /** Called on right-click or long-press with the measure and beat at that position. */
   onSheetContextMenu?: (info: {
     measureNumber: number;
@@ -279,6 +281,7 @@ export function SheetMusicDisplay({
   onFocusRangeChange,
   snapBeatRef,
   snapGeneration,
+  scrollLocked = false,
   onSheetContextMenu,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
@@ -315,6 +318,10 @@ export function SheetMusicDisplay({
   // Set true when the user manually scrolls; suppresses cursor-following until
   // a snap or until the cursor scrolls back into the visible viewport.
   const detachedRef = useRef(false);
+  // Mirrors the scrollLocked prop so the event handlers (set up once in a
+  // useEffect([])) can read the current value without a stale closure.
+  const scrollLockedRef = useRef(scrollLocked);
+  scrollLockedRef.current = scrollLocked;
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
   // Reads the target beat from snapBeatRef and computes the scroll position via
@@ -340,7 +347,9 @@ export function SheetMusicDisplay({
     }
     scrollTargetRef.current = null;
     const x = computeCursorX(beat, score, layout);
-    el.scrollLeft = x !== null ? Math.max(0, x - el.clientWidth / 2) : 0;
+    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    el.scrollLeft =
+      x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
     detachedRef.current = false;
   }, [snapGeneration, score, layout]);
 
@@ -351,17 +360,24 @@ export function SheetMusicDisplay({
     }
     const el = containerRef.current;
 
+    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
+    const cursorScrollPos = leftPad + cursorX;
+
     if (detachedRef.current) {
       // Re-attach automatically once the cursor scrolls back into the viewport.
       const visible =
-        cursorX >= el.scrollLeft && cursorX <= el.scrollLeft + el.clientWidth;
+        cursorScrollPos >= el.scrollLeft &&
+        cursorScrollPos <= el.scrollLeft + el.clientWidth;
       if (!visible) {
         return;
       }
       detachedRef.current = false;
     }
 
-    scrollTargetRef.current = Math.max(0, cursorX - el.clientWidth / 2);
+    scrollTargetRef.current = Math.max(
+      0,
+      cursorScrollPos - el.clientWidth * 0.38,
+    );
 
     if (scrollRafRef.current !== null) {
       return; // animation loop already running
@@ -478,6 +494,9 @@ export function SheetMusicDisplay({
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      if (scrollLockedRef.current) {
+        return;
+      }
       // Cancel any running auto-scroll so the manual drag always wins.
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
@@ -501,7 +520,11 @@ export function SheetMusicDisplay({
       dragRef.current = null;
     };
 
-    const onWheel = () => {
+    const onWheel = (e: WheelEvent) => {
+      if (scrollLockedRef.current) {
+        e.preventDefault();
+        return;
+      }
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
         scrollRafRef.current = null;
@@ -514,7 +537,8 @@ export function SheetMusicDisplay({
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointerleave", onPointerUp);
-    el.addEventListener("wheel", onWheel, { passive: true });
+    // passive: false so we can call preventDefault() to block wheel scroll during playback.
+    el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
