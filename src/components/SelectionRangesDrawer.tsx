@@ -1,6 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
-import { type WaitModeAttempt, loadAttemptHistory } from "../use-file-history";
+import {
+  type PlayalongAttempt,
+  type WaitModeAttempt,
+  loadAttemptHistory,
+  loadPlayalongAttemptHistory,
+} from "../use-file-history";
 
 interface SelectionRangesDrawerProps {
   open: boolean;
@@ -11,6 +16,7 @@ interface SelectionRangesDrawerProps {
   measureRange: { from: number; to: number } | null;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   fileHash: string | null;
+  markedBpm: number;
 }
 
 function rangesEqual(
@@ -34,22 +40,24 @@ function bestAttempt(attempts: WaitModeAttempt[]): WaitModeAttempt | null {
   if (attempts.length === 0) {
     return null;
   }
-  return attempts.reduce((best, a) => {
-    if (a.wrongNotes < best.wrongNotes) {
-      return a;
-    }
-    if (a.wrongNotes === best.wrongNotes && a.elapsedMs < best.elapsedMs) {
-      return a;
-    }
-    return best;
-  });
+  return attempts.reduce((best, a) => (a.score > best.score ? a : best));
 }
 
-function formatTime(ms: number): string {
-  const totalSec = Math.round(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
+function bestPlayalongAttempt(
+  attempts: PlayalongAttempt[],
+  markedBpm: number,
+): PlayalongAttempt | null {
+  const atTempo = attempts.filter((a) => a.bpm === markedBpm);
+  if (atTempo.length === 0) {
+    return null;
+  }
+  return atTempo.reduce((best, a) => (a.score > best.score ? a : best));
+}
+
+function scoreColor(score: number): string {
+  if (score >= 80) return "#2e7d32";
+  if (score >= 50) return "#e65100";
+  return "#c62828";
 }
 
 function MiniBar({
@@ -106,16 +114,21 @@ export function SelectionRangesDrawer({
   measureRange,
   onMeasureRangeChange,
   fileHash,
+  markedBpm,
 }: SelectionRangesDrawerProps) {
   const n = totalMeasures;
 
   const [attemptHistory, setAttemptHistory] = useState<
     Record<string, WaitModeAttempt[]>
   >({});
+  const [playalongHistory, setPlayalongHistory] = useState<
+    Record<string, PlayalongAttempt[]>
+  >({});
 
   useEffect(() => {
     if (open && fileHash) {
       setAttemptHistory(loadAttemptHistory(fileHash));
+      setPlayalongHistory(loadPlayalongAttemptHistory(fileHash));
     }
   }, [open, fileHash]);
 
@@ -159,6 +172,13 @@ export function SelectionRangesDrawer({
   ): WaitModeAttempt | null {
     const key = selectionKey(range);
     return bestAttempt(attemptHistory[key] ?? []);
+  }
+
+  function bestPlayalongForRange(
+    range: { from: number; to: number } | null,
+  ): PlayalongAttempt | null {
+    const key = selectionKey(range);
+    return bestPlayalongAttempt(playalongHistory[key] ?? [], markedBpm);
   }
 
   return (
@@ -245,6 +265,7 @@ export function SelectionRangesDrawer({
           label="Whole piece"
           sublabel={`mm. 1–${n}`}
           best={bestForRange(null)}
+          bestPlayalong={bestPlayalongForRange(null)}
           active={wholeIsActive}
           accent={accent}
           theme={theme}
@@ -271,6 +292,7 @@ export function SelectionRangesDrawer({
                   label={p.label}
                   sublabel={p.range ? `mm. ${p.range.from}–${p.range.to}` : ""}
                   best={bestForRange(p.range)}
+                  bestPlayalong={bestPlayalongForRange(p.range)}
                   active={active}
                   accent={accent}
                   theme={theme}
@@ -312,6 +334,7 @@ export function SelectionRangesDrawer({
                       p.range ? `mm. ${p.range.from}–${p.range.to}` : ""
                     }
                     best={bestForRange(p.range)}
+                    bestPlayalong={bestPlayalongForRange(p.range)}
                     active={active}
                     accent={accent}
                     theme={theme}
@@ -369,6 +392,7 @@ function PresetButton({
   label,
   sublabel,
   best,
+  bestPlayalong,
   active,
   accent,
   theme,
@@ -378,12 +402,14 @@ function PresetButton({
   label: string;
   sublabel: string;
   best: WaitModeAttempt | null;
+  bestPlayalong: PlayalongAttempt | null;
   active: boolean;
   accent: string;
   theme: ThemeTokens;
   miniBar: preact.ComponentChildren;
   onClick: () => void;
 }) {
+  const hasAny = best !== null || bestPlayalong !== null;
   return (
     <button
       type="button"
@@ -425,16 +451,27 @@ function PresetButton({
         <span style={{ fontSize: 10, color: theme.inkSoft }}>{sublabel}</span>
       </div>
       {miniBar}
-      {best !== null ? (
-        <span
+      {hasAny ? (
+        <div
           style={{
-            fontSize: 10,
-            color: best.wrongNotes === 0 ? "#5E8C5A" : theme.inkSoft,
+            display: "flex",
+            gap: 8,
             fontVariantNumeric: "tabular-nums",
           }}
         >
-          Best: {best.wrongNotes} wrong · {formatTime(best.elapsedMs)}
-        </span>
+          {best !== null && (
+            <span style={{ fontSize: 10, color: scoreColor(best.score) }}>
+              Wait {best.score}%
+            </span>
+          )}
+          {bestPlayalong !== null && (
+            <span
+              style={{ fontSize: 10, color: scoreColor(bestPlayalong.score) }}
+            >
+              Play {bestPlayalong.score}%
+            </span>
+          )}
+        </div>
       ) : (
         <span style={{ fontSize: 10, color: theme.inkFaint }}>
           No attempts yet
