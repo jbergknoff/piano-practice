@@ -45,6 +45,22 @@ IDs are deterministic from the MusicXML structure. To highlight a note, pass `no
 - **Ties are parsed but not rendered.** Tie information is preserved in the data model for future use.
 - **The Bravura font improves clef glyphs.** The clef symbols are Unicode characters (U+1D11E, U+1D122) that render with any SMuFL-compliant music font. Without Bravura the browser falls back to whatever music font the OS provides. Bravura (OFL license) can be bundled as a WOFF2 in `dist/` for consistent rendering.
 
+## Cursor and scroll
+
+The playback cursor is a vertical `<line>` element drawn at `cursorX`, computed by `computeCursorX(beat, score, layout)`. Given a beat (in quarter notes), it finds the containing measure, walks the measure's events to find the two adjacent event-X anchors that straddle the beat, and linearly interpolates between them. The result is a continuously-moving cursor rather than one that jumps event-to-event.
+
+`cursorX` is a pure derivation from `playbackBeat`, `score`, and `layout` — it is not stored as state, just recomputed on every render.
+
+### Scroll following
+
+The scroll container (`<div style="overflow-x: auto">`) is driven by a `useEffect` that fires whenever `cursorX` changes:
+
+- **Smooth follow** (incremental beat changes during playback): an easing RAF loop moves `scrollLeft` by 12% of the remaining distance each frame, keeping the cursor centered without jarring jumps.
+- **Instant snap** (reset, seek, mode change): the caller sets `snapPendingRef.current = true` before changing the beat. The effect sees this flag on its first run after the re-render, skips the animation, sets `scrollLeft` directly, and clears the flag.
+- **Detached** (user scrolled manually): a `detachedRef` boolean is set `true` by pointer-drag or wheel events. While detached the smooth-follow effect returns early. It re-attaches automatically when the cursor drifts back into the visible viewport, or immediately on any instant snap.
+
+The `snapPendingRef` flag is set by `setCursor(beat, "jump")` in `App.tsx` and consumed (and cleared) by `SheetMusicDisplay` — there is no function call crossing the component boundary, just a shared ref.
+
 ## Future extension: ad-hoc note overlay
 
 The `<svg>` is a plain DOM element. A future `overlayNotes` prop could render a second `<g>` layer of noteheads at approximate beat positions, computed from a beat offset rather than the measure layout. This would let the app show live-played notes against the sheet music for comparison — the same coordinate math applies.
