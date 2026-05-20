@@ -4,8 +4,6 @@ import type { PlaybackNote } from "./midi-to-musicxml";
 const SCHEDULE_AHEAD = 0.3;
 // Scheduler tick interval (ms).
 const SCHEDULER_INTERVAL = 25;
-// Position update interval (ms).
-const TICK_INTERVAL = 50;
 // Small offset so the very first notes are never scheduled in the past.
 const LOOKAHEAD = 0.05;
 
@@ -14,7 +12,6 @@ export class MidiPlayer {
   private activeOscillators: OscillatorNode[] = [];
   private activeGains: AudioNode[] = [];
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   // Sorted subset of notes that still need scheduling in the current playback.
   private playQueue: PlaybackNote[] = [];
@@ -74,13 +71,11 @@ export class MidiPlayer {
     }
     this.resumeBeat = this.elapsedBeat();
     this.cancelAll();
-    this.stopTick();
     this._state = "paused";
   }
 
   stop(): void {
     this.cancelAll();
-    this.stopTick();
     this.resumeBeat = 0;
     this._state = "stopped";
     this.onPositionUpdate?.(0);
@@ -95,7 +90,6 @@ export class MidiPlayer {
 
     if (wasPlaying) {
       this.cancelAll();
-      this.stopTick();
     }
 
     this._bpm = bpm;
@@ -107,7 +101,6 @@ export class MidiPlayer {
 
   dispose(): void {
     this.cancelAll();
-    this.stopTick();
     void this.audioCtx?.close();
     this.audioCtx = null;
   }
@@ -144,11 +137,10 @@ export class MidiPlayer {
       () => this.scheduleUpcoming(),
       SCHEDULER_INTERVAL,
     );
-    this.startTick();
   }
 
-  // Called every SCHEDULER_INTERVAL ms: schedule any notes whose start time
-  // falls within the next SCHEDULE_AHEAD seconds.
+  // Called every SCHEDULER_INTERVAL ms: update position, detect end, and
+  // schedule any notes whose start time falls within the next SCHEDULE_AHEAD seconds.
   private scheduleUpcoming(): void {
     if (!this.audioCtx) {
       return;
@@ -156,6 +148,28 @@ export class MidiPlayer {
     const ctx = this.audioCtx;
     const secsPerBeat = 60 / this._bpm;
     const horizon = ctx.currentTime + SCHEDULE_AHEAD;
+
+    const beat = this.elapsedBeat();
+
+    if (this.focusRange && beat >= this.focusRange.endBeat) {
+      this.cancelAll();
+      this._state = "stopped";
+      this.resumeBeat = this.focusRange.startBeat;
+      this.onPositionUpdate?.(this.focusRange.startBeat);
+      this.onEnd?.(this.focusRange.startBeat);
+      return;
+    }
+
+    this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
+
+    if (beat >= this.totalBeats) {
+      this.cancelAll();
+      this._state = "stopped";
+      this.resumeBeat = 0;
+      this.onPositionUpdate?.(0);
+      this.onEnd?.(0);
+      return;
+    }
 
     while (this.playQueueIndex < this.playQueue.length) {
       const first = this.playQueue[this.playQueueIndex];
@@ -359,51 +373,10 @@ export class MidiPlayer {
   seek(beat: number): void {
     if (this._state === "playing") {
       this.cancelAll();
-      this.stopTick();
       this.startSchedule(beat);
     } else {
       this.resumeBeat = beat;
       this.onPositionUpdate?.(beat);
-    }
-  }
-
-  private startTick(): void {
-    this.tickTimer = setInterval(() => {
-      if (this._state !== "playing") {
-        return;
-      }
-
-      const beat = this.elapsedBeat();
-
-      // Focus range: stop and return cursor to range start.
-      if (this.focusRange && beat >= this.focusRange.endBeat) {
-        this.cancelAll();
-        this.stopTick();
-        this._state = "stopped";
-        this.resumeBeat = this.focusRange.startBeat;
-        this.onPositionUpdate?.(this.focusRange.startBeat);
-        this.onEnd?.(this.focusRange.startBeat);
-        return;
-      }
-
-      this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
-
-      if (beat >= this.totalBeats) {
-        this.stopTick();
-        this.cancelAll();
-        this._state = "stopped";
-        this.resumeBeat = 0;
-        this.onPositionUpdate?.(0);
-        this.onEnd?.(0);
-        return;
-      }
-    }, TICK_INTERVAL);
-  }
-
-  private stopTick(): void {
-    if (this.tickTimer !== null) {
-      clearInterval(this.tickTimer);
-      this.tickTimer = null;
     }
   }
 }
