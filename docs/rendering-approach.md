@@ -59,7 +59,7 @@ The scroll container (`<div style="overflow-x: auto">`) is driven by a `useEffec
 - **Instant snap** (reset, seek, mode change): the caller sets `snapPendingRef.current = true` before changing the beat. The effect sees this flag on its first run after the re-render, skips the animation, sets `scrollLeft` directly, and clears the flag.
 - **Detached** (user scrolled manually): a `detachedRef` boolean is set `true` by pointer-drag or wheel events. While detached the smooth-follow effect returns early. It re-attaches automatically when the cursor drifts back into the visible viewport, or immediately on any instant snap.
 
-The `snapPendingRef` flag is set by `setCursor(beat, "jump")` in `App.tsx` and consumed (and cleared) by `SheetMusicDisplay` — there is no function call crossing the component boundary, just a shared ref.
+The `snapPendingRef` flag is set by `setCursor(beat, "jump")` in `PracticeScreen.tsx` and consumed (and cleared) by `SheetMusicDisplay` — there is no function call crossing the component boundary, just a shared ref.
 
 ## Future extension: ad-hoc note overlay
 

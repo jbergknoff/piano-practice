@@ -8,10 +8,8 @@ import {
   useState,
 } from "preact/hooks";
 import { LandingScreen } from "./components/LandingScreen";
-import { PlayalongResultModal } from "./components/PlayalongResultModal";
 import { PracticeScreen } from "./components/PracticeScreen";
-import { WaitModeResultModal } from "./components/WaitModeResultModal";
-import { MidiPlayer } from "./midi-player";
+import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import {
   type MidiConversionResult,
   type TrackInfo,
@@ -19,24 +17,15 @@ import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "./midi-to-musicxml";
-import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import {
   type FileHistory,
-  type PlayalongAttempt,
-  type WaitModeAttempt,
   hashFileBytes,
-  loadAttemptHistory,
   loadFileHistory,
-  loadPlayalongAttemptHistory,
   loadRecentFile,
-  saveAttempt,
   saveFileHistory,
-  savePlayalongAttempt,
   saveRecentFile,
 } from "./use-file-history";
-import { type PlayalongPhase, usePlayalongMode } from "./use-playalong-mode";
-import { useWaitMode } from "./use-wait-mode";
 import { useBluetooth } from "./useBluetooth";
 import { useWakeLock } from "./useWakeLock";
 
@@ -44,101 +33,41 @@ function prettyTitle(filename: string): string {
   return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
-
 export function App() {
-  // File / MIDI state
+  // ── File / MIDI state ────────────────────────────────────────────────────
   const [midiData, setMidiData] = useState<MidiData | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
-  // Beat to seek to once the player is created after a file load with saved history.
-  const pendingSeekRef = useRef<number>(0);
-  // Mode to apply once musicxml is ready after a history restore.
-  const pendingModeRef = useRef<"wait" | "playalong" | "listen" | null>(null);
+  // The beat PracticeScreen should seek to once the player is created after
+  // a file load with saved history.
+  const [initialBeat, setInitialBeat] = useState(0);
 
-  // Transport state
+  // ── Transport + persisted settings ───────────────────────────────────────
   const [bpm, setBpm] = useState(120);
   const [baseBpm, setBaseBpm] = useState(120);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentBeat, setCurrentBeat] = useState(0);
   const [measureRange, setMeasureRange] = useState<{
     from: number;
     to: number;
   } | null>(null);
-
-  // UI state
-  const themeName: ThemeName = "cream";
-  const accent = ACCENT_COLORS[0];
   const [mode, setMode] = useState<"wait" | "playalong" | "listen">("listen");
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
   const [playalongPianoAudio, setPlayalongPianoAudio] = useState(true);
-  const playalongPianoAudioRef = useRef(playalongPianoAudio);
-  useEffect(() => {
-    playalongPianoAudioRef.current = playalongPianoAudio;
-  }, [playalongPianoAudio]);
-  const [countInBeat, setCountInBeat] = useState<{
-    beat: number;
-    timeSigNum: number;
-  } | null>(null);
-  const [completionModal, setCompletionModal] = useState<{
-    history: WaitModeAttempt[];
-    selectionLabel: string;
-    expectedDurationMs: number;
-  } | null>(null);
-  const [playalongModal, setPlayalongModal] = useState<{
-    history: PlayalongAttempt[];
-    selectionLabel: string;
-  } | null>(null);
 
-  const theme = THEMES[themeName];
-
-  // The beat to snap the scroll to on the next SheetMusicDisplay render.
-  // snapGeneration increments on each jump so the effect always fires even if
-  // the beat is the same as the previous jump or cursorX happens to be null.
-  const snapBeatRef = useRef<number | null>(null);
-  const [snapGeneration, setSnapGeneration] = useState(0);
-
-  // Single point of truth for advancing the cursor. "jump" snaps the scroll
-  // instantly; "smooth" lets the cursor-following animation handle it.
-  function setCursor(beat: number, behavior: "jump" | "smooth") {
+  // Mirror of PracticeScreen's live cursor, used only for persistence.
+  const [currentBeat, setCurrentBeat] = useState(0);
+  const handleCurrentBeatChange = useCallback((beat: number) => {
     setCurrentBeat(beat);
-    if (behavior === "jump") {
-      snapBeatRef.current = beat;
-      setSnapGeneration((generation) => generation + 1);
-    }
-  }
+  }, []);
 
-  // Player + wait mode
-  const playerRef = useRef<MidiPlayer | null>(null);
-  const measureRangeRef = useRef(measureRange);
-  useEffect(() => {
-    measureRangeRef.current = measureRange;
-  }, [measureRange]);
-
-  const bpmRef = useRef(bpm);
-  useEffect(() => {
-    bpmRef.current = bpm;
-  }, [bpm]);
-
-  const currentBeatRef = useRef(currentBeat);
-  useEffect(() => {
-    currentBeatRef.current = currentBeat;
-  }, [currentBeat]);
-
-  const modeRef = useRef(mode);
-  useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
-
-  const fileHashRef = useRef(fileHash);
-  useEffect(() => {
-    fileHashRef.current = fileHash;
-  }, [fileHash]);
+  // ── UI tokens ─────────────────────────────────────────────────────────────
+  const themeName: ThemeName = "cream";
+  const accent = ACCENT_COLORS[0];
+  const theme = THEMES[themeName];
 
   const musicxml = useMemo<MidiConversionResult | null>(() => {
     if (!midiData || selectedTracks.length === 0) {
@@ -147,12 +76,7 @@ export function App() {
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
   }, [midiData, selectedTracks]);
 
-  const musicxmlRef = useRef(musicxml);
-  useEffect(() => {
-    musicxmlRef.current = musicxml;
-  }, [musicxml]);
-
-  // Shared debug log — both modes append here; reset when the piece changes.
+  // ── Debug log ────────────────────────────────────────────────────────────
   const debugBufferRef = useRef(newDebugBuffer());
   // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml change is the reset trigger
   useEffect(() => {
@@ -161,164 +85,35 @@ export function App() {
   const appendToDebugLog = useCallback((event: DebugBeatEvent) => {
     debugBufferRef.current.append(event);
   }, []);
+  const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
 
-  // Ref breaks the dependency cycle: waitMode needs bluetooth.sendNote, but
-  // bluetooth needs waitMode.onNoteEvent. The callback is only ever invoked
-  // during async user interaction, so the ref is always current by then.
-  const sendNoteRef =
-    useRef<
-      (
-        note: number,
-        velocity: number,
-        durationMs: number,
-        channel?: number,
-      ) => void
-    >();
-  const sendNotesBatchRef =
-    useRef<
-      (
-        notes: { note: number; velocity: number; durationMs: number }[],
-        channel?: number,
-      ) => void
-    >();
-
-  function handleWaitModeComplete(stats: {
-    wrongNotes: number;
-    elapsedMs: number;
-    totalPoints: number;
-  }) {
-    const hash = fileHashRef.current;
-    const mx = musicxmlRef.current;
-    if (!hash || !mx) {
-      return;
-    }
-    const range = measureRangeRef.current;
-    const currentBpm = bpmRef.current;
-
-    const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
-
-    const selectionBeats = range
-      ? (range.to - range.from + 1) * mx.timeSigNum
-      : mx.totalBeats;
-
-    const expectedDurationMs = (selectionBeats / currentBpm) * 60_000;
-
-    const accuracy =
-      stats.totalPoints > 0
-        ? Math.max(0, 1 - stats.wrongNotes / stats.totalPoints)
-        : 1;
-    const tempo =
-      expectedDurationMs > 0
-        ? Math.min(1, expectedDurationMs / stats.elapsedMs)
-        : 1;
-    const score = Math.round(0.7 * accuracy * 100 + 0.3 * tempo * 100);
-
-    const attempt: WaitModeAttempt = {
-      timestamp: Date.now(),
-      wrongNotes: stats.wrongNotes,
-      elapsedMs: stats.elapsedMs,
-      score,
-    };
-    saveAttempt(hash, selectionKey, attempt);
-    const allAttempts = loadAttemptHistory(hash)[selectionKey] ?? [];
-
-    const selectionLabel = range
-      ? range.from === range.to
-        ? `Measure ${range.from}`
-        : `Measures ${range.from}–${range.to}`
-      : "Full piece";
-
-    setCompletionModal({
-      history: allAttempts,
-      selectionLabel,
-      expectedDurationMs,
-    });
-  }
-
-  function handlePlayalongComplete(stats: { score: number }) {
-    const hash = fileHashRef.current;
-    const mx = musicxmlRef.current;
-    if (!hash || !mx) {
-      return;
-    }
-
-    const range = measureRangeRef.current;
-    const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
-
-    const attempt: PlayalongAttempt = {
-      timestamp: Date.now(),
-      score: stats.score,
-      bpm: bpmRef.current,
-    };
-    savePlayalongAttempt(hash, selectionKey, attempt);
-    const allAttempts = loadPlayalongAttemptHistory(hash)[selectionKey] ?? [];
-
-    const selectionLabel = range
-      ? range.from === range.to
-        ? `Measure ${range.from}`
-        : `Measures ${range.from}–${range.to}`
-      : "Full piece";
-
-    setIsPlaying(false);
-    setPlayalongModal({ history: allAttempts, selectionLabel });
-  }
-
-  const playalongCancelRef = useRef<(() => void) | null>(null);
-
-  const waitMode = useWaitMode(
-    musicxml,
-    measureRange,
-    noteSensitivityMilliseconds,
-    // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
-    () => sendNoteRef.current?.(42, 55, 80, 9),
-    handleWaitModeComplete,
-    accent,
-    (beat) => {
-      setCurrentBeat(beat);
-      playerRef.current?.seek(beat);
-    },
-    appendToDebugLog,
-  );
-
-  const playalong = usePlayalongMode(
-    musicxml,
-    measureRange,
-    currentBeatRef,
-    playalongTimingBeats,
-    handlePlayalongComplete,
-    appendToDebugLog,
-  );
-
-  // Stable combined note-event handler: routes to the active mode's handler.
-  // Both onNoteEvent callbacks are stable (useCallback []); modeRef is a ref.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stable callbacks + refs
-  const combinedNoteEvent = useCallback(
+  // ── BLE MIDI ─────────────────────────────────────────────────────────────
+  // PracticeScreen writes the active mode's onNoteEvent into this ref; the
+  // bluetooth note listener dispatches incoming events through it. Keeps the
+  // construction cycle (useBluetooth needs a handler, the handler needs
+  // bluetooth.sendNote) broken by indirection.
+  const noteEventDispatchRef = useRef<
+    ((noteNumber: number, kind: "on" | "off") => void) | null
+  >(null);
+  const dispatchNoteEvent = useCallback(
     (noteNumber: number, kind: "on" | "off") => {
-      if (modeRef.current === "playalong") {
-        playalong.onNoteEvent(noteNumber, kind);
-      } else {
-        waitMode.onNoteEvent(noteNumber, kind);
-      }
+      noteEventDispatchRef.current?.(noteNumber, kind);
     },
     [],
   );
+  const bluetooth = useBluetooth(dispatchNoteEvent);
 
-  const bluetooth = useBluetooth(combinedNoteEvent);
-  sendNoteRef.current = bluetooth.sendNote;
-  sendNotesBatchRef.current = bluetooth.sendNotesBatch;
-  // Stable ref so effects don't need waitMode.toggle in their dep arrays.
-  const waitModeToggleRef = useRef(waitMode.toggle);
-  waitModeToggleRef.current = waitMode.toggle;
   useWakeLock(musicxml !== null);
 
-  // Force listen mode when no piano is connected — wait and playalong require MIDI input.
+  // Force listen mode when no piano is connected — wait and playalong
+  // require MIDI input.
   useEffect(() => {
     if (bluetooth.status !== "connected") {
       setMode((m) => (m === "wait" || m === "playalong" ? "listen" : m));
     }
   }, [bluetooth.status]);
 
-  // On startup, reload the most recently opened file automatically.
+  // ── File loading + history restore ───────────────────────────────────────
   useEffect(() => {
     const recent = loadRecentFile();
     if (!recent) {
@@ -329,12 +124,91 @@ export function App() {
     );
   }, []);
 
-  // Mirror latest saveable state for the beforeunload handler below.
+  async function parseMidiFile(file: File) {
+    setFileName(file.name);
+    setFileError(null);
+    setMidiData(null);
+    setTracks([]);
+    setSelectedTracks([]);
+    setCurrentBeat(0);
+    setMeasureRange(null);
+    setMode("listen");
+    setFileHash(null);
+    setInitialBeat(0);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const hash = await hashFileBytes(bytes);
+      setFileHash(hash);
+      saveRecentFile(file.name, bytes);
+
+      const parsed = parseMidi(bytes);
+      const trackList = getMidiTracks(parsed);
+      const tempo = getMidiTempo(parsed);
+      const history = loadFileHistory(hash);
+
+      setMidiData(parsed);
+      setTracks(trackList);
+      setBaseBpm(tempo);
+
+      if (history) {
+        const knownIndices = new Set(trackList.map((t) => t.index));
+        const validTracks = history.selectedTrackIndices.filter((i) =>
+          knownIndices.has(i),
+        );
+        setSelectedTracks(
+          validTracks.length > 0 ? validTracks : trackList.map((t) => t.index),
+        );
+        setBpm(Math.round(tempo * history.bpmRatio));
+        setMeasureRange(history.measureRange);
+        setMode(history.mode);
+        setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
+        if (history.playalongTimingBeats !== undefined) {
+          setPlayalongTimingBeats(history.playalongTimingBeats);
+        }
+        setInitialBeat(history.currentBeat);
+      } else {
+        setSelectedTracks(trackList.map((t) => t.index));
+        setBpm(tempo);
+      }
+    } catch (err) {
+      setFileError(String(err));
+    }
+  }
+
+  function handleFileInput(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) {
+      parseMidiFile(file);
+    }
+  }
+
+  function handleFileDrop(e: DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      parseMidiFile(file);
+    }
+  }
+
+  function handleGoToLanding() {
+    setMidiData(null);
+    setFileName(null);
+    setFileHash(null);
+    setTracks([]);
+    setSelectedTracks([]);
+    setCurrentBeat(0);
+    setMeasureRange(null);
+    setMode("listen");
+    setInitialBeat(0);
+  }
+
+  // ── Persistence ──────────────────────────────────────────────────────────
   const snapshotRef = useRef<{ hash: string; history: FileHistory } | null>(
     null,
   );
 
-  // Keep snapshot current and periodically flush to localStorage.
   useEffect(() => {
     if (!fileHash || !midiData) {
       snapshotRef.current = null;
@@ -376,442 +250,7 @@ export function App() {
     return () => window.removeEventListener("beforeunload", save);
   }, []);
 
-  // Activate wait mode when musicxml is ready if the target mode is "wait".
-  // useWaitMode resets to inactive on every musicxml change, so this effect
-  // is the single place that turns it on — for both history restores and
-  // track-selection changes while already in wait mode.
-  useEffect(() => {
-    if (musicxml === null) {
-      return;
-    }
-    const pending = pendingModeRef.current;
-    pendingModeRef.current = null;
-    const targetMode = pending ?? modeRef.current;
-    if (targetMode === "wait") {
-      waitModeToggleRef.current(0);
-    }
-  }, [musicxml]);
-
-  // Rebuild player when conversion result changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange go through player methods
-  useEffect(() => {
-    playerRef.current?.dispose();
-    playerRef.current = null;
-    setIsPlaying(false);
-    setCurrentBeat(0);
-
-    if (musicxml && musicxml.totalBeats > 0) {
-      const player = new MidiPlayer(musicxml.notes, musicxml.totalBeats, bpm);
-      const range = measureRangeRef.current;
-      if (range) {
-        player.focusRange = {
-          startBeat: (range.from - 1) * musicxml.timeSigNum,
-          endBeat: range.to * musicxml.timeSigNum,
-        };
-      }
-      const seekBeat = pendingSeekRef.current;
-      pendingSeekRef.current = 0;
-      if (seekBeat > 0) {
-        player.seek(seekBeat);
-        setCurrentBeat(seekBeat);
-      }
-      player.onPositionUpdate = (beat) => {
-        if (!waitMode.activeRef.current) {
-          setCursor(beat, "smooth");
-        }
-      };
-      player.onEnd = (beat) => {
-        setIsPlaying(false);
-        setCursor(beat, "jump");
-        if (modeRef.current === "playalong") {
-          clearPlayalongAudio(player);
-          playalong.notifyEnd();
-        }
-      };
-      playerRef.current = player;
-    }
-
-    return () => {
-      playerRef.current?.dispose();
-      playerRef.current = null;
-    };
-  }, [musicxml]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: waitMode.activeRef is a ref
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!musicxml) {
-      return;
-    }
-    const { timeSigNum } = musicxml;
-    if (measureRange) {
-      const startBeat = (measureRange.from - 1) * timeSigNum;
-      const endBeat = measureRange.to * timeSigNum;
-      if (player) {
-        player.focusRange = { startBeat, endBeat };
-        player.seek(startBeat);
-      }
-      if (!waitMode.activeRef.current) {
-        setCursor(startBeat, "jump");
-      }
-    } else if (player) {
-      player.focusRange = null;
-    }
-  }, [measureRange, musicxml]);
-
-  function clearPlayalongAudio(player: InstanceType<typeof MidiPlayer>) {
-    player.skipWebAudio = false;
-    player.onNoteScheduled = undefined;
-  }
-
-  function handlePlayalongStop() {
-    playalongCancelRef.current?.();
-    playalongCancelRef.current = null;
-    const player = playerRef.current;
-    if (player) {
-      clearPlayalongAudio(player);
-      player.pause();
-    }
-    setIsPlaying(false);
-    setCountInBeat(null);
-    playalong.abort();
-    const range = measureRangeRef.current;
-    const startBeat = range
-      ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
-      : 0;
-    playerRef.current?.seek(startBeat);
-    setCursor(startBeat, "jump");
-  }
-
-  async function handlePlayPause() {
-    if (mode === "wait") {
-      return;
-    }
-    const player = playerRef.current;
-    if (!player) {
-      return;
-    }
-
-    if (mode === "playalong") {
-      if (
-        isPlaying ||
-        playalong.phaseRef.current === "counting-in" ||
-        playalong.phaseRef.current === "playing"
-      ) {
-        handlePlayalongStop();
-      } else if (
-        playalong.phaseRef.current === "idle" ||
-        playalong.phaseRef.current === "complete"
-      ) {
-        const mx = musicxmlRef.current;
-        if (!mx) {
-          return;
-        }
-
-        // Seek to range start before count-in.
-        const range = measureRangeRef.current;
-        const startBeat = range ? (range.from - 1) * mx.timeSigNum : 0;
-        player.seek(startBeat);
-        setCursor(startBeat, "jump");
-
-        playalong.startCountIn();
-        setIsPlaying(true); // show stop button during count-in
-
-        const countInBeats = 2 * mx.timeSigNum;
-        const { cancel, done } = player.playCountIn(
-          countInBeats,
-          mx.timeSigNum,
-          (i) => {
-            const isDownbeat = i % mx.timeSigNum === 0;
-            sendNoteRef.current?.(42, isDownbeat ? 80 : 55, 80, 9);
-            setCountInBeat({ beat: i, timeSigNum: mx.timeSigNum });
-          },
-        );
-        playalongCancelRef.current = cancel;
-
-        await done;
-        setCountInBeat(null);
-
-        if ((playalong.phaseRef.current as string) !== "counting-in") {
-          // Was stopped during count-in.
-          setIsPlaying(false);
-          return;
-        }
-        playalongCancelRef.current = null;
-        playalong.startPlaying();
-
-        // Route playback audio to the piano speaker if the option is on.
-        if (playalongPianoAudioRef.current) {
-          player.skipWebAudio = true;
-          player.onNoteScheduled = (notes) => {
-            sendNotesBatchRef.current?.(
-              notes.map((n) => ({
-                note: n.noteNumber,
-                velocity: Math.max(1, Math.round(n.velocity * 0.3)),
-                durationMs: n.durationMs,
-              })),
-            );
-          };
-        }
-
-        await player.play();
-      }
-      return;
-    }
-
-    if (isPlaying) {
-      player.pause();
-      setIsPlaying(false);
-    } else {
-      // Snap the view back to the cursor in case the user scrolled away while paused.
-      setCursor(currentBeatRef.current, "jump");
-      await player.play();
-      setIsPlaying(true);
-    }
-  }
-
-  function handleReset() {
-    if (mode === "wait") {
-      waitMode.rewind();
-      return;
-    }
-    // Race mode has no reset button, but handle it defensively.
-    if (mode === "playalong") {
-      handlePlayalongStop();
-      return;
-    }
-    const startBeat = measureRange
-      ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
-      : 0;
-    playerRef.current?.pause();
-    playerRef.current?.seek(startBeat);
-    setIsPlaying(false);
-    setCursor(startBeat, "jump");
-  }
-
-  function handleBpmChange(newBpm: number) {
-    setBpm(newBpm);
-    playerRef.current?.setBpm(newBpm);
-  }
-
-  function handleContextMenuAction(
-    action: "focus" | "seek" | "clearFocus",
-    measureNumber: number,
-    beat: number,
-  ) {
-    if (action === "focus") {
-      setMeasureRange({ from: measureNumber, to: measureNumber });
-    } else if (action === "clearFocus") {
-      setMeasureRange(null);
-    } else {
-      handleSeek(beat);
-    }
-  }
-
-  function handleSeek(beat: number) {
-    if (mode === "wait") {
-      waitMode.seekToBeat(beat);
-      setCursor(beat, "jump");
-      return;
-    }
-    playerRef.current?.seek(beat);
-    setCursor(beat, "jump");
-  }
-
-  function handleModeChange(newMode: "wait" | "playalong" | "listen") {
-    if (newMode === mode) {
-      return;
-    }
-
-    const player = playerRef.current;
-    const range = measureRangeRef.current;
-    const startBeat = range
-      ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
-      : 0;
-
-    // Tear down current mode's active state.
-    if (mode === "playalong") {
-      playalongCancelRef.current?.();
-      playalongCancelRef.current = null;
-      setCountInBeat(null);
-      if (player) {
-        clearPlayalongAudio(player);
-      }
-      playalong.abort();
-    }
-    if (mode === "wait" && waitMode.active) {
-      waitMode.toggle(startBeat);
-    }
-
-    // Stop playback and reset cursor to start of selection.
-    player?.pause();
-    setIsPlaying(false);
-    player?.seek(startBeat);
-    setCursor(startBeat, "jump");
-
-    setMode(newMode);
-
-    if (newMode === "wait" && !waitMode.active) {
-      waitMode.toggle(startBeat);
-    }
-  }
-
-  async function parseMidiFile(file: File) {
-    setFileName(file.name);
-    setFileError(null);
-    setMidiData(null);
-    setTracks([]);
-    setSelectedTracks([]);
-    setIsPlaying(false);
-    setCurrentBeat(0);
-    setMeasureRange(null);
-    setMode("listen");
-    setFileHash(null);
-    pendingSeekRef.current = 0;
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      const hash = await hashFileBytes(bytes);
-      setFileHash(hash);
-      saveRecentFile(file.name, bytes);
-
-      const parsed = parseMidi(bytes);
-      const trackList = getMidiTracks(parsed);
-      const tempo = getMidiTempo(parsed);
-      const history = loadFileHistory(hash);
-
-      setMidiData(parsed);
-      setTracks(trackList);
-      setBaseBpm(tempo);
-
-      if (history) {
-        const knownIndices = new Set(trackList.map((t) => t.index));
-        const validTracks = history.selectedTrackIndices.filter((i) =>
-          knownIndices.has(i),
-        );
-        setSelectedTracks(
-          validTracks.length > 0 ? validTracks : trackList.map((t) => t.index),
-        );
-        setBpm(Math.round(tempo * history.bpmRatio));
-        setMeasureRange(history.measureRange);
-        setMode(history.mode);
-        setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
-        if (history.playalongTimingBeats !== undefined) {
-          setPlayalongTimingBeats(history.playalongTimingBeats);
-        }
-        pendingSeekRef.current = history.currentBeat;
-        pendingModeRef.current = history.mode;
-      } else {
-        setSelectedTracks(trackList.map((t) => t.index));
-        setBpm(tempo);
-      }
-    } catch (err) {
-      setFileError(String(err));
-    }
-  }
-
-  function handleFileInput(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (file) {
-      parseMidiFile(file);
-    }
-  }
-
-  function handleFileDrop(e: DragEvent) {
-    e.preventDefault();
-    const file = e.dataTransfer?.files?.[0];
-    if (file) {
-      parseMidiFile(file);
-    }
-  }
-
-  function handleGoToLanding() {
-    playerRef.current?.stop();
-    playerRef.current?.dispose();
-    playerRef.current = null;
-    setMidiData(null);
-    setFileName(null);
-    setFileHash(null);
-    setTracks([]);
-    setSelectedTracks([]);
-    setIsPlaying(false);
-    setCurrentBeat(0);
-    setMeasureRange(null);
-    setMode("listen");
-  }
-
-  // Note colors
-  const noteColors = useMemo(() => {
-    if (waitMode.active) {
-      return waitMode.noteColors;
-    }
-
-    if (
-      mode === "playalong" &&
-      (playalong.phase === "playing" || playalong.phase === "complete")
-    ) {
-      if (!musicxml) {
-        return {};
-      }
-      const range = measureRange;
-      const startBeat = range ? (range.from - 1) * musicxml.timeSigNum : 0;
-      const endBeat = range
-        ? range.to * musicxml.timeSigNum
-        : musicxml.totalBeats;
-      // In complete phase, treat all selection notes as past.
-      const effectiveBeat =
-        playalong.phase === "complete" ? Number.POSITIVE_INFINITY : currentBeat;
-      const colors: Record<string, string> = {};
-      for (const note of musicxml.notes) {
-        if (note.tieStop) {
-          continue;
-        }
-        if (note.startBeat < startBeat || note.startBeat >= endBeat) {
-          continue;
-        }
-        const id = `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
-        if (playalong.hitNoteIds.has(id)) {
-          colors[id] = "#2e7d32"; // green: correctly played
-        } else if (note.startBeat < effectiveBeat - playalongTimingBeats) {
-          colors[id] = "#c62828"; // red: missed
-        }
-      }
-      return colors;
-    }
-
-    if (!musicxml || currentBeat === 0) {
-      return {};
-    }
-    const colors: Record<string, string> = {};
-    for (const note of musicxml.notes) {
-      if (
-        note.startBeat <= currentBeat &&
-        currentBeat < note.startBeat + note.durationBeats
-      ) {
-        colors[
-          `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-        ] = accent;
-      }
-    }
-    return colors;
-  }, [
-    waitMode.active,
-    waitMode.noteColors,
-    mode,
-    playalong.phase,
-    playalong.hitNoteIds,
-    musicxml,
-    measureRange,
-    currentBeat,
-    playalongTimingBeats,
-    accent,
-  ]);
-
-  const playbackBeat = musicxml !== null ? currentBeat : undefined;
-
-  const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
-
+  // ── Track selection ──────────────────────────────────────────────────────
   const onTrackToggle = (idx: number) =>
     setSelectedTracks((prev) =>
       prev.includes(idx)
@@ -819,7 +258,13 @@ export function App() {
         : [...prev, idx].sort((a, b) => a - b),
     );
 
-  // Screen is derived from whether MIDI data has been loaded.
+  function handleBpmChange(newBpm: number) {
+    setBpm(newBpm);
+  }
+
+  const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
+
+  // ── Render ───────────────────────────────────────────────────────────────
   if (midiData === null) {
     return (
       <LandingScreen
@@ -834,74 +279,36 @@ export function App() {
   }
 
   return (
-    <>
-      <PracticeScreen
-        theme={theme}
-        accent={accent}
-        fileName={fileName ?? ""}
-        pieceTitle={pieceTitle}
-        musicxml={musicxml}
-        noteColors={noteColors}
-        playbackBeat={playbackBeat}
-        cursorColor={accent}
-        isPlaying={isPlaying}
-        bpm={bpm}
-        baseBpm={baseBpm}
-        measureRange={measureRange}
-        bluetooth={bluetooth}
-        mode={mode}
-        playalongPhase={playalong.phase}
-        countInBeat={countInBeat}
-        tracks={tracks}
-        selectedTracks={selectedTracks}
-        onPlayPause={handlePlayPause}
-        onReset={handleReset}
-        onBpmChange={handleBpmChange}
-        onMeasureRangeChange={setMeasureRange}
-        onContextMenuAction={handleContextMenuAction}
-        onModeChange={handleModeChange}
-        onTrackToggle={onTrackToggle}
-        onGoToLanding={handleGoToLanding}
-        snapBeatRef={snapBeatRef}
-        snapGeneration={snapGeneration}
-        noteSensitivityMilliseconds={noteSensitivityMilliseconds}
-        onSensitivityChange={setNoteSensitivityMilliseconds}
-        playalongTimingBeats={playalongTimingBeats}
-        onPlayalongTimingChange={setPlayalongTimingBeats}
-        playalongPianoAudio={playalongPianoAudio}
-        onPlayalongPianoAudioChange={setPlayalongPianoAudio}
-        fileHash={fileHash}
-        getDebugLog={() => debugBufferRef.current.read()}
-      />
-      {completionModal && (
-        <WaitModeResultModal
-          theme={theme}
-          accent={accent}
-          selectionLabel={completionModal.selectionLabel}
-          history={completionModal.history}
-          expectedDurationMs={completionModal.expectedDurationMs}
-          onClose={() => setCompletionModal(null)}
-        />
-      )}
-      {playalongModal && (
-        <PlayalongResultModal
-          theme={theme}
-          accent={accent}
-          selectionLabel={playalongModal.selectionLabel}
-          history={playalongModal.history}
-          onClose={() => {
-            setPlayalongModal(null);
-            // Keep phase="complete" so green/red note colors remain for review.
-            // Seek to start so the sheet is positioned at the beginning.
-            const range = measureRangeRef.current;
-            const startBeat = range
-              ? (range.from - 1) * (musicxmlRef.current?.timeSigNum ?? 4)
-              : 0;
-            playerRef.current?.seek(startBeat);
-            setCursor(startBeat, "jump");
-          }}
-        />
-      )}
-    </>
+    <PracticeScreen
+      theme={theme}
+      accent={accent}
+      fileName={fileName ?? ""}
+      pieceTitle={pieceTitle}
+      musicxml={musicxml}
+      fileHash={fileHash}
+      bpm={bpm}
+      baseBpm={baseBpm}
+      measureRange={measureRange}
+      bluetooth={bluetooth}
+      noteEventDispatchRef={noteEventDispatchRef}
+      mode={mode}
+      tracks={tracks}
+      selectedTracks={selectedTracks}
+      initialBeat={initialBeat}
+      onCurrentBeatChange={handleCurrentBeatChange}
+      onBpmChange={handleBpmChange}
+      onMeasureRangeChange={setMeasureRange}
+      onModeChange={setMode}
+      onTrackToggle={onTrackToggle}
+      onGoToLanding={handleGoToLanding}
+      noteSensitivityMilliseconds={noteSensitivityMilliseconds}
+      onSensitivityChange={setNoteSensitivityMilliseconds}
+      playalongTimingBeats={playalongTimingBeats}
+      onPlayalongTimingChange={setPlayalongTimingBeats}
+      playalongPianoAudio={playalongPianoAudio}
+      onPlayalongPianoAudioChange={setPlayalongPianoAudio}
+      appendToDebugLog={appendToDebugLog}
+      getDebugLog={getDebugLog}
+    />
   );
 }

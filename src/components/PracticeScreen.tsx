@@ -1,13 +1,27 @@
-import { useState } from "preact/hooks";
-import { SheetMusicDisplay } from "../SheetMusicDisplay";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
+import type { DebugBeatEvent } from "../debug-log";
+import { MidiPlayer } from "../midi-player";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
+import {
+  type BluetoothHandle,
+  type ModeControl,
+  createPlayerHandle,
+} from "../mode-control";
+import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { ThemeTokens } from "../theme";
 import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
+import { useListenMode } from "../use-listen-mode";
+import { usePlayalongMode } from "../use-playalong-mode";
+import { useWaitMode } from "../use-wait-mode";
 import type { useBluetooth } from "../useBluetooth";
-import { HelpBadge } from "./HelpBadge";
 import { ConnectionBadge } from "./ConnectionBadge";
-import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
-import { SettingsDrawer } from "./SettingsDrawer";
+import { HelpBadge } from "./HelpBadge";
 import {
   ChevronLeftIcon,
   GearIcon,
@@ -17,6 +31,8 @@ import {
   SectionsIcon,
   StopIcon,
 } from "./icons";
+import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
+import { SettingsDrawer } from "./SettingsDrawer";
 
 interface PracticeScreenProps {
   theme: ThemeTokens;
@@ -24,41 +40,38 @@ interface PracticeScreenProps {
   fileName: string;
   pieceTitle: string;
   musicxml: MidiConversionResult | null;
-  noteColors: Record<string, string>;
-  playbackBeat: number | undefined;
-  cursorColor: string;
-  isPlaying: boolean;
+  fileHash: string | null;
   bpm: number;
   baseBpm: number;
   measureRange: { from: number; to: number } | null;
   bluetooth: ReturnType<typeof useBluetooth>;
+  /**
+   * App-owned ref that useBluetooth dispatches MIDI note events through.
+   * PracticeScreen writes the active mode's onNoteEvent into this ref.
+   */
+  noteEventDispatchRef: {
+    current: ((noteNumber: number, kind: "on" | "off") => void) | null;
+  };
   mode: "wait" | "playalong" | "listen";
-  playalongPhase: "idle" | "counting-in" | "playing" | "complete";
-  countInBeat: { beat: number; timeSigNum: number } | null;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  fileHash: string | null;
-  onPlayPause: () => void;
-  onReset: () => void;
+  /** Beat to seek to once the player is created (used for history restore). */
+  initialBeat: number;
+  /** Fires whenever the live cursor beat changes — App persists it. */
+  onCurrentBeatChange: (beat: number) => void;
   onBpmChange: (bpm: number) => void;
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
-  onContextMenuAction: (
-    action: "focus" | "seek" | "clearFocus",
-    measureNumber: number,
-    beat: number,
-  ) => void;
   onGoToLanding: () => void;
-  snapBeatRef: { current: number | null };
-  snapGeneration: number;
   noteSensitivityMilliseconds: number;
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
   onPlayalongTimingChange: (beats: number) => void;
   playalongPianoAudio: boolean;
   onPlayalongPianoAudioChange: (enabled: boolean) => void;
-  getDebugLog: () => import("../use-wait-mode").DebugBeatEvent[];
+  appendToDebugLog: (event: DebugBeatEvent) => void;
+  getDebugLog: () => DebugBeatEvent[];
 }
 
 export function PracticeScreen({
@@ -67,41 +80,241 @@ export function PracticeScreen({
   fileName,
   pieceTitle,
   musicxml,
-  noteColors,
-  playbackBeat,
-  cursorColor,
-  isPlaying,
+  fileHash,
   bpm,
   baseBpm,
   measureRange,
   bluetooth,
+  noteEventDispatchRef,
   mode,
-  playalongPhase,
-  countInBeat,
   tracks,
   selectedTracks,
-  onPlayPause,
-  onReset,
+  initialBeat,
+  onCurrentBeatChange,
   onBpmChange,
   onMeasureRangeChange,
-  onContextMenuAction,
   onModeChange,
   onTrackToggle,
   onGoToLanding,
-  snapBeatRef,
-  snapGeneration,
   noteSensitivityMilliseconds,
   onSensitivityChange,
   playalongTimingBeats,
   onPlayalongTimingChange,
   playalongPianoAudio,
   onPlayalongPianoAudioChange,
-  fileHash,
+  appendToDebugLog,
   getDebugLog,
 }: PracticeScreenProps) {
+  // Live cursor state owned here so mode hooks (and the player) can drive it.
+  const [currentBeat, setCurrentBeat] = useState(initialBeat);
+  const currentBeatRef = useRef(currentBeat);
+  currentBeatRef.current = currentBeat;
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Scroll-snap signalling: snapBeatRef captures the target beat; bumping
+  // snapGeneration forces SheetMusicDisplay to re-snap even if the beat is
+  // the same as the previous snap.
+  const snapBeatRef = useRef<number | null>(null);
+  const [snapGeneration, setSnapGeneration] = useState(0);
+
+  const setCursor = useCallback((beat: number, behavior: "jump" | "smooth") => {
+    setCurrentBeat(beat);
+    if (behavior === "jump") {
+      snapBeatRef.current = beat;
+      setSnapGeneration((g) => g + 1);
+    }
+  }, []);
+
+  // Notify App so it can persist currentBeat to file-history.
+  useEffect(() => {
+    onCurrentBeatChange(currentBeat);
+  }, [currentBeat, onCurrentBeatChange]);
+
+  // Player + control-surface plumbing -----------------------------------------
+
+  // Player effect — keyed on musicxml. Declared first so mode-activation
+  // effect (declared below) cleans up before this one disposes the player.
+  const playerRef = useRef<MidiPlayer | null>(null);
+  const initialBeatRef = useRef(initialBeat);
+  initialBeatRef.current = initialBeat;
+  const measureRangeRef = useRef(measureRange);
+  measureRangeRef.current = measureRange;
+  const bpmRef = useRef(bpm);
+  bpmRef.current = bpm;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange flow through the player methods + refs
+  useEffect(() => {
+    playerRef.current?.dispose();
+    playerRef.current = null;
+    setIsPlaying(false);
+    setCurrentBeat(0);
+
+    if (musicxml && musicxml.totalBeats > 0) {
+      const player = new MidiPlayer(
+        musicxml.notes,
+        musicxml.totalBeats,
+        bpmRef.current,
+      );
+      const range = measureRangeRef.current;
+      if (range) {
+        player.focusRange = {
+          startBeat: (range.from - 1) * musicxml.timeSigNum,
+          endBeat: range.to * musicxml.timeSigNum,
+        };
+      }
+      // Apply initialBeat BEFORE assigning onPositionUpdate so the seek
+      // doesn't trip the cursor handler.
+      const seekBeat = initialBeatRef.current;
+      initialBeatRef.current = 0;
+      if (seekBeat > 0) {
+        player.seek(seekBeat);
+        setCurrentBeat(seekBeat);
+      }
+      player.onPositionUpdate = (beat) => setCursor(beat, "smooth");
+      player.onEnd = (beat) => {
+        setIsPlaying(false);
+        setCursor(beat, "jump");
+      };
+      playerRef.current = player;
+    }
+
+    return () => {
+      playerRef.current?.dispose();
+      playerRef.current = null;
+    };
+  }, [musicxml]);
+
+  // BPM changes flow through the live player.
+  useEffect(() => {
+    playerRef.current?.setBpm(bpm);
+  }, [bpm]);
+
+  // Measure-range changes: update focusRange + seek + snap (unless wait mode
+  // owns the cursor, in which case let the wait hook handle range changes).
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!musicxml) {
+      return;
+    }
+    if (measureRange) {
+      const startBeat = (measureRange.from - 1) * musicxml.timeSigNum;
+      const endBeat = measureRange.to * musicxml.timeSigNum;
+      if (player) {
+        player.focusRange = { startBeat, endBeat };
+        player.seek(startBeat);
+      }
+      if (modeRef.current !== "wait") {
+        setCursor(startBeat, "jump");
+      }
+    } else if (player) {
+      player.focusRange = null;
+    }
+  }, [measureRange, musicxml, setCursor]);
+
+  // Stable PlayerHandle that delegates to the current playerRef value.
+  const playerHandle = useMemo(
+    () => createPlayerHandle(() => playerRef.current),
+    [],
+  );
+
+  // Stable BluetoothHandle that reads from a ref so identity stays constant.
+  const bluetoothRef = useRef(bluetooth);
+  bluetoothRef.current = bluetooth;
+  const bluetoothHandle = useMemo<BluetoothHandle>(
+    () => ({
+      get status() {
+        return bluetoothRef.current.status;
+      },
+      sendNote: (note, velocity, durationMs, channel) =>
+        bluetoothRef.current.sendNote(note, velocity, durationMs, channel),
+      sendNotesBatch: (notes, channel) =>
+        bluetoothRef.current.sendNotesBatch(notes, channel),
+    }),
+    [],
+  );
+
+  const control: ModeControl = {
+    player: playerHandle,
+    bluetooth: bluetoothHandle,
+    setCursor,
+    setIsPlaying,
+    currentBeat,
+    currentBeatRef,
+    musicxml,
+    measureRange,
+    fileHash,
+    appendToDebugLog,
+  };
+
+  const wait = useWaitMode(control, {
+    noteSensitivityMilliseconds,
+    bpm,
+    accent,
+    theme,
+  });
+  const playalong = usePlayalongMode(control, {
+    timingBeats: playalongTimingBeats,
+    pianoAudio: playalongPianoAudio,
+    bpm,
+    accent,
+    theme,
+  });
+  const listen = useListenMode(control, { accent });
+
+  const active =
+    mode === "wait" ? wait : mode === "playalong" ? playalong : listen;
+
+  // Route bluetooth note events into the active mode.
+  useEffect(() => {
+    noteEventDispatchRef.current = active.onNoteEvent;
+    return () => {
+      if (noteEventDispatchRef.current === active.onNoteEvent) {
+        noteEventDispatchRef.current = null;
+      }
+    };
+  }, [active.onNoteEvent, noteEventDispatchRef]);
+
+  // Mode-activation effect — keyed on [mode, musicxml]. Cleanup deactivates
+  // the previous mode (handle captured in `m`) before setup activates the
+  // new one. Effect is declared AFTER the player effect so cleanup runs
+  // before the player is disposed on piece changes.
+  const modesRef = useRef({ wait, playalong, listen });
+  modesRef.current = { wait, playalong, listen };
+  useEffect(() => {
+    if (!musicxml) {
+      return;
+    }
+    const m = modesRef.current[mode];
+    m.activate();
+    return () => {
+      m.deactivate();
+    };
+  }, [musicxml, mode]);
+
+  // Transport delegation -------------------------------------------------------
+
+  const handlePlayPause = useCallback(() => {
+    void active.handlePlayPause();
+  }, [active]);
+
+  const handleReset = useCallback(() => {
+    active.handleReset();
+  }, [active]);
+
+  const handleSeek = useCallback(
+    (beat: number) => {
+      active.handleSeek(beat);
+    },
+    [active],
+  );
+
+  // UI state -------------------------------------------------------------------
+
   const playalongActive =
     mode === "playalong" &&
-    (playalongPhase === "counting-in" || playalongPhase === "playing");
+    (playalong.phase === "counting-in" || playalong.phase === "playing");
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
@@ -113,6 +326,41 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
+
+  const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
+    if (newMode === mode) {
+      return;
+    }
+    // Snap to range start before switching modes so the new mode activates
+    // at a predictable position. Each mode's own activate() handles any
+    // additional setup (e.g. wait mode picking its first wait point).
+    const startBeat = measureRange
+      ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
+      : 0;
+    playerRef.current?.pause();
+    setIsPlaying(false);
+    playerRef.current?.seek(startBeat);
+    setCursor(startBeat, "jump");
+    onModeChange(newMode);
+  };
+
+  const handleContextMenuAction = (
+    action: "focus" | "seek" | "clearFocus",
+    measureNumber: number,
+    beat: number,
+  ) => {
+    if (action === "focus") {
+      onMeasureRangeChange({ from: measureNumber, to: measureNumber });
+    } else if (action === "clearFocus") {
+      onMeasureRangeChange(null);
+    } else {
+      handleSeek(beat);
+    }
+  };
+
+  const showStopIcon =
+    mode === "playalong" && (isPlaying || playalong.phase === "counting-in");
+
   return (
     <div
       style={{
@@ -141,9 +389,9 @@ export function PracticeScreen({
       {musicxml ? (
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
-          noteColors={noteColors}
-          playbackBeat={playbackBeat}
-          cursorColor={cursorColor}
+          noteColors={active.noteColors}
+          playbackBeat={currentBeat}
+          cursorColor={accent}
           inkColor={theme.ink}
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
@@ -275,7 +523,7 @@ export function PracticeScreen({
           {mode !== "playalong" && (
             <button
               type="button"
-              onClick={onReset}
+              onClick={handleReset}
               style={cornerBtnStyle(theme) as Record<string, string | number>}
               title={
                 measureRange
@@ -289,22 +537,14 @@ export function PracticeScreen({
           {mode !== "wait" && (
             <button
               type="button"
-              onClick={onPlayPause}
+              onClick={handlePlayPause}
               style={cornerBtnStyle(theme) as Record<string, string | number>}
-              title={
-                isPlaying || playalongPhase === "counting-in"
-                  ? mode === "playalong"
-                    ? "Stop"
-                    : "Pause"
-                  : "Play"
-              }
+              title={showStopIcon ? "Stop" : isPlaying ? "Pause" : "Play"}
             >
-              {isPlaying || playalongPhase === "counting-in" ? (
-                mode === "playalong" ? (
-                  <StopIcon size={18} />
-                ) : (
-                  <PauseIcon size={22} />
-                )
+              {showStopIcon ? (
+                <StopIcon size={18} />
+              ) : isPlaying ? (
+                <PauseIcon size={22} />
               ) : (
                 <PlayIcon size={22} />
               )}
@@ -341,7 +581,7 @@ export function PracticeScreen({
               </span>
               {([25, 50, 75, 100] as const).map((pct) => {
                 const targetBpm = Math.round((baseBpm * pct) / 100);
-                const active = bpm === targetBpm;
+                const isActive = bpm === targetBpm;
                 return (
                   <button
                     key={pct}
@@ -354,16 +594,16 @@ export function PracticeScreen({
                       >),
                       padding: "0 10px",
                       minWidth: 44,
-                      background: active ? accent : undefined,
-                      border: active ? "none" : undefined,
-                      color: active ? "#FFF7E5" : theme.ink,
-                      fontWeight: active ? 600 : 400,
+                      background: isActive ? accent : undefined,
+                      border: isActive ? "none" : undefined,
+                      color: isActive ? "#FFF7E5" : theme.ink,
+                      fontWeight: isActive ? 600 : 400,
                       fontSize: 13,
-                      boxShadow: active
+                      boxShadow: isActive
                         ? `0 2px 8px ${hexA(accent, 0.35)}`
                         : undefined,
                     }}
-                    aria-pressed={active}
+                    aria-pressed={isActive}
                   >
                     {targetBpm}
                   </button>
@@ -391,7 +631,7 @@ export function PracticeScreen({
             }}
           >
             {(["listen", "wait", "playalong"] as const).map((m) => {
-              const active = mode === m;
+              const isActive = mode === m;
               const requiresPiano = m === "wait" || m === "playalong";
               const disabled =
                 requiresPiano && bluetooth.status !== "connected";
@@ -405,24 +645,24 @@ export function PracticeScreen({
                   key={m}
                   type="button"
                   disabled={disabled}
-                  onClick={() => onModeChange(m)}
+                  onClick={() => handleModeChange(m)}
                   style={{
                     ...(miniBtnStyle(theme) as Record<string, string | number>),
                     padding: "0 14px",
                     minWidth: 60,
                     height: 30,
-                    background: active ? accent : "transparent",
-                    color: active ? "#FFF7E5" : theme.ink,
-                    fontWeight: active ? 600 : 400,
+                    background: isActive ? accent : "transparent",
+                    color: isActive ? "#FFF7E5" : theme.ink,
+                    fontWeight: isActive ? 600 : 400,
                     fontSize: 12,
-                    boxShadow: active
+                    boxShadow: isActive
                       ? `0 2px 8px ${hexA(accent, 0.35)}`
                       : undefined,
                     cursor: disabled ? "not-allowed" : "pointer",
                     opacity: disabled ? 0.35 : 1,
                     justifyContent: "center",
                   }}
-                  aria-pressed={active}
+                  aria-pressed={isActive}
                   title={
                     disabled ? "Connect a piano to use this mode" : undefined
                   }
@@ -435,66 +675,8 @@ export function PracticeScreen({
         )}
       </div>
 
-      {/* Count-in overlay */}
-      {mode === "playalong" && playalongPhase === "counting-in" && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            zIndex: 10,
-            pointerEvents: "none",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          {(() => {
-            const beatDisplay = countInBeat
-              ? (countInBeat.beat % countInBeat.timeSigNum) + 1
-              : null;
-            return (
-              <div
-                style={{
-                  background: "rgba(0,0,0,0.55)",
-                  backdropFilter: "blur(8px)",
-                  WebkitBackdropFilter: "blur(8px)",
-                  borderRadius: 16,
-                  padding: "14px 28px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 72,
-                    fontWeight: 700,
-                    color: "#fff",
-                    lineHeight: 1,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {beatDisplay ?? ""}
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "rgba(255,255,255,0.7)",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    marginTop: 8,
-                  }}
-                >
-                  Count in…
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      {/* Mode-owned overlay (e.g. playalong count-in) */}
+      {active.overlay}
 
       {/* BOTTOM RIGHT: bluetooth + gear */}
       <div
@@ -588,7 +770,7 @@ export function PracticeScreen({
                 key={action}
                 type="button"
                 onClick={() => {
-                  onContextMenuAction(
+                  handleContextMenuAction(
                     action,
                     contextMenu.measureNumber,
                     contextMenu.beat,
@@ -732,6 +914,9 @@ export function PracticeScreen({
         playalongPianoAudio={playalongPianoAudio}
         onPlayalongPianoAudioChange={onPlayalongPianoAudioChange}
       />
+
+      {/* Mode-owned result modal */}
+      {active.modal}
     </div>
   );
 }
