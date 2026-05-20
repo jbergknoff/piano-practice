@@ -10,18 +10,15 @@ A configurable **post-advance grace period** (`noteSensitivityMilliseconds`) sup
 
 ## Implementation
 
-The check lives in `onNoteEvent` in `src/use-wait-mode.ts`, just before the wrong-note buzz logic:
+The check lives in `onNoteEvent` in `src/use-wait-mode.tsx`, just before the wrong-note buzz logic:
 
 ```ts
-if (
-  !expected.has(noteNumber) &&
-  Date.now() - lastAdvanceTimeRef.current < noteSensitivityMillisecondsRef.current
-) {
+if (!expected.has(noteNumber) && msSinceAdvance < sensitivityMs) {
   return; // silently ignore — still within grace window
 }
 ```
 
-`noteSensitivityMilliseconds` is passed into `useWaitMode` as a plain parameter and mirrored to a ref (`noteSensitivityMillisecondsRef`) so the stable `onNoteEvent` callback (empty deps array) can always read the latest value without going stale.
+`noteSensitivityMilliseconds` is part of the `WaitModeSettings` object passed into `useWaitMode` and mirrored to `settingsRef` so the stable `onNoteEvent` callback (empty deps array) can always read the latest value without going stale.
 
 The existing 100 ms anti-racing debounce for *correct* notes is unchanged — these are orthogonal concerns.
 

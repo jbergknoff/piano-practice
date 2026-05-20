@@ -8,25 +8,28 @@
 
 ### Two-screen model
 
-The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether `midiData` is loaded. `App.tsx` owns all shared state and passes everything down as props.
+The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether `midiData` is loaded. `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay.
 
 ### Data pipeline
 
-MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiConversionResult` (contains `musicxml` string, `notes`, `totalBeats`, `timeSigNum`) → fed into `MidiPlayer` for playback and `useWaitMode` for interactive practice.
+MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiConversionResult` (contains `musicxml` string, `notes`, `totalBeats`, `timeSigNum`) → fed into `MidiPlayer` for playback and into each mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) via the shared `ModeControl`.
 
 ### Key files
 
 | File | Role |
 |------|------|
-| `src/App.tsx` | State hub: owns all app state, instantiates hooks, passes props to screens |
-| `src/components/PracticeScreen.tsx` | Main UI layout; mostly presentational, receives all state + callbacks via props |
+| `src/App.tsx` | Session shell: file load/parse, history persistence, bluetooth, force-listen-on-disconnect, landing↔practice routing |
+| `src/components/PracticeScreen.tsx` | Owns the `MidiPlayer`, the live cursor + snap state, transport delegation, and instantiates the three mode hooks; renders `{active.overlay}` and `{active.modal}` |
 | `src/components/LandingScreen.tsx` | File drop/pick screen |
-| `src/use-wait-mode.ts` | Hook: tracks expected chords, detects correct piano input, fires completion callback |
-| `src/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping |
+| `src/mode-control.ts` | `ModeControl` / `ModeHandle` interfaces and `createPlayerHandle` (stable handle that delegates to whatever `MidiPlayer` the getter currently returns) |
+| `src/use-wait-mode.tsx` | Mode hook: wait-point matching, scoring, result modal; receives `ModeControl` |
+| `src/use-playalong-mode.tsx` | Mode hook: count-in, audio-to-piano routing, F1 scoring, count-in overlay + result modal |
+| `src/use-listen-mode.ts` | Mode hook: thin wrapper over `MidiPlayer` for play/pause/reset/seek + sounding-note highlights |
+| `src/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping, count-in scheduling |
 | `src/midi-to-musicxml.ts` | Converts parsed MIDI to MusicXML + note list used throughout |
 | `src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
 | `src/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
-| `src/useBluetooth.ts` | BLE MIDI input; calls `waitMode.onNoteEvent` on each note |
+| `src/useBluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/theme.ts` | Design tokens + `cornerBtnStyle` / `miniBtnStyle` helpers |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
@@ -34,22 +37,26 @@ MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiCo
 
 Three modes stored as `"wait" | "playalong" | "listen"` in `App.tsx` state and persisted in `FileHistory`.
 
-- **Wait** — score halts; `useWaitMode` is active and listens for correct piano chords before advancing. Play/Pause and BPM controls hidden.
+- **Wait** — score halts; `useWaitMode` listens for correct piano chords before advancing. Play/Pause and BPM controls hidden.
 - **Playalong** — the app plays back while the user plays along; notes are scored as hit or missed in real time.
-- **Listen** — normal playback; `useWaitMode` inactive. Play/Pause and BPM controls shown.
+- **Listen** — normal playback; sounding notes are highlighted in accent.
 
-`useWaitMode` starts with `active = false` and resets to `false` whenever `musicxml` changes. A `useEffect([musicxml])` in `App.tsx` calls `waitMode.toggle()` to activate it when the target mode is `"wait"` (covering both initial load and track-selection changes). `handleModeChange` also calls `toggle()` to keep the hook in sync when the user switches modes.
+Every mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) consumes the same `ModeControl` surface — `player` (a `PlayerHandle`), `bluetooth` (a `BluetoothHandle`), `setCursor`, `setIsPlaying`, `currentBeat` + `currentBeatRef`, `musicxml`, `measureRange`, `fileHash`, `appendToDebugLog` — and returns the same `ModeHandle` shape: `{ noteColors, activeRef, onNoteEvent, activate, deactivate, handlePlayPause, handleReset, handleSeek, overlay, modal }`. `PracticeScreen` selects `active = { wait, playalong, listen }[mode]` and delegates every transport handler to `active.*`.
+
+Mode activation runs in a `useEffect([musicxml, mode])` inside `PracticeScreen`: the cleanup deactivates the previous mode (handle captured in the closure) and the setup activates the new one. Each hook also self-resets on `musicxml` change via its own internal effect. When the user clicks a mode button, `PracticeScreen.handleModeChange` first snaps the cursor to range start and pauses the player (matching pre-refactor behavior), then calls `onModeChange` so the mode-effect can fire. `useWaitMode.activate()` is the only one with non-trivial side effects — it snaps to its first wait point in the active range and installs a no-op `onPositionUpdate` on the player so any stray ticks don't move the cursor.
+
+The note-event routing chain breaks the construction cycle (`useBluetooth` needs a handler, mode hooks need `bluetooth.sendNote`) by indirection: App's `useBluetooth(dispatchNoteEvent)` reads from a `noteEventDispatchRef`; `PracticeScreen` writes `active.onNoteEvent` into that ref on every render via an effect.
 
 ### Cursor and scroll system
 
-`currentBeat: number` in `App.tsx` is the **single cursor** shared by all three modes. Nothing else tracks cursor position.
+`currentBeat: number` in `PracticeScreen` is the **single cursor** shared by all three modes. `App.tsx` keeps a mirror copy (updated via the `onCurrentBeatChange` prop) purely so the persistence snapshot can include it in `FileHistory`.
 
-All cursor changes go through `setCursor(beat, "jump" | "smooth")` in `App.tsx`:
+All cursor changes go through `setCursor(beat, "jump" | "smooth")` in `PracticeScreen`:
 
-- **`"smooth"`** — used for incremental playback ticks (`MidiPlayer.onPositionUpdate`) and wait-mode note-by-note advances. The sheet music scroll eases toward the cursor position over several animation frames.
-- **`"jump"`** — used for any discontinuous move: reset, seek (context menu), mode switch, playalong stop, end-of-piece. Writes the target beat into `snapBeatRef.current` and increments `snapGeneration` (React state). `SheetMusicDisplay` has a dedicated snap effect that depends on `snapGeneration`; it reads the beat from `snapBeatRef`, calls `computeCursorX` directly (bypassing `playbackBeat`), and sets `scrollLeft` instantly. Using the beat rather than `cursorX` ensures the snap fires even when `playbackBeat` is undefined — e.g. resetting to beat 0 in listen mode, where `cursorX` would be null.
+- **`"smooth"`** — used for incremental playback ticks (`MidiPlayer.onPositionUpdate`). The sheet music scroll eases toward the cursor position over several animation frames.
+- **`"jump"`** — used for any discontinuous move: reset, seek (context menu), mode switch, playalong stop, end-of-piece, wait-mode advance. Writes the target beat into `snapBeatRef.current` and increments `snapGeneration` (React state). `SheetMusicDisplay` has a dedicated snap effect that depends on `snapGeneration`; it reads the beat from `snapBeatRef`, calls `computeCursorX` directly (bypassing `playbackBeat`), and sets `scrollLeft` instantly. Using the beat rather than `cursorX` ensures the snap fires even when `playbackBeat` is undefined — e.g. resetting to beat 0 in listen mode, where `cursorX` would be null.
 
-`useWaitMode` fires an `onCursorAdvance(beat)` callback synchronously inside `onNoteEvent` whenever the user plays a correct chord. This callback calls `setCurrentBeat` and `player.seek` directly, with no intermediate reactive state, eliminating the render-cycle lag that existed when cursor position was derived from a separate hook-internal state value.
+Mode hooks reach the cursor through `control.setCursor` and the player through `control.player`. `useWaitMode` calls `control.setCursor(beat, "jump")` + `control.player.seek(beat)` synchronously inside `onNoteEvent` whenever the user plays a correct chord, with no intermediate reactive state — eliminating render-cycle lag.
 
 **Scroll detachment** — `SheetMusicDisplay` tracks a `detachedRef` boolean internally:
 - Set `true` by pointer-drag or wheel events on the scroll container (the user scrolled away manually).
@@ -78,7 +85,7 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 
 ## Debug log
 
-Both `useWaitMode` and `usePlayalongMode` maintain independent rolling buffers (last 50 events each) of every note event they process. `App.tsx` merges and time-sorts both buffers before passing them to the UI, producing a single chronological timeline across modes.
+`App.tsx` owns a single shared rolling buffer (last 50 events) of every note event processed by Wait and Playalong modes. The buffer is reset whenever `musicxml` changes. Each mode hook receives an `appendToDebugLog` callback through `ModeControl` and appends events as it processes them, producing a single chronological timeline.
 
 The shared types live in `src/debug-log.ts`:
 
@@ -89,7 +96,7 @@ The shared types live in `src/debug-log.ts`:
 
 The underlying O(1) ring buffer is a generic `CircularBuffer<T>` class in `lib/circular-buffer/index.ts`. It exposes two methods: `append(item)` and `read()` (returns entries oldest-first). Unit tests are in `lib/circular-buffer/index.test.ts` (run with `bun test`).
 
-The log is exposed via `waitMode.getDebugLog()` and `playalong.getDebugLog()`, then rendered in the **Debugging** tab of the Help (?) modal by `src/components/DebugLogTab.tsx`. Users copy it from there and paste it into bug reports.
+App exposes a `getDebugLog()` callback that reads the buffer; it's passed through `PracticeScreen` to the **Debugging** tab of the Help (?) modal (`src/components/DebugLogTab.tsx`). Users copy it from there and paste it into bug reports.
 
 See `docs/debug-log.md` for the full format reference and a field-by-field guide to the three main diagnostic cases: (1) correct chord not recognised in Wait mode, (2) wrong chord accepted in Wait mode, (3) correct note scored as EXTRA in Playalong mode.
 
