@@ -4,6 +4,8 @@ import type { PlaybackNote } from "./midi-to-musicxml";
 const SCHEDULE_AHEAD = 0.3;
 // Scheduler tick interval (ms).
 const SCHEDULER_INTERVAL = 25;
+// Position update interval (ms).
+const TICK_INTERVAL = 50;
 // Small offset so the very first notes are never scheduled in the past.
 const LOOKAHEAD = 0.05;
 
@@ -12,7 +14,7 @@ export class MidiPlayer {
   private activeOscillators: OscillatorNode[] = [];
   private activeGains: AudioNode[] = [];
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
-  private animFrameId: number | null = null;
+  private tickTimer: ReturnType<typeof setInterval> | null = null;
 
   // Sorted subset of notes that still need scheduling in the current playback.
   private playQueue: PlaybackNote[] = [];
@@ -366,7 +368,7 @@ export class MidiPlayer {
   }
 
   private startTick(): void {
-    const tick = () => {
+    this.tickTimer = setInterval(() => {
       if (this._state !== "playing") {
         return;
       }
@@ -395,16 +397,13 @@ export class MidiPlayer {
         this.onEnd?.(0);
         return;
       }
-
-      this.animFrameId = requestAnimationFrame(tick);
-    };
-    this.animFrameId = requestAnimationFrame(tick);
+    }, TICK_INTERVAL);
   }
 
   private stopTick(): void {
-    if (this.animFrameId !== null) {
-      cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
+    if (this.tickTimer !== null) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
     }
   }
 }
