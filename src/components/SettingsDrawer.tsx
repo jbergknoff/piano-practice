@@ -14,8 +14,10 @@ interface SettingsDrawerProps {
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
   onPlayalongTimingChange: (beats: number) => void;
-  playalongPianoAudio: boolean;
-  onPlayalongPianoAudioChange: (enabled: boolean) => void;
+  playalongPlayMusic: boolean;
+  onPlayalongPlayMusicChange: (enabled: boolean) => void;
+  playalongMetronome: boolean;
+  onPlayalongMetronomeChange: (enabled: boolean) => void;
 }
 
 function sensitivityLabel(ms: number): string {
@@ -46,8 +48,10 @@ export function SettingsDrawer({
   onSensitivityChange,
   playalongTimingBeats,
   onPlayalongTimingChange,
-  playalongPianoAudio,
-  onPlayalongPianoAudioChange,
+  playalongPlayMusic,
+  onPlayalongPlayMusicChange,
+  playalongMetronome,
+  onPlayalongMetronomeChange,
 }: SettingsDrawerProps) {
   return (
     <>
@@ -223,8 +227,12 @@ export function SettingsDrawer({
           </div>
         </DrawerRow>
 
-        {/* Playalong piano audio toggle */}
-        <DrawerRow theme={theme} label="Piano plays along" hint="">
+        {/* Playalong: play music aloud (Web Audio) */}
+        <DrawerRow
+          theme={theme}
+          label="Playalong mode: play music aloud"
+          hint=""
+        >
           <label
             style={{
               display: "flex",
@@ -236,16 +244,43 @@ export function SettingsDrawer({
           >
             <input
               type="checkbox"
-              checked={playalongPianoAudio}
+              checked={playalongPlayMusic}
               onChange={(e) =>
-                onPlayalongPianoAudioChange(
+                onPlayalongPlayMusicChange(
                   (e.target as HTMLInputElement).checked,
                 )
               }
               style={{ accentColor: accent }}
             />
             <span style={{ color: theme.inkSoft }}>
-              Play guide notes through the piano at low volume
+              Play the song through the device speaker
+            </span>
+          </label>
+        </DrawerRow>
+
+        {/* Playalong: metronome via piano */}
+        <DrawerRow theme={theme} label="Playalong mode: metronome" hint="">
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={playalongMetronome}
+              onChange={(e) =>
+                onPlayalongMetronomeChange(
+                  (e.target as HTMLInputElement).checked,
+                )
+              }
+              style={{ accentColor: accent }}
+            />
+            <span style={{ color: theme.inkSoft }}>
+              Send hi-hat ticks through the piano on each beat
             </span>
           </label>
         </DrawerRow>

@@ -19,7 +19,10 @@ export type PlayalongPhase = "idle" | "counting-in" | "playing" | "complete";
 
 export interface PlayalongSettings {
   timingBeats: number;
-  pianoAudio: boolean;
+  /** When true, the song is played aloud via Web Audio (phone speaker). */
+  playMusic: boolean;
+  /** When true, hi-hat metronome ticks are sent to the piano via BLE MIDI. */
+  metronome: boolean;
   /** Current BPM — recorded with each attempt for the history table. */
   bpm: number;
   accent: string;
@@ -58,6 +61,33 @@ export function usePlayalongMode(
   const countInCancelRef = useRef<(() => void) | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
   const uninstallAudioRoutingRef = useRef<(() => void) | null>(null);
+  const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopMetronome() {
+    if (metronomeTimerRef.current !== null) {
+      clearInterval(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    }
+  }
+
+  function startMetronome() {
+    stopMetronome();
+    const ctrl = controlRef.current;
+    const mx = ctrl.musicxml;
+    if (!mx) {
+      return;
+    }
+    const msPerBeat = (60 / settingsRef.current.bpm) * 1000;
+    const timeSigNum = mx.timeSigNum;
+    let beatIdx = 0;
+    const tick = () => {
+      const isDownbeat = beatIdx % timeSigNum === 0;
+      ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
+      beatIdx++;
+    };
+    tick();
+    metronomeTimerRef.current = setInterval(tick, msPerBeat);
+  }
 
   const controlRef = useRef(control);
   controlRef.current = control;
@@ -73,6 +103,7 @@ export function usePlayalongMode(
     uninstallAudioRoutingRef.current = null;
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = null;
+    stopMetronome();
     phaseRef.current = "idle";
     setPhase("idle");
     hitNoteIdsRef.current = new Set();
@@ -149,6 +180,7 @@ export function usePlayalongMode(
     uninstallAudioRoutingRef.current = null;
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = null;
+    stopMetronome();
     const ctrl = controlRef.current;
     ctrl.player.pause();
     ctrl.setIsPlaying(false);
@@ -233,26 +265,23 @@ export function usePlayalongMode(
         }
         uninstallAudioRoutingRef.current?.();
         uninstallAudioRoutingRef.current = null;
+        stopMetronome();
         phaseRef.current = "complete";
         setPhase("complete");
         recordCompletion(computeScore());
       },
     });
 
-    if (settingsRef.current.pianoAudio) {
+    // Web Audio output is the default; when "play music aloud" is off, mute it.
+    if (!settingsRef.current.playMusic) {
       uninstallAudioRoutingRef.current?.();
       uninstallAudioRoutingRef.current = player.setAudioRouting({
         skipWebAudio: true,
-        onNoteScheduled: (notes) => {
-          ctrl.bluetooth.sendNotesBatch(
-            notes.map((n) => ({
-              note: n.noteNumber,
-              velocity: Math.max(1, Math.round(n.velocity * 0.3)),
-              durationMs: n.durationMs,
-            })),
-          );
-        },
       });
+    }
+
+    if (settingsRef.current.metronome) {
+      startMetronome();
     }
 
     await player.play();

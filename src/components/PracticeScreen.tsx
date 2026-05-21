@@ -68,8 +68,10 @@ interface PracticeScreenProps {
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
   onPlayalongTimingChange: (beats: number) => void;
-  playalongPianoAudio: boolean;
-  onPlayalongPianoAudioChange: (enabled: boolean) => void;
+  playalongPlayMusic: boolean;
+  onPlayalongPlayMusicChange: (enabled: boolean) => void;
+  playalongMetronome: boolean;
+  onPlayalongMetronomeChange: (enabled: boolean) => void;
   appendToDebugLog: (event: DebugBeatEvent) => void;
   getDebugLog: () => DebugBeatEvent[];
 }
@@ -100,8 +102,10 @@ export function PracticeScreen({
   onSensitivityChange,
   playalongTimingBeats,
   onPlayalongTimingChange,
-  playalongPianoAudio,
-  onPlayalongPianoAudioChange,
+  playalongPlayMusic,
+  onPlayalongPlayMusicChange,
+  playalongMetronome,
+  onPlayalongMetronomeChange,
   appendToDebugLog,
   getDebugLog,
 }: PracticeScreenProps) {
@@ -256,7 +260,8 @@ export function PracticeScreen({
   });
   const playalong = usePlayalongMode(control, {
     timingBeats: playalongTimingBeats,
-    pianoAudio: playalongPianoAudio,
+    playMusic: playalongPlayMusic,
+    metronome: playalongMetronome,
     bpm,
     accent,
     theme,
@@ -911,8 +916,10 @@ export function PracticeScreen({
         onSensitivityChange={onSensitivityChange}
         playalongTimingBeats={playalongTimingBeats}
         onPlayalongTimingChange={onPlayalongTimingChange}
-        playalongPianoAudio={playalongPianoAudio}
-        onPlayalongPianoAudioChange={onPlayalongPianoAudioChange}
+        playalongPlayMusic={playalongPlayMusic}
+        onPlayalongPlayMusicChange={onPlayalongPlayMusicChange}
+        playalongMetronome={playalongMetronome}
+        onPlayalongMetronomeChange={onPlayalongMetronomeChange}
       />
 
       {/* Mode-owned result modal */}

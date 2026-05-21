@@ -56,7 +56,8 @@ export function App() {
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
-  const [playalongPianoAudio, setPlayalongPianoAudio] = useState(true);
+  const [playalongPlayMusic, setPlayalongPlayMusic] = useState(true);
+  const [playalongMetronome, setPlayalongMetronome] = useState(false);
 
   // Mirror of PracticeScreen's live cursor, used only for persistence.
   const [currentBeat, setCurrentBeat] = useState(0);
@@ -305,8 +306,10 @@ export function App() {
       onSensitivityChange={setNoteSensitivityMilliseconds}
       playalongTimingBeats={playalongTimingBeats}
       onPlayalongTimingChange={setPlayalongTimingBeats}
-      playalongPianoAudio={playalongPianoAudio}
-      onPlayalongPianoAudioChange={setPlayalongPianoAudio}
+      playalongPlayMusic={playalongPlayMusic}
+      onPlayalongPlayMusicChange={setPlayalongPlayMusic}
+      playalongMetronome={playalongMetronome}
+      onPlayalongMetronomeChange={setPlayalongMetronome}
       appendToDebugLog={appendToDebugLog}
       getDebugLog={getDebugLog}
     />
