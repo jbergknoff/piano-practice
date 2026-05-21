@@ -231,9 +231,8 @@ interface SheetMusicDisplayProps {
   layout?: LayoutConfig;
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
-  playbackBeat?: number;
-  /** Color of the playback cursor line. Defaults to blue (#1976d2). */
-  cursorColor?: string;
+  /** Accent color used for the focus-range handles. Defaults to blue (#1976d2). */
+  accentColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
   /** Color for staff lines, barlines, stems, and noteheads. Defaults to "black". */
@@ -248,9 +247,7 @@ interface SheetMusicDisplayProps {
   onFocusRangeChange?: (range: { from: number; to: number }) => void;
   /** Ref written by the caller before each jump (reset/seek/mode change).
    *  The snap effect reads the beat, computes scroll position via
-   *  computeCursorX, and clears the ref. Using the beat directly (rather
-   *  than cursorX) means the snap works even when playbackBeat is undefined
-   *  (e.g. beat 0 in listen mode) and fires even if cursorX did not change. */
+   *  computeCursorX, and clears the ref. */
   snapBeatRef?: { current: number | null };
   /** Incremented by the caller on every jump. The snap effect depends on this
    *  so it always fires — even if the beat is identical to the previous jump. */
@@ -271,8 +268,7 @@ export function SheetMusicDisplay({
   layout: layoutConfig,
   noteColors = {},
   visibleParts,
-  playbackBeat,
-  cursorColor = "#1976d2",
+  accentColor = "#1976d2",
   glyphFontSize,
   inkColor = "black",
   containerStyle,
@@ -307,28 +303,15 @@ export function SheetMusicDisplay({
 
   const fontSize = glyphFontSize ?? layout.staffSpace * 4;
 
-  const cursorX =
-    playbackBeat !== undefined
-      ? computeCursorX(playbackBeat, score, layout)
-      : null;
-
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollTargetRef = useRef<number | null>(null);
-  const scrollRafRef = useRef<number | null>(null);
-  // Set true when the user manually scrolls; suppresses cursor-following until
-  // a snap or until the cursor scrolls back into the visible viewport.
-  const detachedRef = useRef(false);
   // Mirrors the scrollLocked prop so the event handlers (set up once in a
   // useEffect([])) can read the current value without a stale closure.
   const scrollLockedRef = useRef(scrollLocked);
   scrollLockedRef.current = scrollLocked;
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
-  // Reads the target beat from snapBeatRef and computes the scroll position via
-  // computeCursorX directly — bypassing playbackBeat — so the snap works even
-  // when playbackBeat is undefined (e.g. beat 0 in listen mode, where cursorX
-  // would be null). snapGeneration increments on every jump so this effect
-  // always fires even when the beat is unchanged from the previous jump.
+  // snapGeneration increments on every jump so this effect always fires
+  // even when the beat is unchanged from the previous jump.
   // biome-ignore lint/correctness/useExhaustiveDependencies: snapBeatRef is a stable ref; score/layout are used to compute position
   useEffect(() => {
     if (!snapBeatRef || snapBeatRef.current === null) {
@@ -341,66 +324,11 @@ export function SheetMusicDisplay({
     if (!el) {
       return;
     }
-    if (scrollRafRef.current !== null) {
-      cancelAnimationFrame(scrollRafRef.current);
-      scrollRafRef.current = null;
-    }
-    scrollTargetRef.current = null;
     const x = computeCursorX(beat, score, layout);
     const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
     el.scrollLeft =
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
-    detachedRef.current = false;
   }, [snapGeneration, score, layout]);
-
-  // Smooth cursor-following animation during playback.
-  useEffect(() => {
-    if (!containerRef.current || cursorX === null) {
-      return;
-    }
-    const el = containerRef.current;
-
-    const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
-    const cursorScrollPos = leftPad + cursorX;
-
-    if (detachedRef.current) {
-      // Re-attach automatically once the cursor scrolls back into the viewport.
-      const visible =
-        cursorScrollPos >= el.scrollLeft &&
-        cursorScrollPos <= el.scrollLeft + el.clientWidth;
-      if (!visible) {
-        return;
-      }
-      detachedRef.current = false;
-    }
-
-    scrollTargetRef.current = Math.max(
-      0,
-      cursorScrollPos - el.clientWidth * 0.38,
-    );
-
-    if (scrollRafRef.current !== null) {
-      return; // animation loop already running
-    }
-
-    const step = () => {
-      const target = scrollTargetRef.current;
-      if (target === null || !containerRef.current) {
-        scrollRafRef.current = null;
-        return;
-      }
-      const diff = target - containerRef.current.scrollLeft;
-      if (Math.abs(diff) < 0.5) {
-        containerRef.current.scrollLeft = target;
-        scrollTargetRef.current = null;
-        scrollRafRef.current = null;
-        return;
-      }
-      containerRef.current.scrollLeft += diff * 0.12;
-      scrollRafRef.current = requestAnimationFrame(step);
-    };
-    scrollRafRef.current = requestAnimationFrame(step);
-  }, [cursorX]);
 
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -497,15 +425,8 @@ export function SheetMusicDisplay({
       if (scrollLockedRef.current) {
         return;
       }
-      // Cancel any running auto-scroll so the manual drag always wins.
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
       dragRef.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
       el.setPointerCapture(e.pointerId);
-      detachedRef.current = true;
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -523,14 +444,7 @@ export function SheetMusicDisplay({
     const onWheel = (e: WheelEvent) => {
       if (scrollLockedRef.current) {
         e.preventDefault();
-        return;
       }
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-        scrollRafRef.current = null;
-      }
-      scrollTargetRef.current = null;
-      detachedRef.current = true;
     };
 
     el.addEventListener("pointerdown", onPointerDown);
@@ -666,17 +580,6 @@ export function SheetMusicDisplay({
               inkColor={inkColor}
             />
           ))}
-          {cursorX !== null && (
-            <line
-              x1={cursorX}
-              x2={cursorX}
-              y1={cursorY1 - 4}
-              y2={cursorY2 + 4}
-              stroke={cursorColor}
-              stroke-width="2"
-              stroke-opacity="0.85"
-            />
-          )}
           {/* Visible handle bars — SVG only, no pointer events */}
           {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>
@@ -690,7 +593,7 @@ export function SheetMusicDisplay({
                       y={cursorY1 - 4}
                       width={2}
                       height={cursorY2 - cursorY1 + 8}
-                      fill={cursorColor}
+                      fill={accentColor}
                       opacity={0.35}
                     />
                     {/* Pill thumb */}
@@ -700,7 +603,7 @@ export function SheetMusicDisplay({
                       width={12}
                       height={36}
                       rx={6}
-                      fill={cursorColor}
+                      fill={accentColor}
                       opacity={0.9}
                     />
                     {/* Grip lines */}

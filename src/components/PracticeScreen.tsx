@@ -390,8 +390,7 @@ export function PracticeScreen({
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
           noteColors={active.noteColors}
-          playbackBeat={currentBeat}
-          cursorColor={accent}
+          accentColor={accent}
           inkColor={theme.ink}
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
