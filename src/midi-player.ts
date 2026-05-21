@@ -57,11 +57,6 @@ export class MidiPlayer {
     return this._state;
   }
 
-  /** Live playback position in beats, clamped to the piece length. */
-  get currentBeat(): number {
-    return Math.min(this.elapsedBeat(), this.totalBeats);
-  }
-
   async play(): Promise<void> {
     if (this._state === "playing") {
       return;
@@ -85,9 +80,6 @@ export class MidiPlayer {
     this.cancelAll();
     this.stopTick();
     this._state = "paused";
-    // Sync listeners to the exact pause position so the cursor doesn't hop back
-    // to the last throttled update when the live animation stops.
-    this.onPositionUpdate?.(Math.min(this.resumeBeat, this.totalBeats));
   }
 
   stop(): void {

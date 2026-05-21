@@ -144,14 +144,6 @@ export function PracticeScreen({
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
-  // Stable getter for SheetMusicDisplay's cursor animation loop — reads the
-  // player's live position directly so the 60fps cursor never routes through
-  // this component's state.
-  const getLiveBeat = useCallback(
-    () => playerRef.current?.currentBeat ?? null,
-    [],
-  );
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange flow through the player methods + refs
   useEffect(() => {
     playerRef.current?.dispose();
@@ -398,9 +390,6 @@ export function PracticeScreen({
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
           noteColors={active.noteColors}
-          playbackBeat={currentBeat}
-          getLiveBeat={getLiveBeat}
-          playing={isPlaying}
           accentColor={accent}
           inkColor={theme.ink}
           focusRange={measureRange}

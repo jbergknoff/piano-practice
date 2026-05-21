@@ -232,17 +232,7 @@ interface SheetMusicDisplayProps {
   layout?: LayoutConfig;
   noteColors?: Record<string, string>;
   visibleParts?: Set<string>;
-  /** Static cursor beat — used to position the cursor while paused/seeking.
-   *  During playback the live position from getLiveBeat takes over. */
-  playbackBeat?: number;
-  /** When playing, called once per animation frame to read the live playback
-   *  beat. Drives the cursor + auto-scroll at full frame rate without routing
-   *  the 60fps stream through parent React state. */
-  getLiveBeat?: () => number | null;
-  /** Whether playback is active. Gates the cursor animation loop. */
-  playing?: boolean;
-  /** Accent color used for the playback cursor and focus-range handles.
-   *  Defaults to blue (#1976d2). */
+  /** Accent color used for the focus-range handles. Defaults to blue (#1976d2). */
   accentColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
@@ -279,9 +269,6 @@ export function SheetMusicDisplay({
   layout: layoutConfig,
   noteColors = {},
   visibleParts,
-  playbackBeat,
-  getLiveBeat,
-  playing = false,
   accentColor = "#1976d2",
   glyphFontSize,
   inkColor = "black",
@@ -343,45 +330,6 @@ export function SheetMusicDisplay({
     el.scrollLeft =
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
   }, [snapGeneration, score, layout]);
-
-  // Live cursor position during playback. Driven by an rAF loop that polls
-  // getLiveBeat, so the 60fps stream re-renders only this component (the
-  // memoized staves skip) rather than the whole app. While paused, liveBeat is
-  // null and the cursor falls back to the static playbackBeat prop.
-  const [liveBeat, setLiveBeat] = useState<number | null>(null);
-  const getLiveBeatRef = useRef(getLiveBeat);
-  getLiveBeatRef.current = getLiveBeat;
-
-  useEffect(() => {
-    if (!playing) {
-      setLiveBeat(null);
-      return;
-    }
-    const el = containerRef.current;
-    const leftPad = el
-      ? Number.parseFloat(getComputedStyle(el).paddingLeft) || 0
-      : 0;
-    let rafId = 0;
-    const tick = () => {
-      const beat = getLiveBeatRef.current?.() ?? null;
-      setLiveBeat(beat);
-      // Ease the scroll so the cursor trails toward ~38% of the viewport.
-      if (el && beat !== null) {
-        const x = computeCursorX(beat, score, layout);
-        if (x !== null) {
-          const target = Math.max(0, leftPad + x - el.clientWidth * 0.38);
-          el.scrollLeft += (target - el.scrollLeft) * 0.18;
-        }
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [playing, score, layout]);
-
-  const cursorBeat = liveBeat ?? playbackBeat ?? null;
-  const cursorX =
-    cursorBeat !== null ? computeCursorX(cursorBeat, score, layout) : null;
 
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -633,17 +581,6 @@ export function SheetMusicDisplay({
               inkColor={inkColor}
             />
           ))}
-          {cursorX !== null && (
-            <line
-              x1={cursorX}
-              x2={cursorX}
-              y1={cursorY1 - 4}
-              y2={cursorY2 + 4}
-              stroke={accentColor}
-              stroke-width="2"
-              stroke-opacity="0.85"
-            />
-          )}
           {/* Visible handle bars — SVG only, no pointer events */}
           {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>
