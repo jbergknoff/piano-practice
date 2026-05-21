@@ -9,6 +9,12 @@ bun = $(call run,bun)
 biome = $(call run,./node_modules/.bin/biome)
 tsc = $(call run,./node_modules/.bin/tsc)
 
+# Netlify Deploy Previews (PR builds) set CONTEXT=deploy-preview; emit source
+# maps there so PR previews are debuggable. Production stays map-free.
+ifeq ($(CONTEXT),deploy-preview)
+sourcemap = --sourcemap=linked
+endif
+
 node_modules: package.json
 	$(bun) install
 
@@ -26,7 +32,7 @@ test: node_modules
 
 build: node_modules
 	mkdir -p dist
-	$(bun) build src/main.tsx --outdir dist --minify --define 'GIT_COMMIT="$(shell git rev-parse --short HEAD)"'
+	$(bun) build src/main.tsx --outdir dist --minify $(sourcemap) --define 'GIT_COMMIT="$(shell git rev-parse --short HEAD)"'
 	cp node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2 dist/bravura.woff2
 
 pr-ready: format lint typecheck test build
