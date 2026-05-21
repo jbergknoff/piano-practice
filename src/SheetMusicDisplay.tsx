@@ -1,3 +1,4 @@
+import { memo } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
@@ -836,41 +837,56 @@ function Measure({
   inkColor,
 }: MeasureProps) {
   const { staffSpace, noteUnitWidth } = layout;
-  const eventXs = eventXPositions(
+
+  // Note positions and beam geometry depend only on the score + layout, never
+  // on note colors. Memoize so color changes during playback don't recompute
+  // them — and so beamOverrideMap entries keep a stable identity, letting the
+  // memoized ChordGroupEl skip re-rendering.
+  const { eventXs, beamGroups, beamOverrideMap } = useMemo(() => {
+    const eventXs = eventXPositions(
+      measure.events,
+      x,
+      isFirstMeasure,
+      keySig.fifths,
+      noteUnitWidth,
+      staffSpace,
+    );
+    const beamGroups = computeBeamGroups(
+      measure.events,
+      eventXs,
+      clef,
+      staffBottomY,
+      staffSpace,
+    );
+    // Map from event index → beam stem override (direction + tip Y)
+    const beamOverrideMap = new Map<
+      number,
+      { stemDir: "up" | "down"; stemTipY: number }
+    >();
+    for (const group of beamGroups) {
+      group.eventIndices.forEach((ei, i) => {
+        beamOverrideMap.set(ei, {
+          stemDir: group.stemDir,
+          stemTipY: group.stems[i].stemTipY,
+        });
+      });
+    }
+    return { eventXs, beamGroups, beamOverrideMap };
+  }, [
     measure.events,
     x,
     isFirstMeasure,
     keySig.fifths,
     noteUnitWidth,
     staffSpace,
-  );
+    clef,
+    staffBottomY,
+  ]);
 
   const hdrWidth = isFirstMeasure ? headerWidth(keySig.fifths) : 0;
   const clefX = x + 2;
   const keySigX = clefX + 32;
   const timeSigX = keySigX + Math.abs(keySig.fifths) * 10;
-
-  const beamGroups = computeBeamGroups(
-    measure.events,
-    eventXs,
-    clef,
-    staffBottomY,
-    staffSpace,
-  );
-
-  // Map from event index → beam stem override (direction + tip Y)
-  const beamOverrideMap = new Map<
-    number,
-    { stemDir: "up" | "down"; stemTipY: number }
-  >();
-  for (const group of beamGroups) {
-    group.eventIndices.forEach((ei, i) => {
-      beamOverrideMap.set(ei, {
-        stemDir: group.stemDir,
-        stemTipY: group.stems[i].stemTipY,
-      });
-    });
-  }
 
   return (
     <g>
@@ -1127,7 +1143,41 @@ function chordXOffsets(
   return offsets;
 }
 
-function ChordGroupEl({
+// Skip re-rendering unless something this chord actually draws changed. Every
+// other prop is a primitive or a reference that is stable while the score and
+// layout are unchanged (group/clef come from the memoized score, beamStemOverride
+// from the memoized per-measure map). noteColors is the whole-score map and its
+// identity changes on every active-note transition, so compare only the entries
+// for this chord's own notes rather than the map reference.
+function chordPropsEqual(
+  prev: ChordGroupElProps,
+  next: ChordGroupElProps,
+): boolean {
+  if (
+    prev.group !== next.group ||
+    prev.x !== next.x ||
+    prev.staffBottomY !== next.staffBottomY ||
+    prev.clef !== next.clef ||
+    prev.partIndex !== next.partIndex ||
+    prev.measureNumber !== next.measureNumber ||
+    prev.staffSpace !== next.staffSpace ||
+    prev.inkColor !== next.inkColor ||
+    prev.beamStemOverride !== next.beamStemOverride
+  ) {
+    return false;
+  }
+  const { partIndex, measureNumber } = next;
+  const { noteIndex, notes } = next.group;
+  for (let v = 0; v < notes.length; v++) {
+    const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
+    if (prev.noteColors[id] !== next.noteColors[id]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const ChordGroupEl = memo(function ChordGroupEl({
   group,
   x,
   staffBottomY,
@@ -1230,7 +1280,7 @@ function ChordGroupEl({
       })}
     </g>
   );
-}
+}, chordPropsEqual);
 
 // ── Flags ─────────────────────────────────────────────────────────────────────
 
