@@ -702,7 +702,7 @@ interface StaffProps {
   inkColor: string;
 }
 
-function Staff({
+const Staff = memo(function Staff({
   part,
   partIndex,
   layout,
@@ -750,7 +750,7 @@ function Staff({
       )}
     </g>
   );
-}
+});
 
 // ── Staff Lines ───────────────────────────────────────────────────────────────
 

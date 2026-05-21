@@ -6,6 +6,10 @@ const SCHEDULE_AHEAD = 0.3;
 const SCHEDULER_INTERVAL = 25;
 // Small offset so the very first notes are never scheduled in the past.
 const LOOKAHEAD = 0.05;
+// Minimum gap (ms) between onPositionUpdate callbacks during playback. The rAF
+// loop still runs every frame for accurate end detection, but the position is
+// only reported ~20×/sec — enough for note highlighting, far fewer re-renders.
+const POSITION_UPDATE_INTERVAL = 50;
 
 export class MidiPlayer {
   private audioCtx: AudioContext | null = null;
@@ -13,6 +17,8 @@ export class MidiPlayer {
   private activeGains: AudioNode[] = [];
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private animFrameId: number | null = null;
+  // performance.now() of the last throttled position emit.
+  private lastPositionEmit = 0;
 
   // Sorted subset of notes that still need scheduling in the current playback.
   private playQueue: PlaybackNote[] = [];
@@ -142,6 +148,8 @@ export class MidiPlayer {
       () => this.scheduleUpcoming(),
       SCHEDULER_INTERVAL,
     );
+    // Force the first tick to emit immediately.
+    this.lastPositionEmit = 0;
     this.startTick();
   }
 
@@ -384,7 +392,11 @@ export class MidiPlayer {
         return;
       }
 
-      this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
+      const nowMs = performance.now();
+      if (nowMs - this.lastPositionEmit >= POSITION_UPDATE_INTERVAL) {
+        this.lastPositionEmit = nowMs;
+        this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
+      }
 
       if (beat >= this.totalBeats) {
         this.stopTick();
