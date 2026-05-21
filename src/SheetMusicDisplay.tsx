@@ -951,15 +951,14 @@ function Measure({
               measureNumber={measure.number}
               noteColors={noteColors}
               staffSpace={staffSpace}
-              //beamStemOverride={beamOverrideMap.get(ei)}
+              beamStemOverride={beamOverrideMap.get(ei)}
               inkColor={inkColor}
             />
           );
         });
       })()}
       <BeamLines
-        //beamGroups={beamGroups}
-        beamGroups={null}
+        beamGroups={beamGroups}
         staffSpace={staffSpace}
         inkColor={inkColor}
       />
@@ -1310,7 +1309,7 @@ function BeamLines({
   staffSpace,
   inkColor,
 }: {
-  beamGroups: BeamGroupData[] | null;
+  beamGroups: BeamGroupData[];
   staffSpace: number;
   inkColor: string;
 }) {
@@ -1320,7 +1319,7 @@ function BeamLines({
 
   return (
     <g>
-      {beamGroups?.map((group) => {
+      {beamGroups.map((group) => {
         const { eventIndices, stems, beamY, stemDir, types } = group;
         const x1 = stems[0].stemX;
         const x2 = stems[stems.length - 1].stemX;
