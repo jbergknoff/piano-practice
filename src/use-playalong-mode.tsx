@@ -15,7 +15,12 @@ import {
   savePlayalongAttempt,
 } from "./use-file-history";
 
-export type PlayalongPhase = "idle" | "counting-in" | "playing" | "complete";
+export type PlayalongPhase =
+  | "idle"
+  | "counting-in"
+  | "waiting-for-note"
+  | "playing"
+  | "complete";
 
 export interface PlayalongSettings {
   timingBeats: number;
@@ -23,6 +28,11 @@ export interface PlayalongSettings {
   playMusic: boolean;
   /** When true, hi-hat metronome ticks are sent to the piano via BLE MIDI. */
   metronome: boolean;
+  /**
+   * When true, a metronome count-in precedes playback. When false, playback
+   * begins as soon as the user presses the first note.
+   */
+  countIn: boolean;
   /** Current BPM — recorded with each attempt for the history table. */
   bpm: number;
   accent: string;
@@ -200,56 +210,9 @@ export function usePlayalongMode(
     ctrl.setCursor(startBeat, "jump");
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong / computeScore / recordCompletion read only from refs; stable by design
-  const handlePlayPause = useCallback(async () => {
+  async function startPlaying() {
     const ctrl = controlRef.current;
     const player = ctrl.player;
-
-    if (phaseRef.current === "counting-in" || phaseRef.current === "playing") {
-      stopPlayalong();
-      return;
-    }
-
-    const mx = ctrl.musicxml;
-    if (!mx) {
-      return;
-    }
-
-    const range = ctrl.measureRange;
-    const startBeat = range ? (range.from - 1) * mx.timeSigNum : 0;
-    player.seek(startBeat);
-    ctrl.setCursor(startBeat, "jump");
-
-    // Reset score state and enter counting-in.
-    const empty = new Set<string>();
-    hitNoteIdsRef.current = empty;
-    setHitNoteIds(empty);
-    extraNoteCountRef.current = 0;
-    phaseRef.current = "counting-in";
-    setPhase("counting-in");
-    ctrl.setIsPlaying(true);
-
-    const countInBeats = 2 * mx.timeSigNum;
-    const { cancel, done } = player.playCountIn(
-      countInBeats,
-      mx.timeSigNum,
-      (i) => {
-        const isDownbeat = i % mx.timeSigNum === 0;
-        ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
-        setCountInBeat({ beat: i, timeSigNum: mx.timeSigNum });
-      },
-    );
-    countInCancelRef.current = cancel;
-
-    await done;
-    setCountInBeat(null);
-
-    if ((phaseRef.current as PlayalongPhase) !== "counting-in") {
-      // Stopped during count-in — stopPlayalong already cleaned up.
-      ctrl.setIsPlaying(false);
-      return;
-    }
-    countInCancelRef.current = null;
 
     phaseRef.current = "playing";
     setPhase("playing");
@@ -285,6 +248,72 @@ export function usePlayalongMode(
     }
 
     await player.play();
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong / computeScore / recordCompletion / startPlaying read only from refs; stable by design
+  const handlePlayPause = useCallback(async () => {
+    const ctrl = controlRef.current;
+    const player = ctrl.player;
+
+    if (
+      phaseRef.current === "counting-in" ||
+      phaseRef.current === "waiting-for-note" ||
+      phaseRef.current === "playing"
+    ) {
+      stopPlayalong();
+      return;
+    }
+
+    const mx = ctrl.musicxml;
+    if (!mx) {
+      return;
+    }
+
+    const range = ctrl.measureRange;
+    const startBeat = range ? (range.from - 1) * mx.timeSigNum : 0;
+    player.seek(startBeat);
+    ctrl.setCursor(startBeat, "jump");
+
+    // Reset score state.
+    const empty = new Set<string>();
+    hitNoteIdsRef.current = empty;
+    setHitNoteIds(empty);
+    extraNoteCountRef.current = 0;
+    ctrl.setIsPlaying(true);
+
+    if (!settingsRef.current.countIn) {
+      // Skip count-in: wait for the user's first note to begin playback.
+      phaseRef.current = "waiting-for-note";
+      setPhase("waiting-for-note");
+      return;
+    }
+
+    phaseRef.current = "counting-in";
+    setPhase("counting-in");
+
+    const countInBeats = 2 * mx.timeSigNum;
+    const { cancel, done } = player.playCountIn(
+      countInBeats,
+      mx.timeSigNum,
+      (i) => {
+        const isDownbeat = i % mx.timeSigNum === 0;
+        ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
+        setCountInBeat({ beat: i, timeSigNum: mx.timeSigNum });
+      },
+    );
+    countInCancelRef.current = cancel;
+
+    await done;
+    setCountInBeat(null);
+
+    if ((phaseRef.current as PlayalongPhase) !== "counting-in") {
+      // Stopped during count-in — stopPlayalong already cleaned up.
+      ctrl.setIsPlaying(false);
+      return;
+    }
+    countInCancelRef.current = null;
+
+    await startPlaying();
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong reads only from refs; stable by design
@@ -309,6 +338,7 @@ export function usePlayalongMode(
   }, []);
 
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startPlaying reads only from refs; stable by design
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
     const ctrl = controlRef.current;
     const now = Date.now();
@@ -333,6 +363,12 @@ export function usePlayalongMode(
     }
 
     held.add(noteNumber);
+
+    // First note while waiting (count-in disabled) kicks off playback. Fall
+    // through so this same press is also evaluated against the first notes.
+    if (phaseRef.current === "waiting-for-note") {
+      void startPlaying();
+    }
 
     if (phaseRef.current !== "playing") {
       ctrl.appendToDebugLog({
@@ -440,6 +476,8 @@ export function usePlayalongMode(
   const overlay =
     phase === "counting-in" ? (
       <CountInOverlay countInBeat={countInBeat} />
+    ) : phase === "waiting-for-note" ? (
+      <WaitingForNoteOverlay />
     ) : null;
 
   const modal = resultModal ? (
@@ -555,6 +593,61 @@ function CountInOverlay({
           }}
         >
           Count in…
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WaitingForNoteOverlay() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 10,
+        pointerEvents: "none",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          borderRadius: 16,
+          padding: "18px 28px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            color: "#fff",
+            lineHeight: 1.1,
+            textAlign: "center",
+          }}
+        >
+          Press any key
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.7)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginTop: 8,
+          }}
+        >
+          to start
         </div>
       </div>
     </div>

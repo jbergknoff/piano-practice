@@ -18,6 +18,8 @@ interface SettingsDrawerProps {
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
   playalongMetronome: boolean;
   onPlayalongMetronomeChange: (enabled: boolean) => void;
+  playalongCountIn: boolean;
+  onPlayalongCountInChange: (enabled: boolean) => void;
 }
 
 function sensitivityLabel(ms: number): string {
@@ -52,6 +54,8 @@ export function SettingsDrawer({
   onPlayalongPlayMusicChange,
   playalongMetronome,
   onPlayalongMetronomeChange,
+  playalongCountIn,
+  onPlayalongCountInChange,
 }: SettingsDrawerProps) {
   return (
     <>
@@ -281,6 +285,31 @@ export function SettingsDrawer({
             />
             <span style={{ color: theme.inkSoft }}>
               Send hi-hat ticks through the piano on each beat
+            </span>
+          </label>
+        </DrawerRow>
+
+        {/* Playalong: count-in */}
+        <DrawerRow theme={theme} label="Playalong mode: count-in" hint="">
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={playalongCountIn}
+              onChange={(e) =>
+                onPlayalongCountInChange((e.target as HTMLInputElement).checked)
+              }
+              style={{ accentColor: accent }}
+            />
+            <span style={{ color: theme.inkSoft }}>
+              Count in before playback; when off, start on your first note
             </span>
           </label>
         </DrawerRow>

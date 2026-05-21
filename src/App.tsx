@@ -58,6 +58,7 @@ export function App() {
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
   const [playalongPlayMusic, setPlayalongPlayMusic] = useState(true);
   const [playalongMetronome, setPlayalongMetronome] = useState(false);
+  const [playalongCountIn, setPlayalongCountIn] = useState(true);
 
   // Mirror of PracticeScreen's live cursor, used only for persistence.
   const [currentBeat, setCurrentBeat] = useState(0);
@@ -310,6 +311,8 @@ export function App() {
       onPlayalongPlayMusicChange={setPlayalongPlayMusic}
       playalongMetronome={playalongMetronome}
       onPlayalongMetronomeChange={setPlayalongMetronome}
+      playalongCountIn={playalongCountIn}
+      onPlayalongCountInChange={setPlayalongCountIn}
       appendToDebugLog={appendToDebugLog}
       getDebugLog={getDebugLog}
     />
