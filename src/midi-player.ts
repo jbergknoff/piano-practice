@@ -57,6 +57,13 @@ export class MidiPlayer {
     return this._state;
   }
 
+  get currentBeat(): number {
+    if (this._state !== "playing") {
+      return Math.min(this.resumeBeat, this.totalBeats);
+    }
+    return Math.min(this.elapsedBeat(), this.totalBeats);
+  }
+
   async play(): Promise<void> {
     if (this._state === "playing") {
       return;

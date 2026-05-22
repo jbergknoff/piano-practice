@@ -264,6 +264,12 @@ interface SheetMusicDisplayProps {
     clientX: number;
     clientY: number;
   }) => void;
+  /**
+   * When provided, a playback cursor is drawn. The function is called every
+   * animation frame and should return the current beat (or null to hide it).
+   * Position and scroll are updated via direct DOM mutation — no React state.
+   */
+  getLiveBeat?: () => number | null;
 }
 
 export function SheetMusicDisplay({
@@ -282,6 +288,7 @@ export function SheetMusicDisplay({
   snapGeneration,
   scrollLocked = false,
   onSheetContextMenu,
+  getLiveBeat,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -311,6 +318,50 @@ export function SheetMusicDisplay({
   // useEffect([])) can read the current value without a stale closure.
   const scrollLockedRef = useRef(scrollLocked);
   scrollLockedRef.current = scrollLocked;
+
+  // Cursor line — updated by direct DOM mutation in the rAF loop below.
+  const cursorLineRef = useRef<SVGLineElement>(null);
+
+  // rAF loop: update cursor position and drive scroll follow, both via direct
+  // DOM mutation so this never triggers a React re-render.
+  useEffect(() => {
+    if (!getLiveBeat) {
+      return;
+    }
+    const container = containerRef.current;
+    const leftPad = container
+      ? Number.parseFloat(getComputedStyle(container).paddingLeft) || 0
+      : 0;
+    let rafId: number;
+    const tick = () => {
+      const beat = getLiveBeat();
+      const line = cursorLineRef.current;
+      if (line) {
+        if (beat !== null) {
+          const x = computeCursorX(beat, score, layout);
+          if (x !== null) {
+            line.setAttribute("x1", String(x));
+            line.setAttribute("x2", String(x));
+            line.style.display = "";
+            if (container) {
+              const target = Math.max(
+                0,
+                leftPad + x - container.clientWidth * 0.38,
+              );
+              container.scrollLeft += (target - container.scrollLeft) * 0.08;
+            }
+          } else {
+            line.style.display = "none";
+          }
+        } else {
+          line.style.display = "none";
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [getLiveBeat, score, layout]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
   // snapGeneration increments on every jump so this effect always fires
@@ -583,6 +634,19 @@ export function SheetMusicDisplay({
               inkColor={inkColor}
             />
           ))}
+          {getLiveBeat && (
+            <line
+              ref={cursorLineRef}
+              x1={0}
+              x2={0}
+              y1={cursorY1}
+              y2={cursorY2}
+              stroke={accentColor}
+              stroke-width={2}
+              opacity={0.75}
+              style={{ display: "none", pointerEvents: "none" }}
+            />
+          )}
           {/* Visible handle bars — SVG only, no pointer events */}
           {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>

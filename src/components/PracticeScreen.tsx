@@ -219,6 +219,16 @@ export function PracticeScreen({
     [],
   );
 
+  // Returns the live playback beat for the cursor rAF loop. Returns null when
+  // not playing so the cursor is hidden and scroll is not driven.
+  const getLiveBeat = useCallback(() => {
+    const p = playerRef.current;
+    if (!p || p.state !== "playing") {
+      return null;
+    }
+    return p.currentBeat;
+  }, []);
+
   // Stable BluetoothHandle that reads from a ref so identity stays constant.
   const bluetoothRef = useRef(bluetooth);
   bluetoothRef.current = bluetooth;
@@ -389,7 +399,6 @@ export function PracticeScreen({
       {musicxml ? (
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
-          noteColors={active.noteColors}
           accentColor={accent}
           inkColor={theme.ink}
           focusRange={measureRange}
@@ -398,6 +407,7 @@ export function PracticeScreen({
           snapBeatRef={snapBeatRef}
           snapGeneration={snapGeneration}
           scrollLocked={isPlaying}
+          getLiveBeat={getLiveBeat}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
