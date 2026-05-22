@@ -219,14 +219,14 @@ export function PracticeScreen({
     [],
   );
 
-  // Returns the live playback beat for the cursor rAF loop. Returns null when
-  // not playing so the cursor is hidden and scroll is not driven.
+  // Drives the cursor rAF loop. Returns the beat while playing or paused (so the
+  // cursor stays visible when paused); null only when stopped, which hides it.
   const getLiveBeat = useCallback(() => {
     const p = playerRef.current;
-    if (!p || p.state !== "playing") {
+    if (!p || p.state === "stopped") {
       return null;
     }
-    return p.currentBeat;
+    return { beat: p.currentBeat, playing: p.state === "playing" };
   }, []);
 
   // Stable BluetoothHandle that reads from a ref so identity stays constant.

@@ -398,10 +398,12 @@ interface SheetMusicDisplayProps {
   }) => void;
   /**
    * When provided, a playback cursor is drawn. The function is called every
-   * animation frame and should return the current beat (or null to hide it).
-   * Position and scroll are updated via direct DOM mutation — no React state.
+   * animation frame and should return the current beat plus whether playback is
+   * active (or null to hide the cursor). The cursor is shown while playing or
+   * paused; scroll only follows while `playing` is true. Position and scroll are
+   * updated via direct DOM mutation — no React state.
    */
-  getLiveBeat?: () => number | null;
+  getLiveBeat?: () => { beat: number; playing: boolean } | null;
 }
 
 export function SheetMusicDisplay({
@@ -496,18 +498,20 @@ export function SheetMusicDisplay({
 
     let rafId: number;
     const tick = () => {
-      const beat = getLiveBeat();
+      const live = getLiveBeat();
       const cursor = cursorDivRef.current;
       if (cursor) {
-        const x = beat !== null ? computeCursorX(beat, score, layout) : null;
-        if (x !== null && containerWidth > 0) {
-          // Page-turn scroll: only write scrollLeft when the cursor is about to
-          // leave the visible area, so the hot path stays render-free.
-          const screenX = leftPad + x - currentScroll;
-          if (screenX < 0 || screenX > containerWidth * 0.78) {
-            currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
-            if (container) {
-              container.scrollLeft = currentScroll;
+        const x = live ? computeCursorX(live.beat, score, layout) : null;
+        if (live && x !== null && containerWidth > 0) {
+          // Page-turn scroll only while actively playing — when paused the
+          // cursor stays put and the user is free to scroll manually.
+          if (live.playing) {
+            const screenX = leftPad + x - currentScroll;
+            if (screenX < 0 || screenX > containerWidth * 0.78) {
+              currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
+              if (container) {
+                container.scrollLeft = currentScroll;
+              }
             }
           }
           // Cursor lives inside the scroll container so transform uses SVG x.
