@@ -241,7 +241,11 @@ export function App() {
     playalongTimingBeats,
   ]);
 
-  // Save synchronously on page close/refresh so cursor position isn't lost.
+  // Persist the latest cursor position when the page is closed or backgrounded.
+  // currentBeat is no longer a snapshot dep (it would re-render on every
+  // position update), so these are the points where the live beat is captured.
+  // visibilitychange → hidden is the reliable signal on mobile, where
+  // beforeunload often doesn't fire.
   useEffect(() => {
     function save() {
       if (snapshotRef.current) {
@@ -251,8 +255,17 @@ export function App() {
         });
       }
     }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        save();
+      }
+    }
     window.addEventListener("beforeunload", save);
-    return () => window.removeEventListener("beforeunload", save);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", save);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   // ── Track selection ──────────────────────────────────────────────────────

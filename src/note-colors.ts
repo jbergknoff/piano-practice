@@ -20,7 +20,7 @@ function sameColors(
  * Preserve the previous note-color map reference when its contents are
  * unchanged. The mode hooks recompute the map whenever currentBeat advances
  * (many times per second), but the active-note set only changes a few times per
- * second. Returning a stable reference lets memoized consumers (Staff) skip
+ * second. Returning a stable reference lets the memoized NoteColorOverlay skip
  * re-rendering between actual color changes.
  */
 export function useStableNoteColors(

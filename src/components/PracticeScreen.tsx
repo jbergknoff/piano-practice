@@ -170,8 +170,6 @@ export function PracticeScreen({
       initialBeatRef.current = 0;
       if (seekBeat > 0) {
         player.seek(seekBeat);
-        // Jump so the sheet scrolls to the restored position on load.
-        setCursor(seekBeat, "jump");
       }
       player.onPositionUpdate = (beat) => setCursor(beat, "smooth");
       player.onEnd = (beat) => {
@@ -179,6 +177,9 @@ export function PracticeScreen({
         setCursor(beat, "jump");
       };
       playerRef.current = player;
+      // Jump so the cursor is placed and the sheet scrolls to the start (or the
+      // restored position) as soon as the piece loads.
+      setCursor(seekBeat, "jump");
     }
 
     return () => {
@@ -220,15 +221,12 @@ export function PracticeScreen({
     [],
   );
 
-  // Drives the cursor rAF loop. Always returns the current beat (so the cursor
-  // is visible at the start position even when stopped); null only when there is
-  // no player. Scroll-follow is gated to `playing` in SheetMusicDisplay.
+  // Drives the cursor. Returns the current beat (so the cursor is visible at the
+  // start position even when stopped); null only when there is no player. The
+  // play/pause lifecycle of the rAF loop is driven by the `playing` prop below.
   const getLiveBeat = useCallback(() => {
     const p = playerRef.current;
-    if (!p) {
-      return null;
-    }
-    return { beat: p.currentBeat, playing: p.state === "playing" };
+    return p ? p.currentBeat : null;
   }, []);
 
   // Stable BluetoothHandle that reads from a ref so identity stays constant.
@@ -411,6 +409,7 @@ export function PracticeScreen({
           snapGeneration={snapGeneration}
           scrollLocked={isPlaying}
           getLiveBeat={getLiveBeat}
+          playing={isPlaying}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}

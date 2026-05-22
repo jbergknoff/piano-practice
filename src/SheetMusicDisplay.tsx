@@ -1,5 +1,11 @@
 import { memo } from "preact/compat";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   DIVISIONS,
@@ -229,16 +235,77 @@ function computeCursorX(
 
 const EMPTY_COLORS: Record<string, string> = {};
 
-// Per-note geometry needed to redraw a notehead in a highlight color. Computed
-// once from score + layout (never depends on colors) and consumed by the
-// NoteColorOverlay, which draws colored glyphs on top of the ink noteheads.
+// Per-note geometry needed to draw (or recolor) a notehead. This is the single
+// source of truth for notehead placement, shared by ChordGroupEl (ink notes)
+// and the NoteColorOverlay (highlight glyphs) so the two can never drift.
 interface NoteRenderInfo {
+  id: string;
   nx: number;
   ny: number;
-  char: string;
+  type: NoteType;
   showAccidental: boolean;
   dot: boolean;
   staffSpace: number;
+}
+
+// Resolve the per-event beam stem overrides (direction + tip Y) for a measure.
+// Used by both Measure (to render stems/beams) and computeNoteRenderInfos.
+function beamStemOverrides(
+  events: MeasureEvent[],
+  eventXs: number[],
+  clef: { sign: "G" | "F"; line: number },
+  staffBottomY: number,
+  staffSpace: number,
+): {
+  beamGroups: BeamGroupData[];
+  beamOverrideMap: Map<number, { stemDir: "up" | "down"; stemTipY: number }>;
+} {
+  const beamGroups = computeBeamGroups(
+    events,
+    eventXs,
+    clef,
+    staffBottomY,
+    staffSpace,
+  );
+  const beamOverrideMap = new Map<
+    number,
+    { stemDir: "up" | "down"; stemTipY: number }
+  >();
+  for (const group of beamGroups) {
+    group.eventIndices.forEach((ei, i) => {
+      beamOverrideMap.set(ei, {
+        stemDir: group.stemDir,
+        stemTipY: group.stems[i].stemTipY,
+      });
+    });
+  }
+  return { beamGroups, beamOverrideMap };
+}
+
+// Notehead placement for one chord group. stemDir must already be resolved
+// (beam override ?? stemDirection) since it feeds the intra-chord x offsets.
+function chordNoteGeometry(
+  group: ChordGroup,
+  ex: number,
+  partIndex: number,
+  measureNumber: number,
+  clef: { sign: "G" | "F"; line: number },
+  staffBottomY: number,
+  staffSpace: number,
+  stemDir: "up" | "down",
+): NoteRenderInfo[] {
+  const { type, notes, noteIndex, dot } = group;
+  const nrx = staffSpace * 0.55;
+  const xOffsets = chordXOffsets(notes, stemDir, nrx);
+  return notes.map((note, v) => ({
+    id: `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`,
+    nx: ex + xOffsets[v],
+    ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
+    type,
+    showAccidental: note.showAccidental,
+    dot: !!dot,
+    staffSpace,
+  }));
 }
 
 function computeNoteRenderInfos(
@@ -247,7 +314,6 @@ function computeNoteRenderInfos(
 ): Map<string, NoteRenderInfo> {
   const infos = new Map<string, NoteRenderInfo>();
   const { staffSpace, noteUnitWidth, measureXs, staffBottomYs } = layout;
-  const nrx = staffSpace * 0.55;
 
   score.parts.forEach((part, p) => {
     const staffBottomY = staffBottomYs[p];
@@ -255,57 +321,41 @@ function computeNoteRenderInfos(
     const fifths = part.keySig.fifths;
 
     part.measures.forEach((measure, m) => {
-      const x = measureXs[m];
-      const isFirst = m === 0;
       const eventXs = eventXPositions(
         measure.events,
-        x,
-        isFirst,
+        measureXs[m],
+        m === 0,
         fifths,
         noteUnitWidth,
         staffSpace,
       );
-      // Beam grouping only affects stem direction, which feeds chordXOffsets.
-      const beamGroups = computeBeamGroups(
+      const { beamOverrideMap } = beamStemOverrides(
         measure.events,
         eventXs,
         clef,
         staffBottomY,
         staffSpace,
       );
-      const stemDirOverride = new Map<number, "up" | "down">();
-      for (const group of beamGroups) {
-        for (const ei of group.eventIndices) {
-          stemDirOverride.set(ei, group.stemDir);
-        }
-      }
 
       measure.events.forEach((event, ei) => {
         if (isRest(event)) {
           return;
         }
         const group = event as ChordGroup;
-        const { type, notes, noteIndex, dot } = group;
-        const char =
-          type === "whole"
-            ? G.noteheadWhole
-            : type === "half"
-              ? G.noteheadHalf
-              : G.noteheadBlack;
-        const stemDir = stemDirOverride.get(ei) ?? stemDirection(group, clef);
-        const xOffsets = chordXOffsets(notes, stemDir, nrx);
-        const ex = eventXs[ei];
-        notes.forEach((note, v) => {
-          const id = `p${p}-m${measure.number}-n${noteIndex}-v${v}`;
-          infos.set(id, {
-            nx: ex + xOffsets[v],
-            ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
-            char,
-            showAccidental: note.showAccidental,
-            dot: !!dot,
-            staffSpace,
-          });
-        });
+        const stemDir =
+          beamOverrideMap.get(ei)?.stemDir ?? stemDirection(group, clef);
+        for (const info of chordNoteGeometry(
+          group,
+          eventXs[ei],
+          p,
+          measure.number,
+          clef,
+          staffBottomY,
+          staffSpace,
+          stemDir,
+        )) {
+          infos.set(info.id, info);
+        }
       });
     });
   });
@@ -334,24 +384,21 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
         }
         const nrx = info.staffSpace * 0.55;
         return (
-          <g key={id} fill={color}>
-            {info.showAccidental && (
-              <text
-                x={info.nx - info.staffSpace * 1.4}
-                y={info.ny}
-                text-anchor="middle"
-              >
-                {G.accSharp}
-              </text>
-            )}
-            <text x={info.nx} y={info.ny} text-anchor="middle">
-              {info.char}
-            </text>
+          <g key={id}>
+            <Notehead
+              x={info.nx}
+              y={info.ny}
+              type={info.type}
+              color={color}
+              showAccidental={info.showAccidental}
+              staffSpace={info.staffSpace}
+            />
             {info.dot && (
               <circle
                 cx={info.nx + nrx + 4}
                 cy={info.ny - info.staffSpace / 4}
                 r={1.5}
+                fill={color}
               />
             )}
           </g>
@@ -397,13 +444,15 @@ interface SheetMusicDisplayProps {
     clientY: number;
   }) => void;
   /**
-   * When provided, a playback cursor is drawn. The function is called every
-   * animation frame and should return the current beat plus whether playback is
-   * active (or null to hide the cursor). The cursor is shown while playing or
-   * paused; scroll only follows while `playing` is true. Position and scroll are
-   * updated via direct DOM mutation — no React state.
+   * When provided, a playback cursor is drawn. Returns the current beat (or
+   * null to hide the cursor). While `playing`, it is polled every animation
+   * frame to move the cursor and page-turn the scroll; when not playing the
+   * cursor is positioned once and the rAF loop stops. Position is updated via
+   * direct DOM mutation — no React state.
    */
-  getLiveBeat?: () => { beat: number; playing: boolean } | null;
+  getLiveBeat?: () => number | null;
+  /** Whether playback is active. Drives the cursor rAF loop + scroll-follow. */
+  playing?: boolean;
 }
 
 export function SheetMusicDisplay({
@@ -423,6 +472,7 @@ export function SheetMusicDisplay({
   scrollLocked = false,
   onSheetContextMenu,
   getLiveBeat,
+  playing = false,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -460,20 +510,34 @@ export function SheetMusicDisplay({
   const scrollLockedRef = useRef(scrollLocked);
   scrollLockedRef.current = scrollLocked;
 
-  // Cursor bar — lives in an overflow:visible overlay OUTSIDE the scroll
-  // container and is positioned in screen coordinates via CSS transform. Keeping
-  // it out of the overflow:auto container is critical: a transform on a
-  // descendant of an overflow:auto element forces the browser to recompute the
-  // container's scrollable-overflow region every frame (a layout pass).
+  // Cursor bar — an absolutely-positioned div living INSIDE the scroll
+  // container (so it scrolls with the content) and moved via a CSS transform on
+  // the SVG x coordinate. The transform is GPU-composited (will-change +
+  // contain: layout), so moving it never triggers a layout/reflow.
   const cursorDivRef = useRef<HTMLDivElement>(null);
 
-  // rAF loop: position the cursor (screen X = leftPad + x − scrollLeft) and do
-  // edge-triggered page-turn scrolling. The cursor transform is composited on
-  // the GPU; scrollLeft is only written when the cursor nears the visible edge.
-  // A passive scroll listener keeps currentScroll synced without reading
-  // scrollLeft (a layout-flushing property) in the hot path.
+  // Position the cursor div at an SVG x (or hide it when x is null).
+  const placeCursor = useCallback((x: number | null) => {
+    const cursor = cursorDivRef.current;
+    if (!cursor) {
+      return;
+    }
+    if (x === null) {
+      cursor.style.display = "none";
+    } else {
+      cursor.style.transform = `translateX(${x}px)`;
+      cursor.style.display = "";
+    }
+  }, []);
+
+  // While playing, run a 60fps rAF loop that moves the cursor and page-turns the
+  // scroll. The loop is gated on `playing`, so it does NOT run while paused or
+  // stopped (the cursor is static then — see the effect below). scrollLeft is
+  // only written when the cursor nears the visible edge; a passive scroll
+  // listener keeps currentScroll synced without reading it (a layout-flushing
+  // property) in the hot path.
   useEffect(() => {
-    if (!getLiveBeat) {
+    if (!getLiveBeat || !playing) {
       return;
     }
     const container = containerRef.current;
@@ -498,28 +562,19 @@ export function SheetMusicDisplay({
 
     let rafId: number;
     const tick = () => {
-      const live = getLiveBeat();
-      const cursor = cursorDivRef.current;
-      if (cursor) {
-        const x = live ? computeCursorX(live.beat, score, layout) : null;
-        if (live && x !== null && containerWidth > 0) {
-          // Page-turn scroll only while actively playing — when paused the
-          // cursor stays put and the user is free to scroll manually.
-          if (live.playing) {
-            const screenX = leftPad + x - currentScroll;
-            if (screenX < 0 || screenX > containerWidth * 0.78) {
-              currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
-              if (container) {
-                container.scrollLeft = currentScroll;
-              }
-            }
+      const beat = getLiveBeat();
+      const x = beat !== null ? computeCursorX(beat, score, layout) : null;
+      if (x !== null && containerWidth > 0) {
+        const screenX = leftPad + x - currentScroll;
+        if (screenX < 0 || screenX > containerWidth * 0.78) {
+          currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
+          if (container) {
+            container.scrollLeft = currentScroll;
           }
-          // Cursor lives inside the scroll container so transform uses SVG x.
-          cursor.style.transform = `translateX(${x}px)`;
-          cursor.style.display = "";
-        } else {
-          cursor.style.display = "none";
         }
+        placeCursor(x);
+      } else {
+        placeCursor(null);
       }
       rafId = requestAnimationFrame(tick);
     };
@@ -529,7 +584,19 @@ export function SheetMusicDisplay({
       ro.disconnect();
       container?.removeEventListener("scroll", onScroll);
     };
-  }, [getLiveBeat, score, layout]);
+  }, [getLiveBeat, playing, score, layout, placeCursor]);
+
+  // When not playing (paused, stopped, initial load) the cursor is static, so
+  // position it once here instead of burning a rAF loop. Re-runs on pause/stop
+  // and after every jump (snapGeneration) so seeks/resets move it immediately.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapGeneration drives re-fire after jumps; score/layout compute position
+  useEffect(() => {
+    if (!getLiveBeat || playing) {
+      return;
+    }
+    const beat = getLiveBeat();
+    placeCursor(beat !== null ? computeCursorX(beat, score, layout) : null);
+  }, [getLiveBeat, playing, snapGeneration, score, layout, placeCursor]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
   // snapGeneration increments on every jump so this effect always fires
@@ -764,11 +831,7 @@ export function SheetMusicDisplay({
         (e.g. TimeSig) override via their own attributes.
       */}
       <div
-        style={{
-          position: "relative",
-          display: "inline-block",
-          flexShrink: 0,
-        }}
+        style={{ position: "relative", display: "inline-block", flexShrink: 0 }}
       >
         <svg
           ref={svgRef}
@@ -1089,26 +1152,13 @@ function Measure({
       noteUnitWidth,
       staffSpace,
     );
-    const beamGroups = computeBeamGroups(
+    const { beamGroups, beamOverrideMap } = beamStemOverrides(
       measure.events,
       eventXs,
       clef,
       staffBottomY,
       staffSpace,
     );
-    // Map from event index → beam stem override (direction + tip Y)
-    const beamOverrideMap = new Map<
-      number,
-      { stemDir: "up" | "down"; stemTipY: number }
-    >();
-    for (const group of beamGroups) {
-      group.eventIndices.forEach((ei, i) => {
-        beamOverrideMap.set(ei, {
-          stemDir: group.stemDir,
-          stemTipY: group.stems[i].stemTipY,
-        });
-      });
-    }
     return { eventXs, beamGroups, beamOverrideMap };
   }, [
     measure.events,
@@ -1395,18 +1445,25 @@ const ChordGroupEl = memo(function ChordGroupEl({
   inkColor,
   beamStemOverride,
 }: ChordGroupElProps) {
-  const { type, notes, noteIndex, dot } = group;
+  const { type, notes } = group;
   const hasNoStem = type === "whole";
 
-  const noteYs = notes.map((n) =>
-    noteY(n.pitch, clef, staffBottomY, staffSpace),
+  const stemDir = beamStemOverride?.stemDir ?? stemDirection(group, clef);
+  const noteGeom = chordNoteGeometry(
+    group,
+    x,
+    partIndex,
+    measureNumber,
+    clef,
+    staffBottomY,
+    staffSpace,
+    stemDir,
   );
+  const noteYs = noteGeom.map((n) => n.ny);
   const topY = Math.min(...noteYs);
   const bottomY = Math.max(...noteYs);
-  const stemDir = beamStemOverride?.stemDir ?? stemDirection(group, clef);
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
-  const xOffsets = chordXOffsets(notes, stemDir, nrx);
 
   let stemX: number;
   let stemY1: number;
@@ -1422,7 +1479,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
   }
 
   return (
-    <g data-chord-id={`p${partIndex}-m${measureNumber}-n${noteIndex}`}>
+    <g data-chord-id={`p${partIndex}-m${measureNumber}-n${group.noteIndex}`}>
       {!hasNoStem && (
         <line
           x1={stemX}
@@ -1444,22 +1501,20 @@ const ChordGroupEl = memo(function ChordGroupEl({
             inkColor={inkColor}
           />
         )}
-      {notes.map((note, v) => {
-        const ny = noteYs[v];
-        const nx = x + xOffsets[v];
-        const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
+      {noteGeom.map((info, v) => {
+        const { nx, ny } = info;
         return (
-          <g key={id}>
+          <g key={info.id}>
             <Notehead
               x={nx}
               y={ny}
               type={type}
-              id={id}
+              id={info.id}
               color={inkColor}
-              showAccidental={note.showAccidental}
+              showAccidental={info.showAccidental}
               staffSpace={staffSpace}
             />
-            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map(
+            {ledgerLineYs(notes[v].pitch, clef, staffBottomY, staffSpace).map(
               (ly) => (
                 <line
                   key={ly}
@@ -1472,7 +1527,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
                 />
               ),
             )}
-            {dot && (
+            {info.dot && (
               <circle
                 cx={nx + nrx + 4}
                 cy={ny - staffSpace / 4}
@@ -1531,7 +1586,7 @@ function Notehead({
   x: number;
   y: number;
   type: NoteType;
-  id: string;
+  id?: string;
   color: string;
   showAccidental: boolean;
   staffSpace: number;
