@@ -319,8 +319,9 @@ export function SheetMusicDisplay({
   const scrollLockedRef = useRef(scrollLocked);
   scrollLockedRef.current = scrollLocked;
 
-  // Cursor line — updated by direct DOM mutation in the rAF loop below.
-  const cursorLineRef = useRef<SVGLineElement>(null);
+  // Cursor bar — an absolutely-positioned div driven by CSS transform so the
+  // browser composites it on the GPU with zero layout/paint cost per frame.
+  const cursorDivRef = useRef<HTMLDivElement>(null);
 
   // rAF loop: update cursor position and drive scroll follow, both via direct
   // DOM mutation so this never triggers a React re-render.
@@ -329,38 +330,56 @@ export function SheetMusicDisplay({
       return;
     }
     const container = containerRef.current;
+    // Read layout-flushing properties once at setup; keep clientWidth fresh via
+    // ResizeObserver so the hot rAF path never triggers a forced layout.
     const leftPad = container
       ? Number.parseFloat(getComputedStyle(container).paddingLeft) || 0
       : 0;
+    let containerWidth = container?.clientWidth ?? 0;
+    // Track scroll in a local variable so we never read scrollLeft in the hot
+    // path (reading it forces layout just like clientWidth).
+    let currentScroll = container?.scrollLeft ?? 0;
+
+    const ro = new ResizeObserver(([entry]) => {
+      containerWidth = entry.contentRect.width;
+    });
+    if (container) {
+      ro.observe(container);
+    }
+
     let rafId: number;
     const tick = () => {
       const beat = getLiveBeat();
-      const line = cursorLineRef.current;
-      if (line) {
+      const cursor = cursorDivRef.current;
+      if (cursor) {
         if (beat !== null) {
           const x = computeCursorX(beat, score, layout);
           if (x !== null) {
-            line.setAttribute("x1", String(x));
-            line.setAttribute("x2", String(x));
-            line.style.display = "";
-            if (container) {
-              const target = Math.max(
-                0,
-                leftPad + x - container.clientWidth * 0.38,
-              );
-              container.scrollLeft += (target - container.scrollLeft) * 0.08;
+            cursor.style.transform = `translateX(${x}px)`;
+            cursor.style.display = "";
+            if (container && containerWidth > 0) {
+              const target = Math.max(0, leftPad + x - containerWidth * 0.38);
+              currentScroll += (target - currentScroll) * 0.08;
+              container.scrollLeft = currentScroll;
             }
           } else {
-            line.style.display = "none";
+            cursor.style.display = "none";
           }
         } else {
-          line.style.display = "none";
+          cursor.style.display = "none";
+          // Resync so currentScroll is accurate when playback restarts.
+          if (container) {
+            currentScroll = container.scrollLeft;
+          }
         }
       }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
   }, [getLiveBeat, score, layout]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
@@ -634,19 +653,6 @@ export function SheetMusicDisplay({
               inkColor={inkColor}
             />
           ))}
-          {getLiveBeat && (
-            <line
-              ref={cursorLineRef}
-              x1={0}
-              x2={0}
-              y1={cursorY1}
-              y2={cursorY2}
-              stroke={accentColor}
-              stroke-width={2}
-              opacity={0.75}
-              style={{ display: "none", pointerEvents: "none" }}
-            />
-          )}
           {/* Visible handle bars — SVG only, no pointer events */}
           {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>
@@ -750,6 +756,23 @@ export function SheetMusicDisplay({
               onPointerCancel={onHandlePointerUp}
             />
           </>
+        )}
+        {getLiveBeat && (
+          <div
+            ref={cursorDivRef}
+            style={{
+              position: "absolute",
+              top: cursorY1,
+              left: 0,
+              width: 2,
+              height: cursorY2 - cursorY1,
+              background: accentColor,
+              opacity: 0.75,
+              pointerEvents: "none",
+              willChange: "transform",
+              display: "none",
+            }}
+          />
         )}
       </div>
     </div>
