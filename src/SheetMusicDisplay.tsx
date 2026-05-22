@@ -229,6 +229,138 @@ function computeCursorX(
 
 const EMPTY_COLORS: Record<string, string> = {};
 
+// Per-note geometry needed to redraw a notehead in a highlight color. Computed
+// once from score + layout (never depends on colors) and consumed by the
+// NoteColorOverlay, which draws colored glyphs on top of the ink noteheads.
+interface NoteRenderInfo {
+  nx: number;
+  ny: number;
+  char: string;
+  showAccidental: boolean;
+  dot: boolean;
+  staffSpace: number;
+}
+
+function computeNoteRenderInfos(
+  score: ParsedScore,
+  layout: ResolvedLayout,
+): Map<string, NoteRenderInfo> {
+  const infos = new Map<string, NoteRenderInfo>();
+  const { staffSpace, noteUnitWidth, measureXs, staffBottomYs } = layout;
+  const nrx = staffSpace * 0.55;
+
+  score.parts.forEach((part, p) => {
+    const staffBottomY = staffBottomYs[p];
+    const clef = part.clef;
+    const fifths = part.keySig.fifths;
+
+    part.measures.forEach((measure, m) => {
+      const x = measureXs[m];
+      const isFirst = m === 0;
+      const eventXs = eventXPositions(
+        measure.events,
+        x,
+        isFirst,
+        fifths,
+        noteUnitWidth,
+        staffSpace,
+      );
+      // Beam grouping only affects stem direction, which feeds chordXOffsets.
+      const beamGroups = computeBeamGroups(
+        measure.events,
+        eventXs,
+        clef,
+        staffBottomY,
+        staffSpace,
+      );
+      const stemDirOverride = new Map<number, "up" | "down">();
+      for (const group of beamGroups) {
+        for (const ei of group.eventIndices) {
+          stemDirOverride.set(ei, group.stemDir);
+        }
+      }
+
+      measure.events.forEach((event, ei) => {
+        if (isRest(event)) {
+          return;
+        }
+        const group = event as ChordGroup;
+        const { type, notes, noteIndex, dot } = group;
+        const char =
+          type === "whole"
+            ? G.noteheadWhole
+            : type === "half"
+              ? G.noteheadHalf
+              : G.noteheadBlack;
+        const stemDir = stemDirOverride.get(ei) ?? stemDirection(group, clef);
+        const xOffsets = chordXOffsets(notes, stemDir, nrx);
+        const ex = eventXs[ei];
+        notes.forEach((note, v) => {
+          const id = `p${p}-m${measure.number}-n${noteIndex}-v${v}`;
+          infos.set(id, {
+            nx: ex + xOffsets[v],
+            ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
+            char,
+            showAccidental: note.showAccidental,
+            dot: !!dot,
+            staffSpace,
+          });
+        });
+      });
+    });
+  });
+
+  return infos;
+}
+
+// Renders colored notehead glyphs on top of the ink notes. Only the notes
+// present in noteColors are drawn, so this re-renders cheaply (a handful of
+// glyphs) while the heavyweight note tree below never re-renders on color
+// changes. Memoized on [infos, noteColors] — noteColors identity is stabilized
+// upstream so this skips entirely when the active set is unchanged.
+const NoteColorOverlay = memo(function NoteColorOverlay({
+  infos,
+  noteColors,
+}: {
+  infos: Map<string, NoteRenderInfo>;
+  noteColors: Record<string, string>;
+}) {
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      {Object.entries(noteColors).map(([id, color]) => {
+        const info = infos.get(id);
+        if (!info) {
+          return null;
+        }
+        const nrx = info.staffSpace * 0.55;
+        return (
+          <g key={id} fill={color}>
+            {info.showAccidental && (
+              <text
+                x={info.nx - info.staffSpace * 1.4}
+                y={info.ny}
+                text-anchor="middle"
+              >
+                {G.accSharp}
+              </text>
+            )}
+            <text x={info.nx} y={info.ny} text-anchor="middle">
+              {info.char}
+            </text>
+            {info.dot && (
+              <circle
+                cx={info.nx + nrx + 4}
+                cy={info.ny - info.staffSpace / 4}
+                r={1.5}
+              />
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+});
+
 interface SheetMusicDisplayProps {
   musicxml: string;
   layout?: LayoutConfig;
@@ -310,6 +442,13 @@ export function SheetMusicDisplay({
   if (score.parts.length === 0 || score.numMeasures === 0) {
     return <p>No music to display.</p>;
   }
+
+  // Per-note geometry for the color overlay. Depends only on score + layout, so
+  // it is computed once per piece and never on color changes.
+  const noteInfos = useMemo(
+    () => computeNoteRenderInfos(score, layout),
+    [score, layout],
+  );
 
   const fontSize = glyphFontSize ?? layout.staffSpace * 4;
 
@@ -658,11 +797,11 @@ export function SheetMusicDisplay({
               partIndex={p}
               layout={layout}
               staffBottomY={layout.staffBottomYs[p]}
-              noteColors={noteColors}
               visible={visibleParts ? visibleParts.has(part.id) : true}
               inkColor={inkColor}
             />
           ))}
+          <NoteColorOverlay infos={noteInfos} noteColors={noteColors} />
           {/* Visible handle bars — SVG only, no pointer events */}
           {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>
@@ -797,7 +936,6 @@ interface StaffProps {
   partIndex: number;
   layout: ResolvedLayout;
   staffBottomY: number;
-  noteColors: Record<string, string>;
   visible: boolean;
   inkColor: string;
 }
@@ -807,7 +945,6 @@ const Staff = memo(function Staff({
   partIndex,
   layout,
   staffBottomY,
-  noteColors,
   visible,
   inkColor,
 }: StaffProps) {
@@ -832,7 +969,6 @@ const Staff = memo(function Staff({
           x={measureXs[m]}
           staffBottomY={staffBottomY}
           layout={layout}
-          noteColors={noteColors}
           inkColor={inkColor}
         />
       ))}
@@ -919,7 +1055,6 @@ interface MeasureProps {
   x: number;
   staffBottomY: number;
   layout: ResolvedLayout;
-  noteColors: Record<string, string>;
   inkColor: string;
 }
 
@@ -933,7 +1068,6 @@ function Measure({
   x,
   staffBottomY,
   layout,
-  noteColors,
   inkColor,
 }: MeasureProps) {
   const { staffSpace, noteUnitWidth } = layout;
@@ -1065,7 +1199,6 @@ function Measure({
               clef={clef}
               partIndex={partIndex}
               measureNumber={measure.number}
-              noteColors={noteColors}
               staffSpace={staffSpace}
               beamStemOverride={beamOverrideMap.get(ei)}
               inkColor={inkColor}
@@ -1214,7 +1347,6 @@ interface ChordGroupElProps {
   clef: { sign: "G" | "F"; line: number };
   partIndex: number;
   measureNumber: number;
-  noteColors: Record<string, string>;
   staffSpace: number;
   inkColor: string;
   /** When set, this note is part of a beam group: use the given stem direction
@@ -1243,40 +1375,11 @@ function chordXOffsets(
   return offsets;
 }
 
-// Skip re-rendering unless something this chord actually draws changed. Every
-// other prop is a primitive or a reference that is stable while the score and
-// layout are unchanged (group/clef come from the memoized score, beamStemOverride
-// from the memoized per-measure map). noteColors is the whole-score map and its
-// identity changes on every active-note transition, so compare only the entries
-// for this chord's own notes rather than the map reference.
-function chordPropsEqual(
-  prev: ChordGroupElProps,
-  next: ChordGroupElProps,
-): boolean {
-  if (
-    prev.group !== next.group ||
-    prev.x !== next.x ||
-    prev.staffBottomY !== next.staffBottomY ||
-    prev.clef !== next.clef ||
-    prev.partIndex !== next.partIndex ||
-    prev.measureNumber !== next.measureNumber ||
-    prev.staffSpace !== next.staffSpace ||
-    prev.inkColor !== next.inkColor ||
-    prev.beamStemOverride !== next.beamStemOverride
-  ) {
-    return false;
-  }
-  const { partIndex, measureNumber } = next;
-  const { noteIndex, notes } = next.group;
-  for (let v = 0; v < notes.length; v++) {
-    const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
-    if (prev.noteColors[id] !== next.noteColors[id]) {
-      return false;
-    }
-  }
-  return true;
-}
-
+// All props are primitives or references that stay stable while the score and
+// layout are unchanged (group/clef come from the memoized score,
+// beamStemOverride from the memoized per-measure map), so the default shallow
+// memo comparator is sufficient. Note colors are no longer threaded through
+// here — they are drawn separately by NoteColorOverlay.
 const ChordGroupEl = memo(function ChordGroupEl({
   group,
   x,
@@ -1284,7 +1387,6 @@ const ChordGroupEl = memo(function ChordGroupEl({
   clef,
   partIndex,
   measureNumber,
-  noteColors,
   staffSpace,
   inkColor,
   beamStemOverride,
@@ -1342,7 +1444,6 @@ const ChordGroupEl = memo(function ChordGroupEl({
         const ny = noteYs[v];
         const nx = x + xOffsets[v];
         const id = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`;
-        const color = noteColors[id] ?? inkColor;
         return (
           <g key={id}>
             <Notehead
@@ -1350,7 +1451,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
               y={ny}
               type={type}
               id={id}
-              color={color}
+              color={inkColor}
               showAccidental={note.showAccidental}
               staffSpace={staffSpace}
             />
@@ -1372,7 +1473,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
                 cx={nx + nrx + 4}
                 cy={ny - staffSpace / 4}
                 r={1.5}
-                fill={color}
+                fill={inkColor}
               />
             )}
           </g>
@@ -1380,7 +1481,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
       })}
     </g>
   );
-}, chordPropsEqual);
+});
 
 // ── Flags ─────────────────────────────────────────────────────────────────────
 
