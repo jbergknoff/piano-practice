@@ -219,11 +219,12 @@ export function PracticeScreen({
     [],
   );
 
-  // Drives the cursor rAF loop. Returns the beat while playing or paused (so the
-  // cursor stays visible when paused); null only when stopped, which hides it.
+  // Drives the cursor rAF loop. Always returns the current beat (so the cursor
+  // is visible at the start position even when stopped); null only when there is
+  // no player. Scroll-follow is gated to `playing` in SheetMusicDisplay.
   const getLiveBeat = useCallback(() => {
     const p = playerRef.current;
-    if (!p || p.state === "stopped") {
+    if (!p) {
       return null;
     }
     return { beat: p.currentBeat, playing: p.state === "playing" };
