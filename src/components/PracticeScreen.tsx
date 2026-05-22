@@ -170,7 +170,8 @@ export function PracticeScreen({
       initialBeatRef.current = 0;
       if (seekBeat > 0) {
         player.seek(seekBeat);
-        setCurrentBeat(seekBeat);
+        // Jump so the sheet scrolls to the restored position on load.
+        setCursor(seekBeat, "jump");
       }
       player.onPositionUpdate = (beat) => setCursor(beat, "smooth");
       player.onEnd = (beat) => {
