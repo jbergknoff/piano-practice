@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from "preact/hooks";
 import type { ModeControl, ModeHandle } from "./mode-control";
+import { useStableNoteColors } from "./note-colors";
 
 export interface ListenModeSettings {
   accent: string;
@@ -56,7 +57,7 @@ export function useListenMode(
 
   const onNoteEvent = useCallback(() => {}, []);
 
-  const noteColors = useMemo<Record<string, string>>(() => {
+  const computedColors = useMemo<Record<string, string>>(() => {
     const musicxml = control.musicxml;
     const currentBeat = control.currentBeat;
     if (!musicxml || currentBeat === 0) {
@@ -75,6 +76,7 @@ export function useListenMode(
     }
     return colors;
   }, [control.musicxml, control.currentBeat, settings.accent]);
+  const noteColors = useStableNoteColors(computedColors);
 
   return {
     noteColors,
