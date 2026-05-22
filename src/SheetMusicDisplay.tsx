@@ -355,6 +355,8 @@ export function SheetMusicDisplay({
       container.addEventListener("scroll", onScroll, { passive: true });
     }
 
+    // Track visibility separately so we only write display when it changes.
+    let cursorVisible = false;
     let rafId: number;
     const tick = () => {
       const beat = getLiveBeat();
@@ -373,9 +375,13 @@ export function SheetMusicDisplay({
           }
           // Cursor lives inside the scroll container so transform uses SVG x.
           cursor.style.transform = `translateX(${x}px)`;
-          cursor.style.display = "";
-        } else {
+          if (!cursorVisible) {
+            cursor.style.display = "";
+            cursorVisible = true;
+          }
+        } else if (cursorVisible) {
           cursor.style.display = "none";
+          cursorVisible = false;
         }
       }
       rafId = requestAnimationFrame(tick);
@@ -779,7 +785,6 @@ export function SheetMusicDisplay({
               background: accentColor,
               opacity: 0.75,
               pointerEvents: "none",
-              willChange: "transform",
               contain: "layout",
               display: "none",
             }}
