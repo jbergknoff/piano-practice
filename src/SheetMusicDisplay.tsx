@@ -227,6 +227,8 @@ function computeCursorX(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+const EMPTY_COLORS: Record<string, string> = {};
+
 interface SheetMusicDisplayProps {
   musicxml: string;
   layout?: LayoutConfig;
@@ -267,7 +269,7 @@ interface SheetMusicDisplayProps {
 export function SheetMusicDisplay({
   musicxml,
   layout: layoutConfig,
-  noteColors = {},
+  noteColors = EMPTY_COLORS,
   visibleParts,
   accentColor = "#1976d2",
   glyphFontSize,
