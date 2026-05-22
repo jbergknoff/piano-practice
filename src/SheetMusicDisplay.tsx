@@ -323,28 +323,35 @@ export function SheetMusicDisplay({
   // browser composites it on the GPU with zero layout/paint cost per frame.
   const cursorDivRef = useRef<HTMLDivElement>(null);
 
-  // rAF loop: update cursor position and drive scroll follow, both via direct
-  // DOM mutation so this never triggers a React re-render.
+  // Cursor bar — updated by direct DOM mutation in the rAF loop below.
+  // Scroll is edge-triggered (page-turn style): we only write scrollLeft when
+  // the cursor is about to leave the visible area, keeping rendering cost near
+  // zero between page turns. A scroll event listener keeps currentScroll in
+  // sync with any external scroll changes (snap effect, user drag).
   useEffect(() => {
     if (!getLiveBeat) {
       return;
     }
     const container = containerRef.current;
-    // Read layout-flushing properties once at setup; keep clientWidth fresh via
-    // ResizeObserver so the hot rAF path never triggers a forced layout.
     const leftPad = container
       ? Number.parseFloat(getComputedStyle(container).paddingLeft) || 0
       : 0;
     let containerWidth = container?.clientWidth ?? 0;
-    // Track scroll in a local variable so we never read scrollLeft in the hot
-    // path (reading it forces layout just like clientWidth).
+    // Mirror of container.scrollLeft — updated by the scroll listener so the
+    // rAF path never reads scrollLeft (a layout-flushing property).
     let currentScroll = container?.scrollLeft ?? 0;
 
     const ro = new ResizeObserver(([entry]) => {
       containerWidth = entry.contentRect.width;
     });
+    const onScroll = () => {
+      if (container) {
+        currentScroll = container.scrollLeft;
+      }
+    };
     if (container) {
       ro.observe(container);
+      container.addEventListener("scroll", onScroll, { passive: true });
     }
 
     let rafId: number;
@@ -357,20 +364,24 @@ export function SheetMusicDisplay({
           if (x !== null) {
             cursor.style.transform = `translateX(${x}px)`;
             cursor.style.display = "";
+            // Page-turn scroll: only write scrollLeft when cursor is about to
+            // leave the visible area. Writing every frame triggers expensive
+            // compositing even when the scroll change is tiny.
             if (container && containerWidth > 0) {
-              const target = Math.max(0, leftPad + x - containerWidth * 0.38);
-              currentScroll += (target - currentScroll) * 0.08;
-              container.scrollLeft = currentScroll;
+              const screenX = leftPad + x - currentScroll;
+              if (screenX < 0 || screenX > containerWidth * 0.78) {
+                currentScroll = Math.max(
+                  0,
+                  leftPad + x - containerWidth * 0.38,
+                );
+                container.scrollLeft = currentScroll;
+              }
             }
           } else {
             cursor.style.display = "none";
           }
         } else {
           cursor.style.display = "none";
-          // Resync so currentScroll is accurate when playback restarts.
-          if (container) {
-            currentScroll = container.scrollLeft;
-          }
         }
       }
       rafId = requestAnimationFrame(tick);
@@ -379,6 +390,7 @@ export function SheetMusicDisplay({
     return () => {
       cancelAnimationFrame(rafId);
       ro.disconnect();
+      container?.removeEventListener("scroll", onScroll);
     };
   }, [getLiveBeat, score, layout]);
 
