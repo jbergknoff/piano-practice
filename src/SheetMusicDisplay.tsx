@@ -364,15 +364,15 @@ export function SheetMusicDisplay({
         if (x !== null && containerWidth > 0) {
           // Page-turn scroll: only write scrollLeft when the cursor is about to
           // leave the visible area, so the hot path stays render-free.
-          let screenX = leftPad + x - currentScroll;
+          const screenX = leftPad + x - currentScroll;
           if (screenX < 0 || screenX > containerWidth * 0.78) {
             currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
             if (container) {
               container.scrollLeft = currentScroll;
             }
-            screenX = leftPad + x - currentScroll;
           }
-          cursor.style.transform = `translateX(${screenX}px)`;
+          // Cursor lives inside the scroll container so transform uses SVG x.
+          cursor.style.transform = `translateX(${x}px)`;
           cursor.style.display = "";
         } else {
           cursor.style.display = "none";
@@ -567,226 +567,225 @@ export function SheetMusicDisplay({
   }
 
   return (
-    <div style={{ position: "relative", overflow: "hidden" }}>
-      <div
-        ref={containerRef}
-        style={{
-          overflowX: "auto",
-          userSelect: "none",
-          touchAction: "pan-x",
-          cursor: dragFocusRange ? "ew-resize" : "grab",
-          // Horizontal padding gives the focus-range scrubber pills room to render
-          // at the very first and last measure without being clipped by the container.
-          paddingInline: 8,
-          ...(containerStyle as Record<string, string | number> | undefined),
-        }}
-        onContextMenu={(e) => {
-          if (!onSheetContextMenu) {
-            return;
+    <div
+      ref={containerRef}
+      style={{
+        overflowX: "auto",
+        userSelect: "none",
+        touchAction: "pan-x",
+        cursor: dragFocusRange ? "ew-resize" : "grab",
+        // Horizontal padding gives the focus-range scrubber pills room to render
+        // at the very first and last measure without being clipped by the container.
+        paddingInline: 8,
+        ...(containerStyle as Record<string, string | number> | undefined),
+      }}
+      onContextMenu={(e) => {
+        if (!onSheetContextMenu) {
+          return;
+        }
+        e.preventDefault();
+        dragRef.current = null;
+        const containerEl = containerRef.current;
+        if (!containerEl) {
+          return;
+        }
+        const me = e as unknown as MouseEvent;
+        const svgX =
+          me.clientX -
+          containerEl.getBoundingClientRect().left +
+          containerEl.scrollLeft -
+          Number.parseFloat(getComputedStyle(containerEl).paddingLeft);
+        let measureIndex = 0;
+        for (let i = 0; i < layout.measureXs.length; i++) {
+          if (layout.measureXs[i] <= svgX) {
+            measureIndex = i;
           }
-          e.preventDefault();
-          dragRef.current = null;
-          const containerEl = containerRef.current;
-          if (!containerEl) {
-            return;
-          }
-          const me = e as unknown as MouseEvent;
-          const svgX =
-            me.clientX -
-            containerEl.getBoundingClientRect().left +
-            containerEl.scrollLeft -
-            Number.parseFloat(getComputedStyle(containerEl).paddingLeft);
-          let measureIndex = 0;
-          for (let i = 0; i < layout.measureXs.length; i++) {
-            if (layout.measureXs[i] <= svgX) {
-              measureIndex = i;
-            }
-          }
-          const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
-          const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
-          const measureX = layout.measureXs[measureIndex];
-          const measureW = layout.measureWidths[measureIndex];
-          const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
-          onSheetContextMenu({
-            measureNumber: measureIndex + 1,
-            beat: (measureIndex + frac) * beatsPerMeasure,
-            clientX: me.clientX,
-            clientY: me.clientY,
-          });
-        }}
-      >
-        {/*
+        }
+        const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
+        const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
+        const measureX = layout.measureXs[measureIndex];
+        const measureW = layout.measureWidths[measureIndex];
+        const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
+        onSheetContextMenu({
+          measureNumber: measureIndex + 1,
+          beat: (measureIndex + frac) * beatsPerMeasure,
+          clientX: me.clientX,
+          clientY: me.clientY,
+        });
+      }}
+    >
+      {/*
         Wrapper gives a positioning context for the HTML handle overlays.
         Set font-family and font-size once here so every <text> element inside
         inherits them automatically.  Components that use a different font
         (e.g. TimeSig) override via their own attributes.
       */}
-        <div
+      <div
+        style={{
+          position: "relative",
+          display: "inline-block",
+          flexShrink: 0,
+        }}
+      >
+        <svg
+          ref={svgRef}
+          width={layout.totalWidth}
+          height={layout.totalHeight}
+          overflow="visible"
           style={{
-            position: "relative",
-            display: "inline-block",
-            flexShrink: 0,
+            display: "block",
+            fontFamily: BRAVURA,
+            fontSize: fontSize,
           }}
+          role="img"
+          aria-label="Sheet music"
         >
-          <svg
-            ref={svgRef}
-            width={layout.totalWidth}
-            height={layout.totalHeight}
-            overflow="visible"
-            style={{
-              display: "block",
-              fontFamily: BRAVURA,
-              fontSize: fontSize,
-            }}
-            role="img"
-            aria-label="Sheet music"
-          >
-            {/* Focus range background */}
-            {focusX1 !== null && focusX2 !== null && focusColor && (
-              <rect
-                x={focusX1}
-                y={cursorY1 - 4}
-                width={focusX2 - focusX1}
-                height={cursorY2 - cursorY1 + 8}
-                fill={focusColor}
-                rx={8}
-              />
-            )}
-            {score.parts.map((part, p) => (
-              <Staff
-                key={part.id}
-                part={part}
-                partIndex={p}
-                layout={layout}
-                staffBottomY={layout.staffBottomYs[p]}
-                noteColors={noteColors}
-                visible={visibleParts ? visibleParts.has(part.id) : true}
-                inkColor={inkColor}
-              />
-            ))}
-            {/* Visible handle bars — SVG only, no pointer events */}
-            {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
-              <g style={{ pointerEvents: "none" }}>
-                {([focusX1, focusX2] as const).map((x) => {
-                  const midY = (cursorY1 + cursorY2) / 2;
-                  return (
-                    <g key={x}>
-                      {/* Thin edge line */}
-                      <rect
-                        x={x - 1}
-                        y={cursorY1 - 4}
-                        width={2}
-                        height={cursorY2 - cursorY1 + 8}
-                        fill={accentColor}
-                        opacity={0.35}
-                      />
-                      {/* Pill thumb */}
-                      <rect
-                        x={x - 6}
-                        y={midY - 18}
-                        width={12}
-                        height={36}
-                        rx={6}
-                        fill={accentColor}
-                        opacity={0.9}
-                      />
-                      {/* Grip lines */}
-                      <line
-                        x1={x - 3}
-                        y1={midY - 6}
-                        x2={x + 3}
-                        y2={midY - 6}
-                        stroke="white"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                      />
-                      <line
-                        x1={x - 3}
-                        y1={midY}
-                        x2={x + 3}
-                        y2={midY}
-                        stroke="white"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                      />
-                      <line
-                        x1={x - 3}
-                        y1={midY + 6}
-                        x2={x + 3}
-                        y2={midY + 6}
-                        stroke="white"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                      />
-                    </g>
-                  );
-                })}
-              </g>
-            )}
-          </svg>
-          {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
-            HTML elements have reliable touch-action support unlike SVG elements. */}
-          {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
-            <>
-              <div
-                style={{
-                  position: "absolute",
-                  top: cursorY1 - 4,
-                  left: focusX1 - 14,
-                  width: 28,
-                  height: cursorY2 - cursorY1 + 8,
-                  cursor: "ew-resize",
-                  touchAction: "none",
-                }}
-                onPointerDown={(e) =>
-                  onHandlePointerDown(e as unknown as PointerEvent, "left")
-                }
-                onPointerMove={(e) =>
-                  onHandlePointerMove(e as unknown as PointerEvent)
-                }
-                onPointerUp={onHandlePointerUp}
-                onPointerCancel={onHandlePointerUp}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  top: cursorY1 - 4,
-                  left: focusX2 - 14,
-                  width: 28,
-                  height: cursorY2 - cursorY1 + 8,
-                  cursor: "ew-resize",
-                  touchAction: "none",
-                }}
-                onPointerDown={(e) =>
-                  onHandlePointerDown(e as unknown as PointerEvent, "right")
-                }
-                onPointerMove={(e) =>
-                  onHandlePointerMove(e as unknown as PointerEvent)
-                }
-                onPointerUp={onHandlePointerUp}
-                onPointerCancel={onHandlePointerUp}
-              />
-            </>
+          {/* Focus range background */}
+          {focusX1 !== null && focusX2 !== null && focusColor && (
+            <rect
+              x={focusX1}
+              y={cursorY1 - 4}
+              width={focusX2 - focusX1}
+              height={cursorY2 - cursorY1 + 8}
+              fill={focusColor}
+              rx={8}
+            />
           )}
-        </div>
+          {score.parts.map((part, p) => (
+            <Staff
+              key={part.id}
+              part={part}
+              partIndex={p}
+              layout={layout}
+              staffBottomY={layout.staffBottomYs[p]}
+              noteColors={noteColors}
+              visible={visibleParts ? visibleParts.has(part.id) : true}
+              inkColor={inkColor}
+            />
+          ))}
+          {/* Visible handle bars — SVG only, no pointer events */}
+          {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
+            <g style={{ pointerEvents: "none" }}>
+              {([focusX1, focusX2] as const).map((x) => {
+                const midY = (cursorY1 + cursorY2) / 2;
+                return (
+                  <g key={x}>
+                    {/* Thin edge line */}
+                    <rect
+                      x={x - 1}
+                      y={cursorY1 - 4}
+                      width={2}
+                      height={cursorY2 - cursorY1 + 8}
+                      fill={accentColor}
+                      opacity={0.35}
+                    />
+                    {/* Pill thumb */}
+                    <rect
+                      x={x - 6}
+                      y={midY - 18}
+                      width={12}
+                      height={36}
+                      rx={6}
+                      fill={accentColor}
+                      opacity={0.9}
+                    />
+                    {/* Grip lines */}
+                    <line
+                      x1={x - 3}
+                      y1={midY - 6}
+                      x2={x + 3}
+                      y2={midY - 6}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={x - 3}
+                      y1={midY}
+                      x2={x + 3}
+                      y2={midY}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                    <line
+                      x1={x - 3}
+                      y1={midY + 6}
+                      x2={x + 3}
+                      y2={midY + 6}
+                      stroke="white"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
+        </svg>
+        {/* HTML overlay hit areas — position: absolute uses SVG px coords directly.
+            HTML elements have reliable touch-action support unlike SVG elements. */}
+        {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
+          <>
+            <div
+              style={{
+                position: "absolute",
+                top: cursorY1 - 4,
+                left: focusX1 - 14,
+                width: 28,
+                height: cursorY2 - cursorY1 + 8,
+                cursor: "ew-resize",
+                touchAction: "none",
+              }}
+              onPointerDown={(e) =>
+                onHandlePointerDown(e as unknown as PointerEvent, "left")
+              }
+              onPointerMove={(e) =>
+                onHandlePointerMove(e as unknown as PointerEvent)
+              }
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: cursorY1 - 4,
+                left: focusX2 - 14,
+                width: 28,
+                height: cursorY2 - cursorY1 + 8,
+                cursor: "ew-resize",
+                touchAction: "none",
+              }}
+              onPointerDown={(e) =>
+                onHandlePointerDown(e as unknown as PointerEvent, "right")
+              }
+              onPointerMove={(e) =>
+                onHandlePointerMove(e as unknown as PointerEvent)
+              }
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerUp}
+            />
+          </>
+        )}
+        {getLiveBeat && (
+          <div
+            ref={cursorDivRef}
+            style={{
+              position: "absolute",
+              top: cursorY1,
+              left: 0,
+              width: 2,
+              height: cursorY2 - cursorY1,
+              background: accentColor,
+              opacity: 0.75,
+              pointerEvents: "none",
+              willChange: "transform",
+              contain: "layout",
+              display: "none",
+            }}
+          />
+        )}
       </div>
-      {getLiveBeat && (
-        <div
-          ref={cursorDivRef}
-          style={{
-            position: "absolute",
-            top: cursorY1,
-            left: 0,
-            width: 2,
-            height: cursorY2 - cursorY1,
-            background: accentColor,
-            opacity: 0.75,
-            pointerEvents: "none",
-            willChange: "transform",
-            display: "none",
-          }}
-        />
-      )}
     </div>
   );
 }
