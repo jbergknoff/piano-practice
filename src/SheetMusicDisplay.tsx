@@ -233,8 +233,6 @@ function computeCursorX(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-const EMPTY_COLORS: Record<string, string> = {};
-
 // Per-note geometry needed to draw (or recolor) a notehead. This is the single
 // source of truth for notehead placement, shared by ChordGroupEl (ink notes)
 // and the NoteColorOverlay (highlight glyphs) so the two can never drift.
@@ -445,20 +443,20 @@ interface SheetMusicDisplayProps {
   }) => void;
   /**
    * When provided, a playback cursor is drawn. Returns the current beat (or
-   * null to hide the cursor). While `playing`, it is polled every animation
+   * null to hide the cursor). While `isPlaying`, it is polled every animation
    * frame to move the cursor and page-turn the scroll; when not playing the
    * cursor is positioned once and the rAF loop stops. Position is updated via
    * direct DOM mutation — no React state.
    */
   getLiveBeat?: () => number | null;
   /** Whether playback is active. Drives the cursor rAF loop + scroll-follow. */
-  playing?: boolean;
+  isPlaying?: boolean;
 }
 
 export function SheetMusicDisplay({
   musicxml,
   layout: layoutConfig,
-  noteColors = EMPTY_COLORS,
+  noteColors = {},
   visibleParts,
   accentColor = "#1976d2",
   glyphFontSize,
@@ -472,7 +470,7 @@ export function SheetMusicDisplay({
   scrollLocked = false,
   onSheetContextMenu,
   getLiveBeat,
-  playing = false,
+  isPlaying = false,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -510,10 +508,11 @@ export function SheetMusicDisplay({
   const scrollLockedRef = useRef(scrollLocked);
   scrollLockedRef.current = scrollLocked;
 
-  // Cursor bar — an absolutely-positioned div living INSIDE the scroll
-  // container (so it scrolls with the content) and moved via a CSS transform on
-  // the SVG x coordinate. The transform is GPU-composited (will-change +
-  // contain: layout), so moving it never triggers a layout/reflow.
+  // Cursor bar — an absolutely-positioned div that is a sibling of the staves
+  // SVG (not a descendant), so its CSS transform changes never cause the note
+  // tree to repaint. The transform is GPU-composited (will-change + contain:
+  // layout) and uses the SVG x coordinate directly (the cursor scrolls with the
+  // content because it lives inside the same scroll container).
   const cursorDivRef = useRef<HTMLDivElement>(null);
 
   // Position the cursor div at an SVG x (or hide it when x is null).
@@ -531,13 +530,13 @@ export function SheetMusicDisplay({
   }, []);
 
   // While playing, run a 60fps rAF loop that moves the cursor and page-turns the
-  // scroll. The loop is gated on `playing`, so it does NOT run while paused or
+  // scroll. The loop is gated on `isPlaying`, so it does NOT run while paused or
   // stopped (the cursor is static then — see the effect below). scrollLeft is
   // only written when the cursor nears the visible edge; a passive scroll
   // listener keeps currentScroll synced without reading it (a layout-flushing
   // property) in the hot path.
   useEffect(() => {
-    if (!getLiveBeat || !playing) {
+    if (!getLiveBeat || !isPlaying) {
       return;
     }
     const container = containerRef.current;
@@ -584,19 +583,19 @@ export function SheetMusicDisplay({
       ro.disconnect();
       container?.removeEventListener("scroll", onScroll);
     };
-  }, [getLiveBeat, playing, score, layout, placeCursor]);
+  }, [getLiveBeat, isPlaying, score, layout, placeCursor]);
 
   // When not playing (paused, stopped, initial load) the cursor is static, so
   // position it once here instead of burning a rAF loop. Re-runs on pause/stop
   // and after every jump (snapGeneration) so seeks/resets move it immediately.
   // biome-ignore lint/correctness/useExhaustiveDependencies: snapGeneration drives re-fire after jumps; score/layout compute position
   useEffect(() => {
-    if (!getLiveBeat || playing) {
+    if (!getLiveBeat || isPlaying) {
       return;
     }
     const beat = getLiveBeat();
     placeCursor(beat !== null ? computeCursorX(beat, score, layout) : null);
-  }, [getLiveBeat, playing, snapGeneration, score, layout, placeCursor]);
+  }, [getLiveBeat, isPlaying, snapGeneration, score, layout, placeCursor]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
   // snapGeneration increments on every jump so this effect always fires

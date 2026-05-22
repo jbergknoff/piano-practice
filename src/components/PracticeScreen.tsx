@@ -409,7 +409,7 @@ export function PracticeScreen({
           snapGeneration={snapGeneration}
           scrollLocked={isPlaying}
           getLiveBeat={getLiveBeat}
-          playing={isPlaying}
+          isPlaying={isPlaying}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
