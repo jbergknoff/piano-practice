@@ -5,30 +5,33 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { SheetMusicDisplay } from "../SheetMusicDisplay";
-import type { DebugBeatEvent } from "../debug-log";
-import { MidiPlayer } from "../midi-player";
-import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
-import {
-  type BluetoothHandle,
-  type ModeControl,
-  createPlayerHandle,
-} from "../mode-control";
-import type { ThemeTokens } from "../theme";
-import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
+import { MidiPlayer } from "../../../lib/midi/midi-player";
+import type {
+  MidiConversionResult,
+  TrackInfo,
+} from "../../../lib/midi/midi-to-musicxml";
+import type { DebugBeatEvent } from "../../debug-log";
+import type { useBluetooth } from "../../hooks/use-bluetooth";
 import {
   type CustomRange,
   loadCustomRanges,
   saveCustomRanges,
-} from "../use-file-history";
-import { useListenMode } from "../use-listen-mode";
-import { usePlayalongMode } from "../use-playalong-mode";
-import { useWaitMode } from "../use-wait-mode";
-import type { useBluetooth } from "../useBluetooth";
-import { ConnectionBadge } from "./ConnectionBadge";
-import { HelpBadge } from "./HelpBadge";
-import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
-import { SettingsDrawer } from "./SettingsDrawer";
+} from "../../hooks/use-file-history";
+import {
+  type BluetoothHandle,
+  type ModeControl,
+  createPlayerHandle,
+} from "../../modes/mode-control";
+import { useListenMode } from "../../modes/use-listen-mode";
+import { usePlayalongMode } from "../../modes/use-playalong-mode";
+import { useWaitMode } from "../../modes/use-wait-mode";
+import type { ThemeTokens } from "../../theme";
+import { cornerBtnStyle, hexA, miniBtnStyle } from "../../theme";
+import { ConnectionBadge } from "../ConnectionBadge";
+import { HelpBadge } from "../HelpBadge";
+import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
+import { SettingsDrawer } from "../SettingsDrawer";
+import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import {
   ChevronLeftIcon,
   GearIcon,
@@ -37,7 +40,7 @@ import {
   ResetIcon,
   SectionsIcon,
   StopIcon,
-} from "./icons";
+} from "../icons";
 
 interface PracticeScreenProps {
   theme: ThemeTokens;

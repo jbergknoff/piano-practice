@@ -1,12 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ThemeTokens } from "../theme";
 import {
   type CustomRange,
   type PlayalongAttempt,
   type WaitModeAttempt,
   loadAttemptHistory,
   loadPlayalongAttemptHistory,
-} from "../use-file-history";
+} from "../hooks/use-file-history";
+import type { ThemeTokens } from "../theme";
 import { PencilIcon } from "./icons";
 
 interface SelectionRangesDrawerProps {
