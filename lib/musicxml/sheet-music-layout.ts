@@ -148,10 +148,12 @@ function measureLeftPad(
   if (maxCol < 0) {
     return MEASURE_PADDING_LEFT;
   }
-  // staffSpace*2 keeps a single accidental clear of the barline; the per-column
-  // term shifts the noteheads further right so each extra (further-left) column
-  // also lands to the right of the barline.
-  return staffSpace * 2 + maxCol * staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
+  // staffSpace*2 keeps a single accidental clear of the barline; each extra
+  // column shifts the noteheads further right by its own width plus a little
+  // breathing room, so the further-left accidentals also sit clear of the
+  // barline with some margin.
+  const colWidth = staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
+  return staffSpace * 2 + maxCol * (colWidth + staffSpace * 0.5);
 }
 
 function measureWidth(
