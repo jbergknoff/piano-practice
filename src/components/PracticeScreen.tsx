@@ -178,7 +178,6 @@ export function PracticeScreen({
       initialBeatRef.current = 0;
       if (seekBeat > 0) {
         player.seek(seekBeat);
-        setCurrentBeat(seekBeat);
       }
       player.onPositionUpdate = (beat) => setCursor(beat, "smooth");
       player.onEnd = (beat) => {
@@ -186,6 +185,9 @@ export function PracticeScreen({
         setCursor(beat, "jump");
       };
       playerRef.current = player;
+      // Jump so the cursor is placed and the sheet scrolls to the start (or the
+      // restored position) as soon as the piece loads.
+      setCursor(seekBeat, "jump");
     }
 
     return () => {
@@ -226,6 +228,14 @@ export function PracticeScreen({
     () => createPlayerHandle(() => playerRef.current),
     [],
   );
+
+  // Drives the cursor. Returns the current beat (so the cursor is visible at the
+  // start position even when stopped); null only when there is no player. The
+  // play/pause lifecycle of the rAF loop is driven by the `playing` prop below.
+  const getLiveBeat = useCallback(() => {
+    const p = playerRef.current;
+    return p ? p.currentBeat : null;
+  }, []);
 
   // Stable BluetoothHandle that reads from a ref so identity stays constant.
   const bluetoothRef = useRef(bluetooth);
@@ -405,8 +415,7 @@ export function PracticeScreen({
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
           noteColors={active.noteColors}
-          playbackBeat={currentBeat}
-          cursorColor={accent}
+          accentColor={accent}
           inkColor={theme.ink}
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}
@@ -414,6 +423,8 @@ export function PracticeScreen({
           snapBeatRef={snapBeatRef}
           snapGeneration={snapGeneration}
           scrollLocked={isPlaying}
+          getLiveBeat={getLiveBeat}
+          isPlaying={isPlaying}
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}

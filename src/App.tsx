@@ -60,10 +60,13 @@ export function App() {
   const [playalongMetronome, setPlayalongMetronome] = useState(false);
   const [playalongCountIn, setPlayalongCountIn] = useState(true);
 
-  // Mirror of PracticeScreen's live cursor, used only for persistence.
-  const [currentBeat, setCurrentBeat] = useState(0);
+  // Mirror of PracticeScreen's live cursor, used only for persistence. Kept in
+  // a ref (not state) so the 60fps position stream during playback never
+  // re-renders App. The persistence snapshot reads it when other deps change,
+  // and beforeunload reads the latest value directly.
+  const currentBeatRef = useRef(0);
   const handleCurrentBeatChange = useCallback((beat: number) => {
-    setCurrentBeat(beat);
+    currentBeatRef.current = beat;
   }, []);
 
   // ── UI tokens ─────────────────────────────────────────────────────────────
@@ -132,7 +135,7 @@ export function App() {
     setMidiData(null);
     setTracks([]);
     setSelectedTracks([]);
-    setCurrentBeat(0);
+    currentBeatRef.current = 0;
     setMeasureRange(null);
     setMode("listen");
     setFileHash(null);
@@ -200,7 +203,7 @@ export function App() {
     setFileHash(null);
     setTracks([]);
     setSelectedTracks([]);
-    setCurrentBeat(0);
+    currentBeatRef.current = 0;
     setMeasureRange(null);
     setMode("listen");
     setInitialBeat(0);
@@ -221,7 +224,7 @@ export function App() {
       measureRange,
       mode,
       selectedTrackIndices: selectedTracks,
-      currentBeat,
+      currentBeat: currentBeatRef.current,
       noteSensitivityMilliseconds,
       playalongTimingBeats,
     };
@@ -236,20 +239,35 @@ export function App() {
     measureRange,
     mode,
     selectedTracks,
-    currentBeat,
     noteSensitivityMilliseconds,
     playalongTimingBeats,
   ]);
 
-  // Save synchronously on page close/refresh so cursor position isn't lost.
+  // Persist the latest cursor position when the page is closed or backgrounded.
+  // currentBeat is no longer a snapshot dep (it would re-render on every
+  // position update), so these are the points where the live beat is captured.
+  // visibilitychange → hidden is the reliable signal on mobile, where
+  // beforeunload often doesn't fire.
   useEffect(() => {
     function save() {
       if (snapshotRef.current) {
-        saveFileHistory(snapshotRef.current.hash, snapshotRef.current.history);
+        saveFileHistory(snapshotRef.current.hash, {
+          ...snapshotRef.current.history,
+          currentBeat: currentBeatRef.current,
+        });
+      }
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        save();
       }
     }
     window.addEventListener("beforeunload", save);
-    return () => window.removeEventListener("beforeunload", save);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", save);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   // ── Track selection ──────────────────────────────────────────────────────

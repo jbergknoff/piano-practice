@@ -6,8 +6,9 @@ import {
   useState,
 } from "preact/hooks";
 import { PlayalongResultModal } from "./components/PlayalongResultModal";
-import type { ModeControl, ModeHandle } from "./mode-control";
 import type { PlaybackNote } from "./midi-to-musicxml";
+import type { ModeControl, ModeHandle } from "./mode-control";
+import { useStableNoteColors } from "./note-colors";
 import type { ThemeTokens } from "./theme";
 import {
   type PlayalongAttempt,
@@ -424,7 +425,7 @@ export function usePlayalongMode(
 
   // Note colors: green for hits, red for missed past notes (after tolerance);
   // during idle phase, fall back to "highlight currently sounding notes".
-  const noteColors = useMemo<Record<string, string>>(() => {
+  const computedColors = useMemo<Record<string, string>>(() => {
     const musicxml = control.musicxml;
     if (!musicxml) {
       return {};
@@ -472,6 +473,7 @@ export function usePlayalongMode(
     settings.timingBeats,
     settings.accent,
   ]);
+  const noteColors = useStableNoteColors(computedColors);
 
   const overlay =
     phase === "counting-in" ? (
