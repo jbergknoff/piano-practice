@@ -5,6 +5,7 @@
  * decisions actually reach the rendered glyphs and geometry — note positions,
  * stem direction, ledger lines, chord spacing, accidentals, beams, staccato.
  */
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { render } from "preact";
 import { SheetMusicDisplay } from "./SheetMusicDisplay";
@@ -336,4 +337,115 @@ describe("SheetMusicDisplay geometry", () => {
     const dMajor = renderSheetMusic(scoreXml([QUARTER("B", 4)], { fifths: 2 }));
     expect(dMajor.textsWith(SHARP)).toHaveLength(2);
   });
+});
+
+// ── SVG snapshots ─────────────────────────────────────────────────────────────
+//
+// Each case below is rendered to a self-contained, viewable SVG (Bravura subset
+// embedded, cream background) committed under test-fixtures/svg/. The committed
+// file IS the expected output: open it in a browser to see the notation, and the
+// test fails if the renderer drifts from it. Regenerate after an intended change
+// with:  UPDATE_SVG=1 bun test src/components/SheetMusicDisplay.test.tsx
+
+const SVG_DIR = "test-fixtures/svg";
+// Bravura subset (clefs, noteheads, accidentals, rests, flags) embedded so the
+// committed SVGs render real glyphs standalone. The default layout uses a
+// 10px staff space → 40px glyphs.
+const FONT_B64 = readFileSync(`${SVG_DIR}/bravura-subset.woff2`).toString(
+  "base64",
+);
+
+function standaloneSvg(svg: Element): string {
+  const w = svg.getAttribute("width");
+  const h = svg.getAttribute("height");
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="font-family:Bravura,serif;font-size:40px">`,
+    `<defs><style>@font-face{font-family:'Bravura';src:url(data:font/woff2;base64,${FONT_B64}) format('woff2');}</style></defs>`,
+    `<rect width="${w}" height="${h}" fill="#faf6e9"/>`,
+    svg.innerHTML,
+    "</svg>",
+    "",
+  ].join("\n");
+}
+
+const SNAPSHOT_CASES: Array<[string, string]> = [
+  // Sharp then natural (cancel) then a plain note.
+  [
+    "accidentals",
+    scoreXml([QUARTER("C", 4, 1), QUARTER("C", 4, 0), QUARTER("D", 4)]),
+  ],
+  // Staggered chord accidentals in measure 2, kept clear of the barline.
+  [
+    "chord-accidentals",
+    scoreXml(
+      [
+        [{ step: "G", octave: 4, duration: 12, type: "half", dot: true }],
+        [
+          {
+            step: "F",
+            octave: 4,
+            alter: 1,
+            duration: 12,
+            type: "half",
+            dot: true,
+          },
+          {
+            step: "D",
+            octave: 5,
+            alter: 1,
+            duration: 12,
+            type: "half",
+            dot: true,
+            chord: true,
+          },
+        ],
+      ],
+      { beats: 3, beatType: 4 },
+    ),
+  ],
+  // Six eighths in 3/4 → three per-beat beam groups.
+  [
+    "beaming",
+    scoreXml(
+      [
+        EIGHTH("G", 4),
+        EIGHTH("A", 4),
+        EIGHTH("B", 4),
+        EIGHTH("C", 5),
+        EIGHTH("D", 5),
+        EIGHTH("E", 5),
+      ],
+      { beats: 3, beatType: 4 },
+    ),
+  ],
+  // Staccato chord → a single dot below the lowest notehead.
+  [
+    "staccato-chord",
+    scoreXml([
+      { step: "D", octave: 4, duration: 4, type: "quarter", staccato: true },
+      {
+        step: "B",
+        octave: 4,
+        duration: 4,
+        type: "quarter",
+        staccato: true,
+        chord: true,
+      },
+    ]),
+  ],
+];
+
+describe("SheetMusicDisplay SVG snapshots", () => {
+  for (const [name, xml] of SNAPSHOT_CASES) {
+    test(name, () => {
+      const { svg } = renderSheetMusic(xml);
+      const out = standaloneSvg(svg);
+      const path = `${SVG_DIR}/${name}.svg`;
+      if (process.env.UPDATE_SVG) {
+        writeFileSync(path, out);
+        return;
+      }
+      expect(out).toBe(readFileSync(path, "utf8"));
+    });
+  }
 });
