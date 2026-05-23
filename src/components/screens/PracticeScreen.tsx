@@ -373,8 +373,15 @@ export function PracticeScreen({
     onModeChange(newMode);
   };
 
+  // The custom range, if any, that exactly matches the current selection.
+  const namedRange = measureRange
+    ? (customRanges.ranges.find(
+        (r) => r.from === measureRange.from && r.to === measureRange.to,
+      ) ?? null)
+    : null;
+
   const handleContextMenuAction = (
-    action: "focus" | "seek" | "clearFocus" | "saveCustom",
+    action: "focus" | "seek" | "clearFocus" | "saveCustom" | "editCustom",
     measureNumber: number,
     beat: number,
   ) => {
@@ -385,6 +392,10 @@ export function PracticeScreen({
     } else if (action === "saveCustom") {
       if (measureRange) {
         customRanges.openCreate(measureRange);
+      }
+    } else if (action === "editCustom") {
+      if (namedRange) {
+        customRanges.openEdit(namedRange);
       }
     } else {
       handleSeek(beat);
@@ -552,7 +563,7 @@ export function PracticeScreen({
               type="button"
               onClick={() => setRangesDrawerOpen(true)}
               style={cornerBtnStyle(theme) as Record<string, string | number>}
-              title="Select section"
+              title="Select range"
             >
               <SectionsIcon />
             </button>
@@ -800,16 +811,26 @@ export function PracticeScreen({
                 },
                 ...(measureRange
                   ? [
-                      {
-                        label: "Name this range",
-                        action: "saveCustom" as const,
-                      },
+                      namedRange
+                        ? {
+                            label: `Edit “${namedRange.name}”`,
+                            action: "editCustom" as const,
+                          }
+                        : {
+                            label: "Name this range",
+                            action: "saveCustom" as const,
+                          },
                       { label: "Clear focus", action: "clearFocus" as const },
                     ]
                   : []),
               ] as {
                 label: string;
-                action: "focus" | "seek" | "clearFocus" | "saveCustom";
+                action:
+                  | "focus"
+                  | "seek"
+                  | "clearFocus"
+                  | "saveCustom"
+                  | "editCustom";
               }[]
             ).map(({ label, action }) => (
               <button

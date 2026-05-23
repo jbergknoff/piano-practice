@@ -85,7 +85,7 @@ export function RangeNameModal({
             marginBottom: 4,
           }}
         >
-          {editor.kind === "create" ? "Name this range" : "Edit name"}
+          {editor.kind === "create" ? "Name this range" : "Edit range"}
         </div>
         <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
           {rangeLabel}

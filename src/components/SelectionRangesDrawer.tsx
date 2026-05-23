@@ -251,7 +251,7 @@ export function SelectionRangesDrawer({
               fontStyle: "italic",
             }}
           >
-            Sections
+            Ranges
           </span>
           <button
             type="button"
@@ -305,6 +305,10 @@ export function SelectionRangesDrawer({
               );
             })}
           </Section>
+        )}
+
+        {customRanges.length > 0 && (
+          <div style={{ height: 1, background: theme.border }} />
         )}
 
         {/* Whole piece */}
