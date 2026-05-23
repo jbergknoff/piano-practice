@@ -12,6 +12,8 @@ import {
   eventXPositions,
   groupBeamableEvents,
   headerWidth,
+  keyChangeGlyphs,
+  keyChangeWidth,
   ledgerLineYs,
   noteY,
   resolveLayout,
@@ -723,6 +725,165 @@ describe("accidental display", () => {
       ]),
     );
     expect(accidentals(score.parts[0].measures[0])).toEqual(["sharp", "sharp"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Key signature changes mid-piece (parseScore + layout)
+// ---------------------------------------------------------------------------
+
+describe("key signature changes", () => {
+  // Build a one-part score where measure 1 declares the opening key (full
+  // attributes) and `changeMeasure` declares a new key via a key-only
+  // <attributes> block, mirroring the converter's output.
+  function scoreXml(opts: {
+    openFifths: number;
+    changeMeasure: number;
+    changeFifths: number;
+    numMeasures: number;
+    notesByMeasure?: Record<number, string>;
+  }): string {
+    const { openFifths, changeMeasure, changeFifths, numMeasures } = opts;
+    const body = Array.from({ length: numMeasures }, (_, i) => {
+      const num = i + 1;
+      let attrs = "";
+      if (i === 0) {
+        attrs = `<attributes><divisions>4</divisions><key><fifths>${openFifths}</fifths><mode>major</mode></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>`;
+      } else if (num === changeMeasure) {
+        attrs = `<attributes><key><fifths>${changeFifths}</fifths><mode>major</mode></key></attributes>`;
+      }
+      const notes =
+        opts.notesByMeasure?.[num] ??
+        "<note><pitch><step>G</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>";
+      return `<measure number="${num}">${attrs}${notes}</measure>`;
+    }).join("");
+    return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
+  }
+
+  test("active key is carried forward across measures", () => {
+    const score = parseScore(
+      scoreXml({
+        openFifths: 0,
+        changeMeasure: 3,
+        changeFifths: 2,
+        numMeasures: 4,
+      }),
+    );
+    const ms = score.parts[0].measures;
+    expect(ms.map((m) => m.activeFifths)).toEqual([0, 0, 2, 2]);
+  });
+
+  test("only the changing measure carries a keyChange descriptor", () => {
+    const score = parseScore(
+      scoreXml({
+        openFifths: 0,
+        changeMeasure: 3,
+        changeFifths: 2,
+        numMeasures: 4,
+      }),
+    );
+    const ms = score.parts[0].measures;
+    expect(ms[0].keyChange).toBeUndefined();
+    expect(ms[1].keyChange).toBeUndefined();
+    expect(ms[2].keyChange).toEqual({ fifths: 2, prevFifths: 0 });
+    expect(ms[3].keyChange).toBeUndefined();
+  });
+
+  test("part-level keySig reflects the opening key, not a later change", () => {
+    const score = parseScore(
+      scoreXml({
+        openFifths: 0,
+        changeMeasure: 2,
+        changeFifths: 3,
+        numMeasures: 3,
+      }),
+    );
+    expect(score.parts[0].keySig).toMatchObject({ fifths: 0 });
+  });
+
+  test("accidentals are computed against the active key of each measure", () => {
+    // Opens in C; changes to D major (F#, C#) at measure 2. An F#5 in measure 2
+    // is in the new key and needs no accidental; an F-natural needs a natural.
+    const fSharp =
+      "<note><pitch><step>F</step><alter>1</alter><octave>5</octave></pitch><duration>8</duration><type>half</type></note>";
+    const fNatural =
+      "<note><pitch><step>F</step><octave>5</octave></pitch><duration>8</duration><type>half</type></note>";
+    const score = parseScore(
+      scoreXml({
+        openFifths: 0,
+        changeMeasure: 2,
+        changeFifths: 2,
+        numMeasures: 2,
+        notesByMeasure: { 2: fSharp + fNatural },
+      }),
+    );
+    const accidentals = (score.parts[0].measures[1].events as ChordGroup[]).map(
+      (e) => e.notes[0].accidental,
+    );
+    expect(accidentals).toEqual(["none", "natural"]);
+  });
+
+  test("a key-change measure pushes its first note right by the key-sig width", () => {
+    const events = [chord([p("C", 4)])];
+    const baseline = eventXPositions(events, 100, false, 0, 48, 10);
+    const withChange = eventXPositions(events, 100, false, 0, 48, 10, {
+      fifths: 2,
+      prevFifths: 0,
+    });
+    expect(withChange[0] - baseline[0]).toBe(
+      keyChangeWidth({ fifths: 2, prevFifths: 0 }, 10),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// keyChangeGlyphs
+// ---------------------------------------------------------------------------
+
+describe("keyChangeGlyphs", () => {
+  test("removing all sharps cancels each with a natural", () => {
+    const { naturals, accidentals } = keyChangeGlyphs(
+      { fifths: 0, prevFifths: 3 },
+      "G",
+    );
+    expect(naturals).toHaveLength(3);
+    expect(accidentals).toHaveLength(0);
+  });
+
+  test("adding sharps from C shows only the new sharps", () => {
+    const { naturals, accidentals } = keyChangeGlyphs(
+      { fifths: 3, prevFifths: 0 },
+      "G",
+    );
+    expect(naturals).toHaveLength(0);
+    expect(accidentals).toHaveLength(3);
+  });
+
+  test("adding more sharps of the same kind cancels nothing", () => {
+    const { naturals, accidentals } = keyChangeGlyphs(
+      { fifths: 2, prevFifths: 1 },
+      "G",
+    );
+    expect(naturals).toHaveLength(0);
+    expect(accidentals).toHaveLength(2);
+  });
+
+  test("fewer sharps cancels the trailing ones", () => {
+    const { naturals, accidentals } = keyChangeGlyphs(
+      { fifths: 1, prevFifths: 2 },
+      "G",
+    );
+    expect(naturals).toHaveLength(1);
+    expect(accidentals).toHaveLength(1);
+  });
+
+  test("switching sign cancels all previous accidentals", () => {
+    const { naturals, accidentals } = keyChangeGlyphs(
+      { fifths: -1, prevFifths: 1 },
+      "G",
+    );
+    expect(naturals).toHaveLength(1);
+    expect(accidentals).toHaveLength(1);
   });
 });
 

@@ -42,9 +42,24 @@ export function parseScore(xml: string): ParsedScore {
     const measures = partEl ? parseMeasures(partEl) : [];
     const first = measures[0];
     const keySig = first?.keySig ?? { fifths: 0, mode: "major" };
-    for (const measure of measures) {
-      assignMeasureAccidentals(measure.events, keySig.fifths);
-    }
+    // Resolve the key in effect for each measure: a measure carries the running
+    // key forward unless its <attributes> declares a different one, in which
+    // case it starts a key change (rendered with cancel naturals + new accidentals).
+    let runningFifths = keySig.fifths;
+    measures.forEach((measure, m) => {
+      const declared = measure.keySig;
+      if (m === 0) {
+        runningFifths = declared?.fifths ?? runningFifths;
+      } else if (declared && declared.fifths !== runningFifths) {
+        measure.keyChange = {
+          fifths: declared.fifths,
+          prevFifths: runningFifths,
+        };
+        runningFifths = declared.fifths;
+      }
+      measure.activeFifths = runningFifths;
+      assignMeasureAccidentals(measure.events, runningFifths);
+    });
     return {
       id,
       measures,
@@ -80,7 +95,16 @@ function parseMeasure(el: Element): ParsedMeasure {
     }
   }
 
-  return { number, timeSig, keySig, clef, events };
+  // activeFifths is a placeholder here; parseScore resolves the running key
+  // across measures and overwrites it.
+  return {
+    number,
+    timeSig,
+    keySig,
+    clef,
+    events,
+    activeFifths: keySig?.fifths ?? 0,
+  };
 }
 
 function parseTimeSig(

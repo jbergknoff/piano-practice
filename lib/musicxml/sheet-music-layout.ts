@@ -41,12 +41,12 @@ export function resolveLayout(
   const ledgerMargin = config.ledgerMargin ?? 35;
 
   const firstPart = score.parts[0];
-  const firstKeySig = firstPart?.keySig ?? { fifths: 0 };
 
-  // Compute width of each measure (shared across all parts)
+  // Compute width of each measure (shared across all parts). All parts share
+  // the same key signature and key changes, so the first part's widths apply.
   const measureWidths =
     firstPart?.measures.map((m, i) =>
-      measureWidth(m, i === 0, firstKeySig.fifths, staffSpace, noteUnitWidth),
+      measureWidth(m, i === 0, staffSpace, noteUnitWidth),
     ) ?? [];
 
   // Accumulate measure X positions
@@ -159,11 +159,14 @@ function measureLeftPad(
 function measureWidth(
   measure: ParsedMeasure,
   isFirst: boolean,
-  fifths: number,
   staffSpace: number,
   noteUnitWidth: number,
 ): number {
-  const hdrW = isFirst ? headerWidth(fifths) : 0;
+  const hdrW = isFirst ? headerWidth(measure.activeFifths) : 0;
+  const keyChangeW =
+    !isFirst && measure.keyChange
+      ? keyChangeWidth(measure.keyChange, staffSpace)
+      : 0;
   let contentW = 0;
   for (const event of measure.events) {
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
@@ -171,6 +174,7 @@ function measureWidth(
   }
   return (
     hdrW +
+    keyChangeW +
     measureLeftPad(measure.events, isFirst, staffSpace) +
     contentW +
     MEASURE_PADDING_RIGHT
@@ -182,6 +186,73 @@ export function headerWidth(fifths: number): number {
   const keySigWidth = Math.abs(fifths) * 10;
   const timeSigWidth = 20;
   return clefWidth + keySigWidth + timeSigWidth + 8;
+}
+
+// ── Mid-staff key changes ─────────────────────────────────────────────────────
+
+// Lead and trailing gaps (× staffSpace) bracketing the key-change glyphs so they
+// clear the barline on the left and the noteheads on the right.
+export const KEY_CHANGE_LEAD_FACTOR = 0.8;
+const KEY_CHANGE_TRAIL_FACTOR = 0.8;
+// Horizontal step between successive key-signature glyphs (× staffSpace). Shared
+// with the renderer so width estimation and glyph placement stay in sync.
+export const KEY_CHANGE_GLYPH_SPACING_FACTOR = 1.1;
+
+const ACCIDENTAL_GLYPH_PITCHES = (fifths: number, sign: "G" | "F"): Pitch[] => {
+  if (fifths > 0) {
+    return SHARP_POSITIONS[sign].slice(0, fifths);
+  }
+  if (fifths < 0) {
+    return FLAT_POSITIONS[sign].slice(0, -fifths);
+  }
+  return [];
+};
+
+/**
+ * Resolve the glyphs drawn for a mid-staff key change: naturals that cancel the
+ * outgoing accidentals no longer in the new key, followed by the new key's
+ * accidentals. Pitches give staff positions (their alter is ignored for the
+ * naturals — a natural sits on the same line as the sharp/flat it cancels).
+ */
+export function keyChangeGlyphs(
+  keyChange: { fifths: number; prevFifths: number },
+  sign: "G" | "F",
+): { naturals: Pitch[]; accidentals: Pitch[] } {
+  const { fifths, prevFifths } = keyChange;
+  const prev = ACCIDENTAL_GLYPH_PITCHES(prevFifths, sign);
+  const accidentals = ACCIDENTAL_GLYPH_PITCHES(fifths, sign);
+  const sameSign =
+    prevFifths !== 0 &&
+    fifths !== 0 &&
+    Math.sign(prevFifths) === Math.sign(fifths);
+  let naturals: Pitch[];
+  if (sameSign && Math.abs(fifths) >= Math.abs(prevFifths)) {
+    // Adding more accidentals of the same kind — nothing to cancel.
+    naturals = [];
+  } else if (sameSign) {
+    // Fewer accidentals of the same kind — cancel the trailing ones.
+    naturals = prev.slice(Math.abs(fifths));
+  } else {
+    // Sign flip or a return to C/A — cancel all the previous accidentals.
+    naturals = prev;
+  }
+  return { naturals, accidentals };
+}
+
+export function keyChangeWidth(
+  keyChange: { fifths: number; prevFifths: number },
+  staffSpace: number,
+): number {
+  // Glyph count is clef-independent, so either sign yields the same width.
+  const { naturals, accidentals } = keyChangeGlyphs(keyChange, "G");
+  const glyphs = naturals.length + accidentals.length;
+  if (glyphs === 0) {
+    return 0;
+  }
+  return (
+    (KEY_CHANGE_LEAD_FACTOR + KEY_CHANGE_TRAIL_FACTOR) * staffSpace +
+    glyphs * (staffSpace * KEY_CHANGE_GLYPH_SPACING_FACTOR)
+  );
 }
 
 // ── Pitch / position helpers ──────────────────────────────────────────────────
@@ -252,10 +323,17 @@ export function eventXPositions(
   fifths: number,
   noteUnitWidth: number,
   staffSpace: number,
+  keyChange?: { fifths: number; prevFifths: number },
 ): number[] {
   const hdrW = isFirstMeasure ? headerWidth(fifths) : 0;
+  const keyChangeW =
+    !isFirstMeasure && keyChange ? keyChangeWidth(keyChange, staffSpace) : 0;
   const xs: number[] = [];
-  let x = measureX + hdrW + measureLeftPad(events, isFirstMeasure, staffSpace);
+  let x =
+    measureX +
+    hdrW +
+    keyChangeW +
+    measureLeftPad(events, isFirstMeasure, staffSpace);
   for (const event of events) {
     xs.push(x);
     const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;

@@ -507,6 +507,90 @@ describe("midiToMusicXml – programmatic fixtures", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Key signature changes mid-piece
+//
+// A MIDI file may declare the key signature more than once (key changes at
+// section boundaries). The first declaration sets the opening key signature and
+// each later one is emitted at the measure it takes effect in.
+// ---------------------------------------------------------------------------
+
+describe("key signature changes", () => {
+  /** fifths value of the <key> declared in each measure (undefined if none). */
+  function keyByMeasure(xml: string): Record<number, number> {
+    const out: Record<number, number> = {};
+    for (const m of xml.matchAll(
+      /<measure number="(\d+)">([\s\S]*?)<\/measure>/g,
+    )) {
+      const k = m[2].match(/<key><fifths>(-?\d+)<\/fifths>/);
+      if (k) {
+        out[Number(m[1])] = Number(k[1]);
+      }
+    }
+    return out;
+  }
+
+  // Single note per measure across four 4/4 measures (1920 ticks each), with a
+  // key change from C major (0) to D major (2 sharps) at the start of measure 3.
+  function fourMeasuresWithKeyChange(): MidiData {
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      [
+        0,
+        {
+          type: "timeSignature",
+          meta: true,
+          numerator: 4,
+          denominator: 4,
+          metronome: 24,
+          thirtyseconds: 8,
+        },
+      ],
+      [0, { type: "keySignature", meta: true, key: 0, scale: 0 }],
+      [3840, { type: "keySignature", meta: true, key: 2, scale: 0 }],
+    ];
+    for (let m = 0; m < 4; m++) {
+      const tick = m * 1920;
+      pairs.push([
+        tick,
+        { type: "noteOn", channel: 0, noteNumber: 67, velocity: 64 },
+      ]);
+      pairs.push([
+        tick + 480,
+        { type: "noteOff", channel: 0, noteNumber: 67, velocity: 0 },
+      ]);
+    }
+    return makeMidi(withDeltas(pairs));
+  }
+
+  test("opening key signature is the first declaration, not the last", () => {
+    // Regression: the converter used to keep the last keySignature event, so a
+    // piece that opens in C and modulates would wrongly show the later key at
+    // measure 1. Measure 1 must reflect the initial (tick-0) key.
+    const xml = midiToMusicXml(fourMeasuresWithKeyChange());
+    expect(keyByMeasure(xml)[1]).toBe(0);
+  });
+
+  test("a mid-piece key change is emitted at the measure it begins", () => {
+    const xml = midiToMusicXml(fourMeasuresWithKeyChange());
+    const keys = keyByMeasure(xml);
+    expect(keys[1]).toBe(0);
+    expect(keys[3]).toBe(2); // change at tick 3840 = start of measure 3
+    // No redundant <key> in measures that don't change.
+    expect(keys[2]).toBeUndefined();
+    expect(keys[4]).toBeUndefined();
+  });
+
+  test("the track-based path also emits per-measure key changes", () => {
+    const { musicxml } = midiToMusicXmlWithTracks(
+      fourMeasuresWithKeyChange(),
+      [0],
+    );
+    const keys = keyByMeasure(musicxml);
+    expect(keys[1]).toBe(0);
+    expect(keys[3]).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Staccato detection (midiToMusicXmlWithTracks)
 //
 // A note that sounds for much less than the space until the next onset is
