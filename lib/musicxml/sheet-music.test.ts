@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parseMidi } from "midi-file";
-import { midiToMusicXmlWithTracks } from "../midi/midi-to-musicxml";
+import {
+  getMidiTracks,
+  midiToMusicXmlWithTracks,
+} from "../midi/midi-to-musicxml";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
+  DIVISIONS,
   beamStemDirection,
   eventXPositions,
   groupBeamableEvents,
@@ -71,7 +75,8 @@ function chord(
       tieStart: false,
       tieStop: false,
       isChordMember: false,
-      showAccidental: false,
+      accidental: "none" as const,
+      staccato: false,
     })),
     duration,
     type,
@@ -289,6 +294,50 @@ describe("parseScore (mozart-k265-var1 via MIDI pipeline)", () => {
       }
     }
     expect(ids.size).toBeGreaterThan(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration — underwater theme exercises all four notation features
+// ---------------------------------------------------------------------------
+
+describe("parseScore (underwater-theme via MIDI pipeline)", () => {
+  const midiData = parseMidi(
+    readFileSync("test-fixtures/underwater-theme.mid"),
+  );
+  const trackIndices = getMidiTracks(midiData).map((t) => t.index);
+  const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
+  const score = parseScore(musicxml);
+
+  const allNotes = score.parts.flatMap((part) =>
+    part.measures.flatMap((m) =>
+      m.events.flatMap((ev) => (isRest(ev) ? [] : (ev as ChordGroup).notes)),
+    ),
+  );
+
+  test("it is a 3/4, C-major piece with two staves", () => {
+    expect(score.parts.length).toBe(2);
+    expect(score.parts[0].timeSig).toMatchObject({ beats: 3, beatType: 4 });
+    expect(score.parts[0].keySig).toMatchObject({ fifths: 0 });
+  });
+
+  test("at least one note carries a natural to cancel an earlier sharp", () => {
+    expect(allNotes.some((n) => n.accidental === "natural")).toBe(true);
+  });
+
+  test("the detached bass accompaniment produces staccato notes", () => {
+    expect(allNotes.some((n) => n.staccato)).toBe(true);
+  });
+
+  test("a long eighth run is split into per-beat beam groups", () => {
+    // Some measure must contain more than one beam group once beats break the
+    // run (a single all-encompassing beam would yield exactly one group).
+    const splitSomewhere = score.parts.some((part) =>
+      part.measures.some(
+        (m) => groupBeamableEvents(m.events, DIVISIONS).length > 1,
+      ),
+    );
+    expect(splitSomewhere).toBe(true);
   });
 });
 
@@ -561,6 +610,119 @@ describe("groupBeamableEvents", () => {
       chord([p("F", 4)], "eighth", 2),
     ];
     expect(groupBeamableEvents(events)).toEqual([[0, 1, 2, 3]]);
+  });
+
+  test("beatDivisions breaks a long eighth run into per-beat groups", () => {
+    // Six eighths (duration 2 each) at positions 0,2,4,6,8,10. With a 4-division
+    // beat the boundaries fall at 4 and 8 → three pairs.
+    const events = Array.from({ length: 6 }, () =>
+      chord([p("C", 4)], "eighth", 2),
+    );
+    expect(groupBeamableEvents(events, 4)).toEqual([
+      [0, 1],
+      [2, 3],
+      [4, 5],
+    ]);
+  });
+
+  test("a lone eighth in its own beat is left unbeamed (gets a flag)", () => {
+    // Eighth rest then five eighths: positions rest@0, then 2,4,6,8,10.
+    // Beat 0 holds only the first eighth (index 1) → no group; beats 1 and 2
+    // each hold a pair. Mirrors measure 8 of the underwater theme.
+    const events = [
+      rest(2, "eighth"),
+      chord([p("G", 4)], "eighth", 2),
+      chord([p("A", 4)], "eighth", 2),
+      chord([p("B", 4)], "eighth", 2),
+      chord([p("C", 5)], "eighth", 2),
+      chord([p("D", 5)], "eighth", 2),
+    ];
+    expect(groupBeamableEvents(events, 4)).toEqual([
+      [2, 3],
+      [4, 5],
+    ]);
+  });
+
+  test("without beatDivisions the whole run beams together", () => {
+    const events = Array.from({ length: 6 }, () =>
+      chord([p("C", 4)], "eighth", 2),
+    );
+    expect(groupBeamableEvents(events)).toEqual([[0, 1, 2, 3, 4, 5]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Accidental display logic (parseScore)
+// ---------------------------------------------------------------------------
+
+describe("accidental display", () => {
+  // Build a one-part score where each measure's notes are given inline.
+  function scoreXml(measures: string[], fifths = 0): string {
+    const body = measures
+      .map(
+        (notes, i) =>
+          `<measure number="${i + 1}">${
+            i === 0
+              ? `<attributes><divisions>4</divisions><key><fifths>${fifths}</fifths><mode>major</mode></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>`
+              : ""
+          }${notes}</measure>`,
+      )
+      .join("");
+    return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
+  }
+
+  function note(step: string, octave: number, alter = 0): string {
+    const alterEl = alter !== 0 ? `<alter>${alter}</alter>` : "";
+    return `<note><pitch><step>${step}</step>${alterEl}<octave>${octave}</octave></pitch><duration>4</duration><type>quarter</type></note>`;
+  }
+
+  function accidentals(measure: {
+    events: ReturnType<typeof parseScore>["parts"][0]["measures"][0]["events"];
+  }): string[] {
+    return measure.events.flatMap((ev) =>
+      isRest(ev) ? [] : (ev as ChordGroup).notes.map((n) => n.accidental),
+    );
+  }
+
+  test("a natural cancels a sharp earlier in the same measure", () => {
+    const score = parseScore(
+      scoreXml([note("C", 4, 1) + note("C", 4, 0) + note("D", 4)]),
+    );
+    expect(accidentals(score.parts[0].measures[0])).toEqual([
+      "sharp",
+      "natural",
+      "none",
+    ]);
+  });
+
+  test("a repeated sharp in the same measure is not redrawn", () => {
+    const score = parseScore(scoreXml([note("F", 4, 1) + note("F", 4, 1)]));
+    expect(accidentals(score.parts[0].measures[0])).toEqual(["sharp", "none"]);
+  });
+
+  test("accidental state resets at the barline", () => {
+    // C#4 in measure 1; a plain C4 in measure 2 needs no accidental.
+    const score = parseScore(scoreXml([note("C", 4, 1), note("C", 4, 0)]));
+    expect(accidentals(score.parts[0].measures[1])).toEqual(["none"]);
+  });
+
+  test("a note matching the key signature shows no accidental, its natural does", () => {
+    // G major (1 sharp = F#). F#5 is in key (no glyph); F-natural needs a natural.
+    const score = parseScore(scoreXml([note("F", 5, 1) + note("F", 5, 0)], 1));
+    expect(accidentals(score.parts[0].measures[0])).toEqual([
+      "none",
+      "natural",
+    ]);
+  });
+
+  test("two sharps a sixth apart in one chord both show", () => {
+    // F#4 + D#5 (measure 6 of the underwater theme).
+    const score = parseScore(
+      scoreXml([
+        `${note("F", 4, 1).replace("</note>", "</note>")}<note><chord/><pitch><step>D</step><alter>1</alter><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>`,
+      ]),
+    );
+    expect(accidentals(score.parts[0].measures[0])).toEqual(["sharp", "sharp"]);
   });
 });
 

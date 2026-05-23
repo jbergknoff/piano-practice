@@ -1,4 +1,5 @@
 import type {
+  AccidentalKind,
   ChordGroup,
   MeasureEvent,
   NoteType,
@@ -40,12 +41,16 @@ export function parseScore(xml: string): ParsedScore {
     const partEl = partEls[i];
     const measures = partEl ? parseMeasures(partEl) : [];
     const first = measures[0];
+    const keySig = first?.keySig ?? { fifths: 0, mode: "major" };
+    for (const measure of measures) {
+      assignMeasureAccidentals(measure.events, keySig.fifths);
+    }
     return {
       id,
       measures,
       clef: first?.clef ?? { sign: "G", line: 2 },
       timeSig: first?.timeSig ?? { beats: 4, beatType: 4 },
-      keySig: first?.keySig ?? { fifths: 0, mode: "major" },
+      keySig,
     };
   });
 
@@ -157,6 +162,9 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const tieStart = ties.some((t) => t.getAttribute("type") === "start");
   const tieStop = ties.some((t) => t.getAttribute("type") === "stop");
 
+  const staccato =
+    el.querySelector("notations > articulations > staccato") !== null;
+
   return {
     kind: "note",
     pitch: { step, alter, octave },
@@ -166,8 +174,58 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
     tieStart,
     tieStop,
     isChordMember,
-    showAccidental: alter !== 0,
+    // Provisional; replaced by assignMeasureAccidentals once the measure's
+    // running accidental state (and the key signature) are known.
+    accidental: "none",
+    staccato,
   };
+}
+
+// Order in which sharps / flats are added by the key signature.
+const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"];
+const FLAT_ORDER = ["B", "E", "A", "D", "G", "C", "F"];
+
+// The alteration the key signature imposes on a given step (+1 sharp, -1 flat).
+function keyAlterForStep(step: string, fifths: number): number {
+  if (fifths > 0) {
+    return SHARP_ORDER.slice(0, fifths).includes(step) ? 1 : 0;
+  }
+  if (fifths < 0) {
+    return FLAT_ORDER.slice(0, -fifths).includes(step) ? -1 : 0;
+  }
+  return 0;
+}
+
+// Walk a measure's events in onset order, deciding which notes need a printed
+// accidental. The active alteration for each (step, octave) starts at whatever
+// the key signature dictates and is updated by every explicit accidental, so a
+// pitch sharped earlier in the measure shows a natural when it returns, and a
+// repeated sharp is not redrawn.
+function assignMeasureAccidentals(
+  events: MeasureEvent[],
+  fifths: number,
+): void {
+  const active = new Map<string, number>();
+  for (const event of events) {
+    if (isRest(event)) {
+      continue;
+    }
+    for (const note of event.notes) {
+      const key = `${note.pitch.step}${note.pitch.octave}`;
+      const current = active.has(key)
+        ? (active.get(key) as number)
+        : keyAlterForStep(note.pitch.step, fifths);
+      const alter = note.pitch.alter;
+      if (alter === current) {
+        note.accidental = "none";
+        continue;
+      }
+      const glyph: AccidentalKind =
+        alter > 0 ? "sharp" : alter < 0 ? "flat" : "natural";
+      note.accidental = glyph;
+      active.set(key, alter);
+    }
+  }
 }
 
 function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {

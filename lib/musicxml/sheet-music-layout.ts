@@ -78,7 +78,7 @@ function firstEventHasAccidental(events: MeasureEvent[]): boolean {
   if (events.length === 0 || isRest(events[0])) {
     return false;
   }
-  return (events[0] as ChordGroup).notes.some((n) => n.showAccidental);
+  return (events[0] as ChordGroup).notes.some((n) => n.accidental !== "none");
 }
 
 function measureLeftPad(
@@ -254,33 +254,47 @@ export function partClef(part: ParsedPart): { sign: "G" | "F"; line: number } {
  * Returns arrays of event indices; each inner array is one beam group (2+
  * consecutive beamable events with no intervening rests or non-beamable notes).
  * A single isolated eighth/16th keeps its flag and is not returned here.
+ *
+ * When `beatDivisions` is given, beams are also broken at beat boundaries so a
+ * long run is split into per-beat sub-beams (the conventional engraving) rather
+ * than one beam spanning the whole measure. Omit it to disable beat breaking.
  */
-export function groupBeamableEvents(events: MeasureEvent[]): number[][] {
+export function groupBeamableEvents(
+  events: MeasureEvent[],
+  beatDivisions?: number,
+): number[][] {
+  // Onset position (in divisions) of each event within the measure.
+  const starts: number[] = [];
+  let pos = 0;
+  for (const ev of events) {
+    starts.push(pos);
+    pos += isRest(ev) ? ev.duration : (ev as ChordGroup).duration;
+  }
+
+  const isBeamable = (ev: MeasureEvent): boolean =>
+    !isRest(ev) &&
+    ((ev as ChordGroup).type === "eighth" ||
+      (ev as ChordGroup).type === "16th");
+
+  const sameBeat = (a: number, b: number): boolean =>
+    beatDivisions === undefined ||
+    Math.floor(starts[a] / beatDivisions) ===
+      Math.floor(starts[b] / beatDivisions);
+
   const groups: number[][] = [];
   let i = 0;
   while (i < events.length) {
-    const ev = events[i];
-    if (
-      !isRest(ev) &&
-      ((ev as ChordGroup).type === "eighth" ||
-        (ev as ChordGroup).type === "16th")
-    ) {
-      const runStart = i;
-      while (
-        i < events.length &&
-        !isRest(events[i]) &&
-        ((events[i] as ChordGroup).type === "eighth" ||
-          (events[i] as ChordGroup).type === "16th")
-      ) {
-        i++;
-      }
-      if (i - runStart >= 2) {
-        groups.push(
-          Array.from({ length: i - runStart }, (_, j) => runStart + j),
-        );
-      }
-    } else {
+    if (!isBeamable(events[i])) {
       i++;
+      continue;
+    }
+    const runStart = i;
+    i++;
+    while (i < events.length && isBeamable(events[i]) && sameBeat(i - 1, i)) {
+      i++;
+    }
+    if (i - runStart >= 2) {
+      groups.push(Array.from({ length: i - runStart }, (_, j) => runStart + j));
     }
   }
   return groups;

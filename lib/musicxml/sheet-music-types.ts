@@ -6,6 +6,12 @@ export interface Pitch {
 
 export type NoteType = "whole" | "half" | "quarter" | "eighth" | "16th";
 
+// Which accidental glyph (if any) to draw before the notehead. Computed per
+// measure from the running accidental state, not just the pitch's alter:
+// a sharp is only drawn the first time it appears, and a natural is drawn to
+// cancel a sharp earlier in the same measure.
+export type AccidentalKind = "none" | "sharp" | "flat" | "natural";
+
 export interface ParsedNote {
   kind: "note";
   pitch: Pitch;
@@ -15,7 +21,8 @@ export interface ParsedNote {
   tieStart: boolean;
   tieStop: boolean;
   isChordMember: boolean;
-  showAccidental: boolean;
+  accidental: AccidentalKind;
+  staccato: boolean;
 }
 
 export interface ParsedRest {
