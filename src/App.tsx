@@ -56,7 +56,9 @@ export function App() {
   const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
     useState(150);
   const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
-  const [playalongPianoAudio, setPlayalongPianoAudio] = useState(true);
+  const [playalongPlayMusic, setPlayalongPlayMusic] = useState(true);
+  const [playalongMetronome, setPlayalongMetronome] = useState(false);
+  const [playalongCountIn, setPlayalongCountIn] = useState(true);
 
   // Mirror of PracticeScreen's live cursor, used only for persistence. Kept in
   // a ref (not state) so the 60fps position stream during playback never
@@ -323,8 +325,12 @@ export function App() {
       onSensitivityChange={setNoteSensitivityMilliseconds}
       playalongTimingBeats={playalongTimingBeats}
       onPlayalongTimingChange={setPlayalongTimingBeats}
-      playalongPianoAudio={playalongPianoAudio}
-      onPlayalongPianoAudioChange={setPlayalongPianoAudio}
+      playalongPlayMusic={playalongPlayMusic}
+      onPlayalongPlayMusicChange={setPlayalongPlayMusic}
+      playalongMetronome={playalongMetronome}
+      onPlayalongMetronomeChange={setPlayalongMetronome}
+      playalongCountIn={playalongCountIn}
+      onPlayalongCountInChange={setPlayalongCountIn}
       appendToDebugLog={appendToDebugLog}
       getDebugLog={getDebugLog}
     />

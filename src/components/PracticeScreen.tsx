@@ -68,8 +68,12 @@ interface PracticeScreenProps {
   onSensitivityChange: (ms: number) => void;
   playalongTimingBeats: number;
   onPlayalongTimingChange: (beats: number) => void;
-  playalongPianoAudio: boolean;
-  onPlayalongPianoAudioChange: (enabled: boolean) => void;
+  playalongPlayMusic: boolean;
+  onPlayalongPlayMusicChange: (enabled: boolean) => void;
+  playalongMetronome: boolean;
+  onPlayalongMetronomeChange: (enabled: boolean) => void;
+  playalongCountIn: boolean;
+  onPlayalongCountInChange: (enabled: boolean) => void;
   appendToDebugLog: (event: DebugBeatEvent) => void;
   getDebugLog: () => DebugBeatEvent[];
 }
@@ -100,8 +104,12 @@ export function PracticeScreen({
   onSensitivityChange,
   playalongTimingBeats,
   onPlayalongTimingChange,
-  playalongPianoAudio,
-  onPlayalongPianoAudioChange,
+  playalongPlayMusic,
+  onPlayalongPlayMusicChange,
+  playalongMetronome,
+  onPlayalongMetronomeChange,
+  playalongCountIn,
+  onPlayalongCountInChange,
   appendToDebugLog,
   getDebugLog,
 }: PracticeScreenProps) {
@@ -266,7 +274,9 @@ export function PracticeScreen({
   });
   const playalong = usePlayalongMode(control, {
     timingBeats: playalongTimingBeats,
-    pianoAudio: playalongPianoAudio,
+    playMusic: playalongPlayMusic,
+    metronome: playalongMetronome,
+    countIn: playalongCountIn,
     bpm,
     accent,
     theme,
@@ -324,7 +334,9 @@ export function PracticeScreen({
 
   const playalongActive =
     mode === "playalong" &&
-    (playalong.phase === "counting-in" || playalong.phase === "playing");
+    (playalong.phase === "counting-in" ||
+      playalong.phase === "waiting-for-note" ||
+      playalong.phase === "playing");
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
@@ -369,7 +381,10 @@ export function PracticeScreen({
   };
 
   const showStopIcon =
-    mode === "playalong" && (isPlaying || playalong.phase === "counting-in");
+    mode === "playalong" &&
+    (isPlaying ||
+      playalong.phase === "counting-in" ||
+      playalong.phase === "waiting-for-note");
 
   return (
     <div
@@ -922,8 +937,12 @@ export function PracticeScreen({
         onSensitivityChange={onSensitivityChange}
         playalongTimingBeats={playalongTimingBeats}
         onPlayalongTimingChange={onPlayalongTimingChange}
-        playalongPianoAudio={playalongPianoAudio}
-        onPlayalongPianoAudioChange={onPlayalongPianoAudioChange}
+        playalongPlayMusic={playalongPlayMusic}
+        onPlayalongPlayMusicChange={onPlayalongPlayMusicChange}
+        playalongMetronome={playalongMetronome}
+        onPlayalongMetronomeChange={onPlayalongMetronomeChange}
+        playalongCountIn={playalongCountIn}
+        onPlayalongCountInChange={onPlayalongCountInChange}
       />
 
       {/* Mode-owned result modal */}

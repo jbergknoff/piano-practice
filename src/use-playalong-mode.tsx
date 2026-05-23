@@ -16,11 +16,24 @@ import {
   savePlayalongAttempt,
 } from "./use-file-history";
 
-export type PlayalongPhase = "idle" | "counting-in" | "playing" | "complete";
+export type PlayalongPhase =
+  | "idle"
+  | "counting-in"
+  | "waiting-for-note"
+  | "playing"
+  | "complete";
 
 export interface PlayalongSettings {
   timingBeats: number;
-  pianoAudio: boolean;
+  /** When true, the song is played aloud via Web Audio (phone speaker). */
+  playMusic: boolean;
+  /** When true, hi-hat metronome ticks are sent to the piano via BLE MIDI. */
+  metronome: boolean;
+  /**
+   * When true, a metronome count-in precedes playback. When false, playback
+   * begins as soon as the user presses the first note.
+   */
+  countIn: boolean;
   /** Current BPM — recorded with each attempt for the history table. */
   bpm: number;
   accent: string;
@@ -59,6 +72,33 @@ export function usePlayalongMode(
   const countInCancelRef = useRef<(() => void) | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
   const uninstallAudioRoutingRef = useRef<(() => void) | null>(null);
+  const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function stopMetronome() {
+    if (metronomeTimerRef.current !== null) {
+      clearInterval(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    }
+  }
+
+  function startMetronome() {
+    stopMetronome();
+    const ctrl = controlRef.current;
+    const mx = ctrl.musicxml;
+    if (!mx) {
+      return;
+    }
+    const msPerBeat = (60 / settingsRef.current.bpm) * 1000;
+    const timeSigNum = mx.timeSigNum;
+    let beatIdx = 0;
+    const tick = () => {
+      const isDownbeat = beatIdx % timeSigNum === 0;
+      ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
+      beatIdx++;
+    };
+    tick();
+    metronomeTimerRef.current = setInterval(tick, msPerBeat);
+  }
 
   const controlRef = useRef(control);
   controlRef.current = control;
@@ -74,6 +114,7 @@ export function usePlayalongMode(
     uninstallAudioRoutingRef.current = null;
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = null;
+    stopMetronome();
     phaseRef.current = "idle";
     setPhase("idle");
     hitNoteIdsRef.current = new Set();
@@ -150,6 +191,7 @@ export function usePlayalongMode(
     uninstallAudioRoutingRef.current = null;
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = null;
+    stopMetronome();
     const ctrl = controlRef.current;
     ctrl.player.pause();
     ctrl.setIsPlaying(false);
@@ -169,12 +211,56 @@ export function usePlayalongMode(
     ctrl.setCursor(startBeat, "jump");
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong / computeScore / recordCompletion read only from refs; stable by design
+  async function startPlaying() {
+    const ctrl = controlRef.current;
+    const player = ctrl.player;
+
+    phaseRef.current = "playing";
+    setPhase("playing");
+
+    // Install onEnd so we can finalize score + uninstall audio routing.
+    uninstallCallbacksRef.current?.();
+    uninstallCallbacksRef.current = player.installCallbacks({
+      onEnd: (beat) => {
+        ctrl.setIsPlaying(false);
+        ctrl.setCursor(beat, "jump");
+        if (phaseRef.current !== "playing") {
+          return;
+        }
+        uninstallAudioRoutingRef.current?.();
+        uninstallAudioRoutingRef.current = null;
+        stopMetronome();
+        phaseRef.current = "complete";
+        setPhase("complete");
+        recordCompletion(computeScore());
+      },
+    });
+
+    // Web Audio output is the default; when "play music aloud" is off, mute it.
+    if (!settingsRef.current.playMusic) {
+      uninstallAudioRoutingRef.current?.();
+      uninstallAudioRoutingRef.current = player.setAudioRouting({
+        skipWebAudio: true,
+      });
+    }
+
+    if (settingsRef.current.metronome) {
+      startMetronome();
+    }
+
+    await player.play();
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong / computeScore / recordCompletion / startPlaying read only from refs; stable by design
   const handlePlayPause = useCallback(async () => {
     const ctrl = controlRef.current;
     const player = ctrl.player;
 
-    if (phaseRef.current === "counting-in" || phaseRef.current === "playing") {
+    if (
+      phaseRef.current === "counting-in" ||
+      phaseRef.current === "waiting-for-note" ||
+      phaseRef.current === "playing"
+    ) {
       stopPlayalong();
       return;
     }
@@ -189,14 +275,22 @@ export function usePlayalongMode(
     player.seek(startBeat);
     ctrl.setCursor(startBeat, "jump");
 
-    // Reset score state and enter counting-in.
+    // Reset score state.
     const empty = new Set<string>();
     hitNoteIdsRef.current = empty;
     setHitNoteIds(empty);
     extraNoteCountRef.current = 0;
+    ctrl.setIsPlaying(true);
+
+    if (!settingsRef.current.countIn) {
+      // Skip count-in: wait for the user's first note to begin playback.
+      phaseRef.current = "waiting-for-note";
+      setPhase("waiting-for-note");
+      return;
+    }
+
     phaseRef.current = "counting-in";
     setPhase("counting-in");
-    ctrl.setIsPlaying(true);
 
     const countInBeats = 2 * mx.timeSigNum;
     const { cancel, done } = player.playCountIn(
@@ -220,43 +314,7 @@ export function usePlayalongMode(
     }
     countInCancelRef.current = null;
 
-    phaseRef.current = "playing";
-    setPhase("playing");
-
-    // Install onEnd so we can finalize score + uninstall audio routing.
-    uninstallCallbacksRef.current?.();
-    uninstallCallbacksRef.current = player.installCallbacks({
-      onEnd: (beat) => {
-        ctrl.setIsPlaying(false);
-        ctrl.setCursor(beat, "jump");
-        if (phaseRef.current !== "playing") {
-          return;
-        }
-        uninstallAudioRoutingRef.current?.();
-        uninstallAudioRoutingRef.current = null;
-        phaseRef.current = "complete";
-        setPhase("complete");
-        recordCompletion(computeScore());
-      },
-    });
-
-    if (settingsRef.current.pianoAudio) {
-      uninstallAudioRoutingRef.current?.();
-      uninstallAudioRoutingRef.current = player.setAudioRouting({
-        skipWebAudio: true,
-        onNoteScheduled: (notes) => {
-          ctrl.bluetooth.sendNotesBatch(
-            notes.map((n) => ({
-              note: n.noteNumber,
-              velocity: Math.max(1, Math.round(n.velocity * 0.3)),
-              durationMs: n.durationMs,
-            })),
-          );
-        },
-      });
-    }
-
-    await player.play();
+    await startPlaying();
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong reads only from refs; stable by design
@@ -281,6 +339,7 @@ export function usePlayalongMode(
   }, []);
 
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: startPlaying reads only from refs; stable by design
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
     const ctrl = controlRef.current;
     const now = Date.now();
@@ -305,6 +364,12 @@ export function usePlayalongMode(
     }
 
     held.add(noteNumber);
+
+    // First note while waiting (count-in disabled) kicks off playback. Fall
+    // through so this same press is also evaluated against the first notes.
+    if (phaseRef.current === "waiting-for-note") {
+      void startPlaying();
+    }
 
     if (phaseRef.current !== "playing") {
       ctrl.appendToDebugLog({
@@ -413,6 +478,8 @@ export function usePlayalongMode(
   const overlay =
     phase === "counting-in" ? (
       <CountInOverlay countInBeat={countInBeat} />
+    ) : phase === "waiting-for-note" ? (
+      <WaitingForNoteOverlay />
     ) : null;
 
   const modal = resultModal ? (
@@ -528,6 +595,61 @@ function CountInOverlay({
           }}
         >
           Count in…
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WaitingForNoteOverlay() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 10,
+        pointerEvents: "none",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          borderRadius: 16,
+          padding: "18px 28px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            color: "#fff",
+            lineHeight: 1.1,
+            textAlign: "center",
+          }}
+        >
+          Press any key
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.7)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginTop: 8,
+          }}
+        >
+          to start
         </div>
       </div>
     </div>
