@@ -526,6 +526,16 @@ describe("Rondo Alla Turca opening excerpt (K.331 III)", () => {
     expect(rhXs[1]).toBe(lhXs[2]); // D5 and the chord share division 4
     expect(rhXs[3]).toBe(lhXs[3]); // B4 and the chord share division 6
   });
+
+  test("measure 1: the G#4 gets extra room so its sharp clears the previous note", () => {
+    const layout = resolveLayout(score);
+    const spine = layout.measureSpines[0]; // measure 1
+    // Events: [quarter rest, B4, A4, G#4, A4] (the last three a tight 16th run).
+    const xs = eventXsFromSpine(score.parts[0].measures[0].events, spine);
+    const intoPlainNote = xs[2] - xs[1]; // B4 -> A4 (no accidental)
+    const intoSharpNote = xs[3] - xs[2]; // A4 -> G#4 (sharp)
+    expect(intoSharpNote).toBeGreaterThan(intoPlainNote);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -795,6 +805,21 @@ describe("buildMeasureSpine + eventXsFromSpine", () => {
     // treble's div-4 note.
     const tx = eventXsFromSpine(treble, spine);
     expect(bx[1]).toBe(tx[2]);
+  });
+
+  test("a note with an accidental gets extra advance to clear the previous note", () => {
+    // Three 16ths A4 G#4 A4: the G#'s sharp would collide with the first A4 at
+    // the plain minimum advance, so the advance into it is widened.
+    const sharp = chord([p("G", 4, 1)], "16th", 1);
+    sharp.notes[0].accidental = "sharp";
+    const events = [
+      chord([p("A", 4)], "16th", 1),
+      sharp,
+      chord([p("A", 4)], "16th", 1),
+    ];
+    const xs = singlePartXs(events);
+    expect(xs[1] - xs[0]).toBe(26); // into G#: staffSpace*2.6, vs the 18 floor
+    expect(xs[2] - xs[1]).toBe(18); // into the plain A4: the 16th minimum
   });
 });
 

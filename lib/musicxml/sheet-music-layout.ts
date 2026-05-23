@@ -192,6 +192,23 @@ function eventAdvance(deltaDivs: number, noteUnitWidth: number): number {
   return Math.max((deltaDivs / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
 }
 
+// Minimum advance INTO a note that carries accidentals, so the glyph (drawn to
+// the left of the notehead, possibly stacked into columns) clears the previous
+// notehead in a tight run. 0 when the chord has no accidentals. Mirrors
+// measureLeftPad's barline clearance (staffSpace*2 for one accidental, plus a
+// per-column step) and adds the previous notehead's half width.
+function accidentalAdvance(notes: ParsedNote[], staffSpace: number): number {
+  const maxCol = accidentalColumns(notes, staffSpace).reduce(
+    (max, c) => Math.max(max, c),
+    -1,
+  );
+  if (maxCol < 0) {
+    return 0;
+  }
+  const colWidth = staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
+  return staffSpace * 2.6 + maxCol * (colWidth + staffSpace * 0.5);
+}
+
 // Distance from a measure's left barline to its first note: the header (clef,
 // key, time) on the first measure, a mid-staff key-change block, plus left
 // padding. The padding is the max across parts so an accidental on either
@@ -224,11 +241,23 @@ export function buildMeasureSpine(
   noteUnitWidth: number,
 ): { divs: number[]; xs: number[]; endDiv: number; endX: number } {
   const onsets = new Set<number>();
+  // Extra advance needed into a given onset so any accidental there clears the
+  // previous notehead — the max requirement across all parts at that onset.
+  const accAdvanceByDiv = new Map<number, number>();
   let contentEnd = 0; // last division any part's notes actually reach
   for (const measure of measures) {
     let pos = 0;
     for (const event of measure.events) {
       onsets.add(pos);
+      if (!isRest(event)) {
+        const acc = accidentalAdvance((event as ChordGroup).notes, staffSpace);
+        if (acc > 0) {
+          accAdvanceByDiv.set(
+            pos,
+            Math.max(accAdvanceByDiv.get(pos) ?? 0, acc),
+          );
+        }
+      }
       pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
     }
     contentEnd = Math.max(contentEnd, pos);
@@ -240,7 +269,8 @@ export function buildMeasureSpine(
   let x = contentStart;
   for (let k = 0; k < divs.length; k++) {
     if (k > 0) {
-      x += eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
+      const gap = eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
+      x += Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0);
     }
     xs.push(x);
   }
