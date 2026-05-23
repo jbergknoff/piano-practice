@@ -6,6 +6,20 @@
 
 ## Architecture
 
+### Repository layout
+
+Framework-agnostic, unit-testable domain logic lives under top-level `lib/` (no Preact imports); Preact/app code lives under `src/`. Tests are colocated next to their subject, except shared MIDI/MusicXML fixtures, which live in top-level `test-fixtures/` (referenced by tests via repo-root-relative paths, since `bun test` runs from the repo root).
+
+- `lib/midi/` — `midi-to-musicxml.ts`, `midi-player.ts`, `ble-midi.ts`
+- `lib/musicxml/` — `sheet-music-types.ts`, `musicxml-parser.ts`, `sheet-music-layout.ts`
+- `lib/circular-buffer/` — generic O(1) ring buffer
+- `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `globals.d.ts`
+- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
+- `src/hooks/` — `use-bluetooth.ts`, `use-wake-lock.ts`, `use-file-history.ts`
+- `src/modes/` — the three mode hooks, `mode-control.ts`, `note-colors.ts`
+
+File naming: components are `PascalCase`; everything else is `kebab-case`.
+
 ### Two-screen model
 
 The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether `midiData` is loaded. `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay.
@@ -19,17 +33,17 @@ MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiCo
 | File | Role |
 |------|------|
 | `src/App.tsx` | Session shell: file load/parse, history persistence, bluetooth, force-listen-on-disconnect, landing↔practice routing |
-| `src/components/PracticeScreen.tsx` | Owns the `MidiPlayer`, the live cursor + snap state, transport delegation, and instantiates the three mode hooks; renders `{active.overlay}` and `{active.modal}` |
-| `src/components/LandingScreen.tsx` | File drop/pick screen |
-| `src/mode-control.ts` | `ModeControl` / `ModeHandle` interfaces and `createPlayerHandle` (stable handle that delegates to whatever `MidiPlayer` the getter currently returns) |
-| `src/use-wait-mode.tsx` | Mode hook: wait-point matching, scoring, result modal; receives `ModeControl` |
-| `src/use-playalong-mode.tsx` | Mode hook: count-in, audio-to-piano routing, F1 scoring, count-in overlay + result modal |
-| `src/use-listen-mode.ts` | Mode hook: thin wrapper over `MidiPlayer` for play/pause/reset/seek + sounding-note highlights |
-| `src/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping, count-in scheduling |
-| `src/midi-to-musicxml.ts` | Converts parsed MIDI to MusicXML + note list used throughout |
-| `src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
-| `src/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
-| `src/useBluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
+| `src/components/screens/PracticeScreen.tsx` | Owns the `MidiPlayer`, the live cursor + snap state, transport delegation, and instantiates the three mode hooks; renders `{active.overlay}` and `{active.modal}` |
+| `src/components/screens/LandingScreen.tsx` | File drop/pick screen |
+| `src/modes/mode-control.ts` | `ModeControl` / `ModeHandle` interfaces and `createPlayerHandle` (stable handle that delegates to whatever `MidiPlayer` the getter currently returns) |
+| `src/modes/use-wait-mode.tsx` | Mode hook: wait-point matching, scoring, result modal; receives `ModeControl` |
+| `src/modes/use-playalong-mode.tsx` | Mode hook: count-in, audio-to-piano routing, F1 scoring, count-in overlay + result modal |
+| `src/modes/use-listen-mode.ts` | Mode hook: thin wrapper over `MidiPlayer` for play/pause/reset/seek + sounding-note highlights |
+| `lib/midi/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping, count-in scheduling |
+| `lib/midi/midi-to-musicxml.ts` | Converts parsed MIDI to MusicXML + note list used throughout |
+| `src/components/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
+| `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
+| `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/theme.ts` | Design tokens + `cornerBtnStyle` / `miniBtnStyle` helpers |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 

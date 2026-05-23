@@ -5,7 +5,7 @@ import {
   buildBLEMIDIBatch,
   buildBLEMIDINote,
   parseBLEMIDI,
-} from "./ble-midi";
+} from "../../lib/midi/ble-midi";
 
 export type BtStatus = "idle" | "connecting" | "connected" | "error";
 

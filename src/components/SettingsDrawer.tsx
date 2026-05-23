@@ -1,4 +1,4 @@
-import type { TrackInfo } from "../midi-to-musicxml";
+import type { TrackInfo } from "../../lib/midi/midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
 import { ResetIcon } from "./icons";
 

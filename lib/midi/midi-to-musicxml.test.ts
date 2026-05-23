@@ -518,9 +518,7 @@ describe("midiToMusicXml – programmatic fixtures", () => {
 // ---------------------------------------------------------------------------
 
 describe("midiToMusicXml – g-major-melody.mid fixture", () => {
-  const midiData = parseMidi(
-    readFileSync("src/test-fixtures/g-major-melody.mid"),
-  );
+  const midiData = parseMidi(readFileSync("test-fixtures/g-major-melody.mid"));
   const xml = midiToMusicXml(midiData);
 
   test("produces well-formed MusicXML wrapper", () => {
@@ -593,9 +591,7 @@ describe("midiToMusicXml – g-major-melody.mid fixture", () => {
 // ---------------------------------------------------------------------------
 
 describe("midiToMusicXml – partitura test_basic_midi fixture", () => {
-  const midiData = parseMidi(
-    readFileSync("src/test-fixtures/c-major-melody.mid"),
-  );
+  const midiData = parseMidi(readFileSync("test-fixtures/c-major-melody.mid"));
   const xml = midiToMusicXml(midiData);
 
   test("produces well-formed MusicXML", () => {
@@ -653,7 +649,7 @@ describe("midiToMusicXml – partitura test_basic_midi fixture", () => {
 
 describe("midiToMusicXml – partitura mozart_k265_var1 fixture", () => {
   const midiData = parseMidi(
-    readFileSync("src/test-fixtures/mozart-k265-var1.mid"),
+    readFileSync("test-fixtures/mozart-k265-var1.mid"),
   );
   const xml = midiToMusicXml(midiData);
 
@@ -707,10 +703,10 @@ describe("midiToMusicXml – partitura mozart_k265_var1 fixture", () => {
 
 describe("fixture comparison – c-major-melody.mid vs hand-written expected", () => {
   const ourXml = midiToMusicXml(
-    parseMidi(readFileSync("src/test-fixtures/c-major-melody.mid")),
+    parseMidi(readFileSync("test-fixtures/c-major-melody.mid")),
   );
   const expected = readFileSync(
-    "src/test-fixtures/c-major-melody.expected.musicxml",
+    "test-fixtures/c-major-melody.expected.musicxml",
     "utf8",
   ).trimEnd();
 
@@ -721,10 +717,10 @@ describe("fixture comparison – c-major-melody.mid vs hand-written expected", (
 
 describe("fixture comparison – underwater theme midi from ninsheetmusic.org vs. Audiveris-generated MusicXML", () => {
   const ourXml = midiToMusicXml(
-    parseMidi(readFileSync("src/test-fixtures/underwater-theme.mid")),
+    parseMidi(readFileSync("test-fixtures/underwater-theme.mid")),
   );
   const expected = readFileSync(
-    "src/test-fixtures/underwater-theme.musicxml",
+    "test-fixtures/underwater-theme.musicxml",
     "utf8",
   );
 

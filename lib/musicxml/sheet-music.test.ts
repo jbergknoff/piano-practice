@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parseMidi } from "midi-file";
-import { midiToMusicXmlWithTracks } from "./midi-to-musicxml";
+import { midiToMusicXmlWithTracks } from "../midi/midi-to-musicxml";
 import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   beamStemDirection,
@@ -21,7 +21,7 @@ import type { ChordGroup, ParsedRest, Pitch } from "./sheet-music-types";
 
 // Full pipeline: MIDI file → MusicXML string → ParsedScore
 function parseMidiFixture(filename: string, trackIndices: number[]) {
-  const midiData = parseMidi(readFileSync(`src/test-fixtures/${filename}`));
+  const midiData = parseMidi(readFileSync(`test-fixtures/${filename}`));
   const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
   return parseScore(musicxml);
 }

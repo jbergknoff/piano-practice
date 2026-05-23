@@ -5,7 +5,7 @@ import {
   type WaitModeAttempt,
   loadAttemptHistory,
   loadPlayalongAttemptHistory,
-} from "../use-file-history";
+} from "../hooks/use-file-history";
 
 interface SelectionRangesDrawerProps {
   open: boolean;
