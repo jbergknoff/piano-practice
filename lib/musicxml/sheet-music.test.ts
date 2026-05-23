@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
 import {
   getMidiTracks,
@@ -347,6 +348,183 @@ describe("parseScore (underwater-theme via MIDI pipeline)", () => {
       ),
     );
     expect(splitSomewhere).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rondo Alla Turca opening excerpt (programmatic, full pipeline)
+//
+// Mozart, Piano Sonata No. 11 in A, K.331, 3rd movement ("Alla Turca").
+// The note data below is the public-domain composition (the actual opening four
+// measures, both hands) transcribed from the score — we intentionally do NOT
+// vendor the copyrighted piano-midi.de MIDI file. 480 tpb, 2/4, A minor (no
+// accidentals). Every note is a sixteenth (120 ticks). This drives the two
+// features the piece exercised: the no-accidentals opening key (the converter
+// used to show the later 3-sharp section's key at bar 1) and cross-staff note
+// alignment in measure 2, where the right-hand sixteenth run plays against the
+// left-hand chords.
+// ---------------------------------------------------------------------------
+
+describe("Rondo Alla Turca opening excerpt (K.331 III)", () => {
+  const TPB_AT = 480;
+  const SIXTEENTH = 120;
+
+  // Right hand, [absoluteTick, midiNote]; measures 1–4.
+  const RH: Array<[number, number]> = [
+    // m1: beat-1 rest, then B4 A4 G#4 A4
+    [480, 71],
+    [600, 69],
+    [720, 68],
+    [840, 69],
+    // m2: C5 D5 C5 B4 C5
+    [960, 72],
+    [1440, 74],
+    [1560, 72],
+    [1680, 71],
+    [1800, 72],
+    // m3: E5 F5 E5 D#5 E5
+    [1920, 76],
+    [2400, 77],
+    [2520, 76],
+    [2640, 75],
+    [2760, 76],
+    // m4: B5 A5 G#5 A5 B5 A5 G#5 A5
+    [2880, 83],
+    [3000, 81],
+    [3120, 80],
+    [3240, 81],
+    [3360, 83],
+    [3480, 81],
+    [3600, 80],
+    [3720, 81],
+  ];
+
+  // Left hand, [absoluteTick, midiNote]; measure 1 is silent.
+  const LH: Array<[number, number]> = [
+    // m2: A3, then C4+E4 chords
+    [960, 57],
+    [1200, 60],
+    [1200, 64],
+    [1440, 60],
+    [1440, 64],
+    [1680, 60],
+    [1680, 64],
+    // m3
+    [1920, 57],
+    [2160, 60],
+    [2160, 64],
+    [2400, 60],
+    [2400, 64],
+    [2640, 60],
+    [2640, 64],
+    // m4
+    [2880, 57],
+    [3120, 60],
+    [3120, 64],
+    [3360, 57],
+    [3600, 60],
+    [3600, 64],
+  ];
+
+  function noteTrack(
+    name: string,
+    onsets: Array<[number, number]>,
+  ): MidiEvent[] {
+    const pairs: Array<[number, number, Record<string, unknown>]> = [];
+    for (const [tick, note] of onsets) {
+      // sort key 1 = noteOn so an off at tick X is processed before an on at X
+      pairs.push([
+        tick,
+        1,
+        { type: "noteOn", channel: 0, noteNumber: note, velocity: 64 },
+      ]);
+      pairs.push([
+        tick + SIXTEENTH,
+        0,
+        { type: "noteOff", channel: 0, noteNumber: note, velocity: 0 },
+      ]);
+    }
+    pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const events: MidiEvent[] = [
+      {
+        deltaTime: 0,
+        meta: true,
+        type: "trackName",
+        text: name,
+      } as unknown as MidiEvent,
+    ];
+    let prev = 0;
+    for (const [tick, , ev] of pairs) {
+      events.push({ ...ev, deltaTime: tick - prev } as unknown as MidiEvent);
+      prev = tick;
+    }
+    return events;
+  }
+
+  function excerptMidi(): MidiData {
+    const meta: MidiEvent[] = [
+      {
+        deltaTime: 0,
+        meta: true,
+        type: "setTempo",
+        microsecondsPerBeat: 500000,
+      },
+      {
+        deltaTime: 0,
+        meta: true,
+        type: "timeSignature",
+        numerator: 2,
+        denominator: 4,
+        metronome: 24,
+        thirtyseconds: 8,
+      },
+      { deltaTime: 0, meta: true, type: "keySignature", key: 0, scale: 0 },
+      { deltaTime: 0, meta: true, type: "endOfTrack" },
+    ] as unknown as MidiEvent[];
+    return {
+      header: { format: 1, numTracks: 3, ticksPerBeat: TPB_AT },
+      tracks: [meta, noteTrack("Piano right", RH), noteTrack("Piano left", LH)],
+    };
+  }
+
+  const midi = excerptMidi();
+  const { musicxml } = midiToMusicXmlWithTracks(
+    midi,
+    getMidiTracks(midi).map((t) => t.index),
+  );
+  const score = parseScore(musicxml);
+
+  test("two staves, 2/4, A-minor opening (no accidentals)", () => {
+    expect(score.parts).toHaveLength(2);
+    expect(score.parts[0].timeSig).toMatchObject({ beats: 2, beatType: 4 });
+    // Regression: the opening key has no accidentals. The converter used to keep
+    // the LAST key-signature event, which would print the later section's 3
+    // sharps from bar 1.
+    expect(score.parts[0].keySig).toMatchObject({ fifths: 0 });
+    expect(score.parts[0].clef).toMatchObject({ sign: "G" });
+  });
+
+  test("right-hand pitches match the score (measures 1–2)", () => {
+    const rh = score.parts[0].measures;
+    expect(pitchSnapshot(rh[0])).toBe("B4 A4 G4# A4");
+    expect(pitchSnapshot(rh[1])).toBe("C5 D5 C5 B4 C5");
+  });
+
+  test("left hand rests in measure 1 and plays A3 + C4/E4 chords in measure 2", () => {
+    const lh = score.parts[1].measures;
+    expect(pitchSnapshot(lh[0])).toBe(""); // full-measure rest
+    expect(pitchSnapshot(lh[1])).toBe("A3 C4,E4 C4,E4 C4,E4");
+  });
+
+  test("measure 2: both hands align on the shared rhythm grid", () => {
+    const layout = resolveLayout(score);
+    const spine = layout.measureSpines[1]; // measure 2
+    const rhXs = eventXsFromSpine(score.parts[0].measures[1].events, spine);
+    const lhXs = eventXsFromSpine(score.parts[1].measures[1].events, spine);
+    // RH: C5@0, D5@4, C5@5, B4@6, C5@7.  LH: A3@0, chord@2, chord@4, chord@6.
+    expect(rhXs[0]).toBe(lhXs[0]); // both on the downbeat (division 0)
+    expect(rhXs[1]).toBe(lhXs[2]); // D5 and the chord share division 4
+    expect(rhXs[3]).toBe(lhXs[3]); // B4 and the chord share division 6
   });
 });
 
