@@ -5,6 +5,7 @@ import type {
   LayoutConfig,
   MeasureEvent,
   ParsedMeasure,
+  ParsedNote,
   ParsedPart,
   ParsedScore,
   Pitch,
@@ -13,6 +14,14 @@ import type {
 
 // MusicXML divisions per quarter note (matches the generator constant)
 export const DIVISIONS = 4;
+
+// Accidental glyphs sit left of the noteheads. Column 0 is this far from the
+// notehead center; each additional column (for chords whose accidentals would
+// collide) steps a further COLUMN_WIDTH to the left. Both factors are × the
+// staff space and are shared with the renderer so padding and glyph placement
+// stay in sync.
+export const ACCIDENTAL_BASE_OFFSET_FACTOR = 1.4;
+export const ACCIDENTAL_COLUMN_WIDTH_FACTOR = 1.1;
 
 // Minimum horizontal advance per event regardless of duration, so that
 // dense 16th-note runs don't collapse noteheads into each other.
@@ -74,11 +83,57 @@ export function resolveLayout(
   };
 }
 
-function firstEventHasAccidental(events: MeasureEvent[]): boolean {
-  if (events.length === 0 || isRest(events[0])) {
-    return false;
+/**
+ * Assign each note in a chord the column its accidental glyph occupies, left of
+ * the noteheads: 0 is nearest, higher numbers step further left. Notes without
+ * an accidental get -1. Working from the top pitch down, an accidental reuses
+ * the nearest column whose previous glyph clears it vertically (~a seventh),
+ * otherwise it starts a new column. Uses diatonic position only, so it is
+ * independent of clef and absolute layout — letting the layout estimate padding
+ * and the renderer place glyphs from the same rule.
+ */
+export function accidentalColumns(
+  notes: ParsedNote[],
+  staffSpace: number,
+): number[] {
+  const cols = notes.map(() => -1);
+  const minGap = staffSpace * 3; // vertical clearance to share a column
+  const halfStep = staffSpace / 2; // one diatonic step
+  const order = notes
+    .map((_, i) => i)
+    .filter((i) => notes[i].accidental !== "none")
+    .sort(
+      (a, b) => diatonicIndex(notes[b].pitch) - diatonicIndex(notes[a].pitch),
+    );
+
+  const lastByCol: number[] = []; // diatonic index of the last glyph in each col
+  for (const i of order) {
+    const di = diatonicIndex(notes[i].pitch);
+    let col = 0;
+    while (
+      col < lastByCol.length &&
+      (lastByCol[col] - di) * halfStep < minGap
+    ) {
+      col++;
+    }
+    cols[i] = col;
+    lastByCol[col] = di;
   }
-  return (events[0] as ChordGroup).notes.some((n) => n.accidental !== "none");
+  return cols;
+}
+
+// Highest accidental column the measure's first event needs (-1 if none).
+function firstEventMaxAccidentalColumn(
+  events: MeasureEvent[],
+  staffSpace: number,
+): number {
+  if (events.length === 0 || isRest(events[0])) {
+    return -1;
+  }
+  return accidentalColumns((events[0] as ChordGroup).notes, staffSpace).reduce(
+    (max, c) => Math.max(max, c),
+    -1,
+  );
 }
 
 function measureLeftPad(
@@ -86,10 +141,17 @@ function measureLeftPad(
   isFirst: boolean,
   staffSpace: number,
 ): number {
-  if (!isFirst && firstEventHasAccidental(events)) {
-    return staffSpace * 2;
+  if (isFirst) {
+    return MEASURE_PADDING_LEFT;
   }
-  return MEASURE_PADDING_LEFT;
+  const maxCol = firstEventMaxAccidentalColumn(events, staffSpace);
+  if (maxCol < 0) {
+    return MEASURE_PADDING_LEFT;
+  }
+  // staffSpace*2 keeps a single accidental clear of the barline; the per-column
+  // term shifts the noteheads further right so each extra (further-left) column
+  // also lands to the right of the barline.
+  return staffSpace * 2 + maxCol * staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
 }
 
 function measureWidth(

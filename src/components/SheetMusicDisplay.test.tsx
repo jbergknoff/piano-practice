@@ -64,6 +64,12 @@ function renderSheetMusic(
           y1: Number(l.getAttribute("y1")),
           y2: Number(l.getAttribute("y2")),
         })),
+    // Barline x positions, ascending (barlines use stroke-width 0.9).
+    barlineXs: () =>
+      allLines()
+        .filter((l) => l.getAttribute("stroke-width") === "0.9")
+        .map((l) => Number(l.getAttribute("x1")))
+        .sort((a, b) => a - b),
     circles: () => Array.from(svg.querySelectorAll("circle")),
   };
 }
@@ -105,12 +111,22 @@ function noteXml(n: NoteSpec): string {
   return parts.join("");
 }
 
+// Build a one-part score from one measure (notes) or several (array of notes).
 function scoreXml(
-  notes: NoteSpec[],
+  notesOrMeasures: NoteSpec[] | NoteSpec[][],
   { beats = 4, beatType = 4, fifths = 0 } = {},
 ): string {
+  const measures = (
+    Array.isArray(notesOrMeasures[0]) ? notesOrMeasures : [notesOrMeasures]
+  ) as NoteSpec[][];
   const attributes = `<attributes><divisions>4</divisions><key><fifths>${fifths}</fifths><mode>major</mode></key><time><beats>${beats}</beats><beat-type>${beatType}</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>`;
-  return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1"><measure number="1">${attributes}${notes.map(noteXml).join("")}</measure></part></score-partwise>`;
+  const body = measures
+    .map(
+      (notes, i) =>
+        `<measure number="${i + 1}">${i === 0 ? attributes : ""}${notes.map(noteXml).join("")}</measure>`,
+    )
+    .join("");
+  return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
 }
 
 const QUARTER = (step: string, octave: number, alter = 0): NoteSpec => ({
@@ -175,6 +191,46 @@ describe("SheetMusicDisplay rendering", () => {
     expect(Math.abs(xs[0] - xs[1])).toBeGreaterThan(5);
   });
 
+  test("staggered chord accidentals sit right of the measure's barline", () => {
+    // Measure 1 is plain; measure 2 opens with the F#4 + D#5 chord whose two
+    // sharps stagger into two columns. Extra left padding must keep both to the
+    // right of the measure-2 barline.
+    const { textsWith, barlineXs } = renderSheetMusic(
+      scoreXml(
+        [
+          [{ step: "G", octave: 4, duration: 12, type: "half", dot: true }],
+          [
+            {
+              step: "F",
+              octave: 4,
+              alter: 1,
+              duration: 12,
+              type: "half",
+              dot: true,
+            },
+            {
+              step: "D",
+              octave: 5,
+              alter: 1,
+              duration: 12,
+              type: "half",
+              dot: true,
+              chord: true,
+            },
+          ],
+        ],
+        { beats: 3, beatType: 4 },
+      ),
+    );
+    const sharps = textsWith(SHARP);
+    expect(sharps).toHaveLength(2);
+    // Barlines ascending: [measure 1, measure 2, final] → middle is measure 2.
+    const measure2BarlineX = barlineXs()[1];
+    for (const s of sharps) {
+      expect(Number(s.getAttribute("x"))).toBeGreaterThan(measure2BarlineX);
+    }
+  });
+
   test("staccato renders a dot; a plain note renders none", () => {
     const plain = renderSheetMusic(scoreXml([QUARTER("G", 4)]));
     expect(plain.circles()).toHaveLength(0);
@@ -185,6 +241,24 @@ describe("SheetMusicDisplay rendering", () => {
       ]),
     );
     expect(staccato.circles()).toHaveLength(1);
+  });
+
+  test("a staccato chord renders one dot, not one per note", () => {
+    // Mirrors measure 3 of the underwater theme: [D4, B4], both staccato.
+    const { circles } = renderSheetMusic(
+      scoreXml([
+        { step: "D", octave: 4, duration: 4, type: "quarter", staccato: true },
+        {
+          step: "B",
+          octave: 4,
+          duration: 4,
+          type: "quarter",
+          staccato: true,
+          chord: true,
+        },
+      ]),
+    );
+    expect(circles()).toHaveLength(1);
   });
 
   test("a six-eighth run in 3/4 beams as three per-beat groups", () => {

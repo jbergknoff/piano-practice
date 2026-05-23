@@ -12,10 +12,13 @@ import {
   parseScore,
 } from "../../lib/musicxml/musicxml-parser";
 import {
+  ACCIDENTAL_BASE_OFFSET_FACTOR,
+  ACCIDENTAL_COLUMN_WIDTH_FACTOR,
   DIVISIONS,
   FLAT_POSITIONS,
   MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
+  accidentalColumns,
   beamStemDirection,
   eventXPositions,
   groupBeamableEvents,
@@ -258,9 +261,6 @@ interface NoteRenderInfo {
   /** Absolute x of the accidental glyph (staggered within a chord). */
   accidentalX: number;
   dot: boolean;
-  staccato: boolean;
-  /** Y of the staccato dot, on the side of the notehead opposite the stem. */
-  staccatoY: number;
   staffSpace: number;
 }
 
@@ -300,39 +300,20 @@ function beamStemOverrides(
   return { beamGroups, beamOverrideMap };
 }
 
-// Assign an x position to each note's accidental glyph so that accidentals in a
-// chord don't collide. Accidentals are placed in columns left of the notehead:
-// column 0 is nearest, each further column is shifted left. Working from the top
-// note down, an accidental reuses the nearest column whose last glyph clears it
-// vertically; otherwise it starts a new column further left. Notes without an
-// accidental are given the default (column 0) position, which is unused.
+// Map each note's accidental column (from the shared layout rule) to an absolute
+// x. Column 0 sits ACCIDENTAL_BASE_OFFSET_FACTOR staff-spaces left of the
+// notehead; each further column steps ACCIDENTAL_COLUMN_WIDTH_FACTOR further
+// left. Notes without an accidental get the column-0 x (unused).
 function accidentalColumnXs(
   notes: ParsedNote[],
-  nys: number[],
   ex: number,
   staffSpace: number,
 ): number[] {
-  const baseX = ex - staffSpace * 1.4;
-  const colWidth = staffSpace * 1.1;
-  // Vertical clearance needed to share a column (~a seventh).
-  const minGap = staffSpace * 3;
-  const xs = notes.map(() => baseX);
-
-  const accIdx = notes
-    .map((note, i) => i)
-    .filter((i) => notes[i].accidental !== "none")
-    .sort((a, b) => nys[a] - nys[b]);
-
-  const lastYByCol: number[] = [];
-  for (const i of accIdx) {
-    let col = 0;
-    while (col < lastYByCol.length && nys[i] - lastYByCol[col] < minGap) {
-      col++;
-    }
-    xs[i] = baseX - col * colWidth;
-    lastYByCol[col] = nys[i];
-  }
-  return xs;
+  const baseX = ex - staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR;
+  const colWidth = staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
+  return accidentalColumns(notes, staffSpace).map((col) =>
+    col < 0 ? baseX : baseX - col * colWidth,
+  );
 }
 
 // Notehead placement for one chord group. stemDir must already be resolved
@@ -350,23 +331,15 @@ function chordNoteGeometry(
   const { type, notes, noteIndex, dot } = group;
   const nrx = staffSpace * 0.55;
   const xOffsets = chordXOffsets(notes, stemDir, nrx);
-  const nys = notes.map((note) =>
-    noteY(note.pitch, clef, staffBottomY, staffSpace),
-  );
-  const accidentalXs = accidentalColumnXs(notes, nys, ex, staffSpace);
-  // Staccato dot sits beyond the notehead on the side away from the stem.
-  const staccatoOffset = staffSpace;
+  const accidentalXs = accidentalColumnXs(notes, ex, staffSpace);
   return notes.map((note, v) => ({
     id: `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`,
     nx: ex + xOffsets[v],
-    ny: nys[v],
+    ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
     type,
     accidental: note.accidental,
     accidentalX: accidentalXs[v],
     dot: !!dot,
-    staccato: note.staccato,
-    staccatoY:
-      stemDir === "up" ? nys[v] + staccatoOffset : nys[v] - staccatoOffset,
     staffSpace,
   }));
 }
@@ -466,9 +439,6 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
                 r={1.5}
                 fill={color}
               />
-            )}
-            {info.staccato && (
-              <circle cx={info.nx} cy={info.staccatoY} r={1.6} fill={color} />
             )}
           </g>
         );
@@ -1541,6 +1511,15 @@ const ChordGroupEl = memo(function ChordGroupEl({
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
 
+  // A staccato chord gets a single dot on the outer notehead away from the
+  // stem (below the lowest note for stem-up, above the highest for stem-down),
+  // not one dot per note. noteGeom is sorted low→high.
+  const staccatoDot = notes.some((n) => n.staccato)
+    ? stemDir === "up"
+      ? { x: noteGeom[0].nx, y: bottomY + staffSpace }
+      : { x: noteGeom[noteGeom.length - 1].nx, y: topY - staffSpace }
+    : null;
+
   let stemX: number;
   let stemY1: number;
   let stemY2: number;
@@ -1612,12 +1591,12 @@ const ChordGroupEl = memo(function ChordGroupEl({
                 fill={inkColor}
               />
             )}
-            {info.staccato && (
-              <circle cx={nx} cy={info.staccatoY} r={1.6} fill={inkColor} />
-            )}
           </g>
         );
       })}
+      {staccatoDot && (
+        <circle cx={staccatoDot.x} cy={staccatoDot.y} r={1.6} fill={inkColor} />
+      )}
     </g>
   );
 });
