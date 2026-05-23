@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
+import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { DebugBeatEvent } from "../debug-log";
 import { MidiPlayer } from "../midi-player";
 import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
@@ -13,15 +14,21 @@ import {
   type ModeControl,
   createPlayerHandle,
 } from "../mode-control";
-import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import type { ThemeTokens } from "../theme";
 import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
+import {
+  type CustomRange,
+  loadCustomRanges,
+  saveCustomRanges,
+} from "../use-file-history";
 import { useListenMode } from "../use-listen-mode";
 import { usePlayalongMode } from "../use-playalong-mode";
 import { useWaitMode } from "../use-wait-mode";
 import type { useBluetooth } from "../useBluetooth";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { HelpBadge } from "./HelpBadge";
+import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
+import { SettingsDrawer } from "./SettingsDrawer";
 import {
   ChevronLeftIcon,
   GearIcon,
@@ -31,8 +38,6 @@ import {
   SectionsIcon,
   StopIcon,
 } from "./icons";
-import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
-import { SettingsDrawer } from "./SettingsDrawer";
 
 interface PracticeScreenProps {
   theme: ThemeTokens;
@@ -349,6 +354,89 @@ export function PracticeScreen({
     beat: number;
   } | null>(null);
 
+  // Custom named ranges, persisted per file in local storage.
+  const [customRanges, setCustomRanges] = useState<CustomRange[]>([]);
+  useEffect(() => {
+    setCustomRanges(fileHash ? loadCustomRanges(fileHash) : []);
+  }, [fileHash]);
+
+  const persistCustomRanges = useCallback(
+    (next: CustomRange[]) => {
+      setCustomRanges(next);
+      if (fileHash) {
+        saveCustomRanges(fileHash, next);
+      }
+    },
+    [fileHash],
+  );
+
+  // Range-naming modal: "create" saves the current selection, "edit" renames
+  // (or deletes) an existing custom range.
+  const [rangeEditor, setRangeEditor] = useState<
+    | { kind: "create"; from: number; to: number }
+    | { kind: "edit"; range: CustomRange }
+    | null
+  >(null);
+  const [nameDraft, setNameDraft] = useState("");
+  const rangeNameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (rangeEditor) {
+      rangeNameInputRef.current?.focus();
+      rangeNameInputRef.current?.select();
+    }
+  }, [rangeEditor]);
+
+  const defaultRangeName = (range: { from: number; to: number }) =>
+    range.from === range.to
+      ? `Measure ${range.from}`
+      : `Measures ${range.from}–${range.to}`;
+
+  const openCreateRangeEditor = (range: { from: number; to: number }) => {
+    setRangeEditor({ kind: "create", from: range.from, to: range.to });
+    setNameDraft(defaultRangeName(range));
+  };
+
+  const openEditRangeEditor = (range: CustomRange) => {
+    setRangeEditor({ kind: "edit", range });
+    setNameDraft(range.name);
+  };
+
+  const handleSaveRangeName = () => {
+    if (!rangeEditor) {
+      return;
+    }
+    const name = nameDraft.trim();
+    if (!name) {
+      return;
+    }
+    if (rangeEditor.kind === "create") {
+      const newRange: CustomRange = {
+        id: crypto.randomUUID(),
+        name,
+        from: rangeEditor.from,
+        to: rangeEditor.to,
+      };
+      persistCustomRanges([...customRanges, newRange]);
+    } else {
+      persistCustomRanges(
+        customRanges.map((r) =>
+          r.id === rangeEditor.range.id ? { ...r, name } : r,
+        ),
+      );
+    }
+    setRangeEditor(null);
+  };
+
+  const handleDeleteRange = () => {
+    if (rangeEditor?.kind !== "edit") {
+      return;
+    }
+    persistCustomRanges(
+      customRanges.filter((r) => r.id !== rangeEditor.range.id),
+    );
+    setRangeEditor(null);
+  };
+
   const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
     if (newMode === mode) {
       return;
@@ -367,7 +455,7 @@ export function PracticeScreen({
   };
 
   const handleContextMenuAction = (
-    action: "focus" | "seek" | "clearFocus",
+    action: "focus" | "seek" | "clearFocus" | "saveCustom",
     measureNumber: number,
     beat: number,
   ) => {
@@ -375,6 +463,10 @@ export function PracticeScreen({
       onMeasureRangeChange({ from: measureNumber, to: measureNumber });
     } else if (action === "clearFocus") {
       onMeasureRangeChange(null);
+    } else if (action === "saveCustom") {
+      if (measureRange) {
+        openCreateRangeEditor(measureRange);
+      }
     } else {
       handleSeek(beat);
     }
@@ -788,9 +880,18 @@ export function PracticeScreen({
                   action: "seek" as const,
                 },
                 ...(measureRange
-                  ? [{ label: "Clear focus", action: "clearFocus" as const }]
+                  ? [
+                      {
+                        label: "Name this range",
+                        action: "saveCustom" as const,
+                      },
+                      { label: "Clear focus", action: "clearFocus" as const },
+                    ]
                   : []),
-              ] as { label: string; action: "focus" | "seek" | "clearFocus" }[]
+              ] as {
+                label: string;
+                action: "focus" | "seek" | "clearFocus" | "saveCustom";
+              }[]
             ).map(({ label, action }) => (
               <button
                 key={action}
@@ -819,6 +920,170 @@ export function PracticeScreen({
                 {label}
               </button>
             ))}
+          </div>
+        </>
+      )}
+
+      {/* Range-naming modal */}
+      {rangeEditor && (
+        <>
+          <div
+            role="presentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 199,
+              background: "rgba(0,0,0,0.3)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+            }}
+            onClick={() => setRangeEditor(null)}
+            onKeyDown={(e) => {
+              if ((e as unknown as KeyboardEvent).key === "Escape") {
+                setRangeEditor(null);
+              }
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 200,
+              background: theme.panel,
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: 16,
+              backdropFilter: "blur(24px) saturate(160%)",
+              WebkitBackdropFilter: "blur(24px) saturate(160%)",
+              padding: "24px 28px",
+              boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+              width: 300,
+              maxWidth: "calc(100vw - 48px)",
+              boxSizing: "border-box",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontStyle: "italic",
+                fontSize: 24,
+                color: theme.ink,
+                marginBottom: 4,
+              }}
+            >
+              {rangeEditor.kind === "create" ? "Name this range" : "Edit name"}
+            </div>
+            <div
+              style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}
+            >
+              {(() => {
+                const r =
+                  rangeEditor.kind === "create"
+                    ? rangeEditor
+                    : rangeEditor.range;
+                return r.from === r.to
+                  ? `Measure ${r.from}`
+                  : `Measures ${r.from}–${r.to}`;
+              })()}
+            </div>
+            <input
+              ref={rangeNameInputRef}
+              type="text"
+              value={nameDraft}
+              placeholder="e.g. Tricky run"
+              onInput={(e) =>
+                setNameDraft((e.target as HTMLInputElement).value)
+              }
+              onKeyDown={(e) => {
+                if ((e as unknown as KeyboardEvent).key === "Enter") {
+                  handleSaveRangeName();
+                }
+              }}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                fontSize: 14,
+                color: theme.ink,
+                background: theme.panelSolid,
+                border: `0.5px solid ${theme.border}`,
+                borderRadius: 10,
+                outline: "none",
+                fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+                marginBottom: 18,
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <div>
+                {rangeEditor.kind === "edit" && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteRange}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#c62828",
+                      cursor: "pointer",
+                      fontSize: 13,
+                      padding: "8px 4px",
+                      outline: "none",
+                      fontFamily:
+                        "'Geist', ui-sans-serif, system-ui, sans-serif",
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setRangeEditor(null)}
+                  style={{
+                    background: "transparent",
+                    border: `0.5px solid ${theme.border}`,
+                    color: theme.ink,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    padding: "8px 16px",
+                    borderRadius: 10,
+                    outline: "none",
+                    fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRangeName}
+                  disabled={nameDraft.trim().length === 0}
+                  style={{
+                    background: accent,
+                    border: "none",
+                    color: "#FFF7E5",
+                    cursor:
+                      nameDraft.trim().length === 0 ? "not-allowed" : "pointer",
+                    opacity: nameDraft.trim().length === 0 ? 0.4 : 1,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    padding: "8px 16px",
+                    borderRadius: 10,
+                    outline: "none",
+                    fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -924,6 +1189,11 @@ export function PracticeScreen({
         onMeasureRangeChange={onMeasureRangeChange}
         fileHash={fileHash}
         markedBpm={baseBpm}
+        customRanges={customRanges}
+        onEditCustomRange={(range) => {
+          setRangesDrawerOpen(false);
+          openEditRangeEditor(range);
+        }}
       />
       <SettingsDrawer
         open={drawerOpen}

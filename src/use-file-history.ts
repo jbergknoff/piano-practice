@@ -144,6 +144,36 @@ export function savePlayalongAttempt(
   }
 }
 
+export interface CustomRange {
+  id: string;
+  name: string;
+  from: number;
+  to: number;
+}
+
+const CUSTOM_RANGES_PREFIX = "piano-practice:custom-ranges:";
+
+export function loadCustomRanges(hash: string): CustomRange[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_RANGES_PREFIX + hash);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CustomRange[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomRanges(hash: string, ranges: CustomRange[]): void {
+  try {
+    localStorage.setItem(CUSTOM_RANGES_PREFIX + hash, JSON.stringify(ranges));
+  } catch {
+    // ignore (private mode, quota exceeded, etc.)
+  }
+}
+
 const RECENT_FILE_KEY = "piano-practice:recent-file";
 
 export function saveRecentFile(name: string, bytes: Uint8Array): void {
