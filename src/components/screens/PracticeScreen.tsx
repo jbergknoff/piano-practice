@@ -5,26 +5,30 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { DebugBeatEvent } from "../../debug-log";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type {
   MidiConversionResult,
   TrackInfo,
 } from "../../../lib/midi/midi-to-musicxml";
+import type { DebugBeatEvent } from "../../debug-log";
+import type { useBluetooth } from "../../hooks/use-bluetooth";
+import { useCustomRanges } from "../../hooks/use-custom-ranges";
 import {
   type BluetoothHandle,
   type ModeControl,
   createPlayerHandle,
 } from "../../modes/mode-control";
-import { SheetMusicDisplay } from "../SheetMusicDisplay";
-import type { ThemeTokens } from "../../theme";
-import { cornerBtnStyle, hexA, miniBtnStyle } from "../../theme";
 import { useListenMode } from "../../modes/use-listen-mode";
 import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
-import type { useBluetooth } from "../../hooks/use-bluetooth";
+import type { ThemeTokens } from "../../theme";
+import { cornerBtnStyle, hexA, miniBtnStyle } from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
 import { HelpBadge } from "../HelpBadge";
+import { RangeNameModal } from "../RangeNameModal";
+import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
+import { SettingsDrawer } from "../SettingsDrawer";
+import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import {
   ChevronLeftIcon,
   GearIcon,
@@ -34,8 +38,6 @@ import {
   SectionsIcon,
   StopIcon,
 } from "../icons";
-import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
-import { SettingsDrawer } from "../SettingsDrawer";
 
 interface PracticeScreenProps {
   theme: ThemeTokens;
@@ -352,6 +354,8 @@ export function PracticeScreen({
     beat: number;
   } | null>(null);
 
+  const customRanges = useCustomRanges(fileHash);
+
   const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
     if (newMode === mode) {
       return;
@@ -369,8 +373,15 @@ export function PracticeScreen({
     onModeChange(newMode);
   };
 
+  // The custom range, if any, that exactly matches the current selection.
+  const namedRange = measureRange
+    ? (customRanges.ranges.find(
+        (r) => r.from === measureRange.from && r.to === measureRange.to,
+      ) ?? null)
+    : null;
+
   const handleContextMenuAction = (
-    action: "focus" | "seek" | "clearFocus",
+    action: "focus" | "seek" | "clearFocus" | "saveCustom" | "editCustom",
     measureNumber: number,
     beat: number,
   ) => {
@@ -378,6 +389,14 @@ export function PracticeScreen({
       onMeasureRangeChange({ from: measureNumber, to: measureNumber });
     } else if (action === "clearFocus") {
       onMeasureRangeChange(null);
+    } else if (action === "saveCustom") {
+      if (measureRange) {
+        customRanges.openCreate(measureRange);
+      }
+    } else if (action === "editCustom") {
+      if (namedRange) {
+        customRanges.openEdit(namedRange);
+      }
     } else {
       handleSeek(beat);
     }
@@ -544,7 +563,7 @@ export function PracticeScreen({
               type="button"
               onClick={() => setRangesDrawerOpen(true)}
               style={cornerBtnStyle(theme) as Record<string, string | number>}
-              title="Select section"
+              title="Select range"
             >
               <SectionsIcon />
             </button>
@@ -791,9 +810,28 @@ export function PracticeScreen({
                   action: "seek" as const,
                 },
                 ...(measureRange
-                  ? [{ label: "Clear focus", action: "clearFocus" as const }]
+                  ? [
+                      namedRange
+                        ? {
+                            label: `Edit “${namedRange.name}”`,
+                            action: "editCustom" as const,
+                          }
+                        : {
+                            label: "Name this range",
+                            action: "saveCustom" as const,
+                          },
+                      { label: "Clear focus", action: "clearFocus" as const },
+                    ]
                   : []),
-              ] as { label: string; action: "focus" | "seek" | "clearFocus" }[]
+              ] as {
+                label: string;
+                action:
+                  | "focus"
+                  | "seek"
+                  | "clearFocus"
+                  | "saveCustom"
+                  | "editCustom";
+              }[]
             ).map(({ label, action }) => (
               <button
                 key={action}
@@ -824,6 +862,20 @@ export function PracticeScreen({
             ))}
           </div>
         </>
+      )}
+
+      {/* Range-naming modal */}
+      {customRanges.editor && (
+        <RangeNameModal
+          editor={customRanges.editor}
+          nameDraft={customRanges.nameDraft}
+          onNameDraftChange={customRanges.setNameDraft}
+          onSave={customRanges.saveEditor}
+          onCancel={customRanges.closeEditor}
+          onDelete={customRanges.deleteEditing}
+          theme={theme}
+          accent={accent}
+        />
       )}
 
       {/* Piece info modal */}
@@ -927,6 +979,11 @@ export function PracticeScreen({
         onMeasureRangeChange={onMeasureRangeChange}
         fileHash={fileHash}
         markedBpm={baseBpm}
+        customRanges={customRanges.ranges}
+        onEditCustomRange={(range) => {
+          setRangesDrawerOpen(false);
+          customRanges.openEdit(range);
+        }}
       />
       <SettingsDrawer
         open={drawerOpen}

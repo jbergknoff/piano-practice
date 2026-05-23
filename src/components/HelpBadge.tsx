@@ -2,8 +2,8 @@ import { useState } from "preact/hooks";
 import type { DebugBeatEvent } from "../modes/use-wait-mode";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
-import { BluetoothIcon } from "./icons";
 import { DebugLogTab } from "./DebugLogTab";
+import { BluetoothIcon } from "./icons";
 
 const IS_MOBILE_BRAVE =
   "brave" in navigator && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -248,7 +248,7 @@ function AboutTab({
           },
           {
             name: "Listen",
-            desc: "Simply plays the music aloud. Use it to hear a section before practicing it.",
+            desc: "Simply plays the music aloud. Use it to hear a passage before practicing it.",
           },
         ].map(({ name, desc }) => (
           <div

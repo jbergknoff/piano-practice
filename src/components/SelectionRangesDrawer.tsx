@@ -1,11 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ThemeTokens } from "../theme";
 import {
+  type CustomRange,
   type PlayalongAttempt,
   type WaitModeAttempt,
   loadAttemptHistory,
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
+import type { ThemeTokens } from "../theme";
+import { PencilIcon } from "./icons";
 
 interface SelectionRangesDrawerProps {
   open: boolean;
@@ -17,6 +19,8 @@ interface SelectionRangesDrawerProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   fileHash: string | null;
   markedBpm: number;
+  customRanges: CustomRange[];
+  onEditCustomRange: (range: CustomRange) => void;
 }
 
 function rangesEqual(
@@ -119,6 +123,8 @@ export function SelectionRangesDrawer({
   onMeasureRangeChange,
   fileHash,
   markedBpm,
+  customRanges,
+  onEditCustomRange,
 }: SelectionRangesDrawerProps) {
   const n = totalMeasures;
 
@@ -245,7 +251,7 @@ export function SelectionRangesDrawer({
               fontStyle: "italic",
             }}
           >
-            Sections
+            Ranges
           </span>
           <button
             type="button"
@@ -263,6 +269,47 @@ export function SelectionRangesDrawer({
             ✕
           </button>
         </div>
+
+        {/* Custom ranges */}
+        {customRanges.length > 0 && (
+          <Section label="Custom" theme={theme}>
+            {customRanges.map((cr) => {
+              const range = { from: cr.from, to: cr.to };
+              const active = rangesEqual(measureRange, range);
+              return (
+                <CustomRangeButton
+                  key={cr.id}
+                  label={cr.name}
+                  sublabel={
+                    cr.from === cr.to
+                      ? `m. ${cr.from}`
+                      : `mm. ${cr.from}–${cr.to}`
+                  }
+                  best={bestForRange(range)}
+                  bestPlayalong={bestPlayalongForRange(range)}
+                  active={active}
+                  accent={accent}
+                  theme={theme}
+                  miniBar={
+                    <MiniBar
+                      from={cr.from}
+                      to={cr.to}
+                      total={n}
+                      accent={accent}
+                      active={active}
+                    />
+                  }
+                  onClick={() => handleSelect(range)}
+                  onEdit={() => onEditCustomRange(cr)}
+                />
+              );
+            })}
+          </Section>
+        )}
+
+        {customRanges.length > 0 && (
+          <div style={{ height: 1, background: theme.border }} />
+        )}
 
         {/* Whole piece */}
         <PresetButton
@@ -392,7 +439,7 @@ function Section({
   );
 }
 
-function PresetButton({
+function RangeContent({
   label,
   sublabel,
   best,
@@ -401,7 +448,6 @@ function PresetButton({
   accent,
   theme,
   miniBar,
-  onClick,
 }: {
   label: string;
   sublabel: string;
@@ -411,30 +457,10 @@ function PresetButton({
   accent: string;
   theme: ThemeTokens;
   miniBar: preact.ComponentChildren;
-  onClick: () => void;
 }) {
   const hasAny = best !== null || bestPlayalong !== null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 7,
-        padding: "10px 12px",
-        borderRadius: 10,
-        border: active
-          ? `1.5px solid ${accent}`
-          : `0.5px solid ${theme.border}`,
-        background: active ? `${accent}18` : theme.panel,
-        cursor: "pointer",
-        textAlign: "left",
-        width: "100%",
-        outline: "none",
-        transition: "border-color 0.15s, background 0.15s",
-      }}
-    >
+    <>
       <div
         style={{
           display: "flex",
@@ -448,11 +474,18 @@ function PresetButton({
             fontSize: 12,
             fontWeight: active ? 600 : 400,
             color: active ? accent : theme.ink,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
           }}
         >
           {label}
         </span>
-        <span style={{ fontSize: 10, color: theme.inkSoft }}>{sublabel}</span>
+        <span
+          style={{ fontSize: 10, color: theme.inkSoft, whiteSpace: "nowrap" }}
+        >
+          {sublabel}
+        </span>
       </div>
       {miniBar}
       {hasAny ? (
@@ -481,6 +514,151 @@ function PresetButton({
           No attempts yet
         </span>
       )}
+    </>
+  );
+}
+
+function PresetButton({
+  label,
+  sublabel,
+  best,
+  bestPlayalong,
+  active,
+  accent,
+  theme,
+  miniBar,
+  onClick,
+}: {
+  label: string;
+  sublabel: string;
+  best: WaitModeAttempt | null;
+  bestPlayalong: PlayalongAttempt | null;
+  active: boolean;
+  accent: string;
+  theme: ThemeTokens;
+  miniBar: preact.ComponentChildren;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 7,
+        padding: "10px 12px",
+        borderRadius: 10,
+        border: active
+          ? `1.5px solid ${accent}`
+          : `0.5px solid ${theme.border}`,
+        background: active ? `${accent}18` : theme.panel,
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+        outline: "none",
+        transition: "border-color 0.15s, background 0.15s",
+      }}
+    >
+      <RangeContent
+        label={label}
+        sublabel={sublabel}
+        best={best}
+        bestPlayalong={bestPlayalong}
+        active={active}
+        accent={accent}
+        theme={theme}
+        miniBar={miniBar}
+      />
     </button>
+  );
+}
+
+function CustomRangeButton({
+  label,
+  sublabel,
+  best,
+  bestPlayalong,
+  active,
+  accent,
+  theme,
+  miniBar,
+  onClick,
+  onEdit,
+}: {
+  label: string;
+  sublabel: string;
+  best: WaitModeAttempt | null;
+  bestPlayalong: PlayalongAttempt | null;
+  active: boolean;
+  accent: string;
+  theme: ThemeTokens;
+  miniBar: preact.ComponentChildren;
+  onClick: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "stretch",
+        gap: 6,
+        borderRadius: 10,
+        border: active
+          ? `1.5px solid ${accent}`
+          : `0.5px solid ${theme.border}`,
+        background: active ? `${accent}18` : theme.panel,
+        transition: "border-color 0.15s, background 0.15s",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 7,
+          padding: "10px 12px",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          flex: 1,
+          minWidth: 0,
+          outline: "none",
+        }}
+      >
+        <RangeContent
+          label={label}
+          sublabel={sublabel}
+          best={best}
+          bestPlayalong={bestPlayalong}
+          active={active}
+          accent={accent}
+          theme={theme}
+          miniBar={miniBar}
+        />
+      </button>
+      <button
+        type="button"
+        onClick={onEdit}
+        title="Edit name"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 38,
+          flexShrink: 0,
+          background: "transparent",
+          border: "none",
+          borderLeft: `0.5px solid ${theme.border}`,
+          color: theme.inkSoft,
+          cursor: "pointer",
+          outline: "none",
+        }}
+      >
+        <PencilIcon />
+      </button>
+    </div>
   );
 }
