@@ -253,6 +253,40 @@ function extractTrackNotes(track: MidiEvent[], tpb: number): RawNote[] {
   return rawNotes;
 }
 
+// Map each MIDI key-signature change to the measure it takes effect in. Key
+// changes in MIDI fall on (or are snapped down to) a measure boundary. Measure 0
+// always has an entry so the first measure's header can be emitted.
+function collectKeyByMeasure(
+  midiData: MidiData,
+  ticksPerMeasure: number,
+): Map<number, { fifths: number; mode: string }> {
+  const events: Array<{ tick: number; fifths: number; mode: string }> = [];
+  for (const track of midiData.tracks) {
+    let tick = 0;
+    for (const ev of track) {
+      tick += ev.deltaTime;
+      if (ev.type === "keySignature") {
+        events.push({
+          tick,
+          fifths: ev.key,
+          mode: ev.scale === 0 ? "major" : "minor",
+        });
+      }
+    }
+  }
+  events.sort((a, b) => a.tick - b.tick);
+
+  const byMeasure = new Map<number, { fifths: number; mode: string }>();
+  for (const ev of events) {
+    const m = Math.max(0, Math.floor(ev.tick / ticksPerMeasure));
+    byMeasure.set(m, { fifths: ev.fifths, mode: ev.mode });
+  }
+  if (!byMeasure.has(0)) {
+    byMeasure.set(0, { fifths: 0, mode: "major" });
+  }
+  return byMeasure;
+}
+
 function detectClef(notes: RawNote[]): { sign: string; line: number } {
   if (notes.length === 0) {
     return { sign: "G", line: 2 };
@@ -267,8 +301,7 @@ function buildPartMeasuresXml(
   tpb: number,
   timeSigNum: number,
   timeSigDen: number,
-  keyFifths: number,
-  keyMode: string,
+  keyByMeasure: Map<number, { fifths: number; mode: string }>,
   clef: { sign: string; line: number },
   numMeasures: number,
   partIndex: number,
@@ -291,6 +324,9 @@ function buildPartMeasuresXml(
   const playbackNotes: PlaybackNote[] = [];
   const ind = "    ";
 
+  const initialKey = keyByMeasure.get(0) ?? { fifths: 0, mode: "major" };
+  let runningFifths = initialKey.fifths;
+
   for (let m = 0; m < numMeasures; m++) {
     const mStart = m * ticksPerMeasure;
     const mEnd = mStart + ticksPerMeasure;
@@ -303,11 +339,21 @@ function buildPartMeasuresXml(
       lines.push(
         `${ind}<attributes>`,
         `${ind}  <divisions>${DIVISIONS}</divisions>`,
-        `${ind}  <key><fifths>${keyFifths}</fifths><mode>${keyMode}</mode></key>`,
+        `${ind}  <key><fifths>${initialKey.fifths}</fifths><mode>${initialKey.mode}</mode></key>`,
         `${ind}  <time><beats>${timeSigNum}</beats><beat-type>${timeSigDen}</beat-type></time>`,
         `${ind}  <clef><sign>${clef.sign}</sign><line>${clef.line}</line></clef>`,
         `${ind}</attributes>`,
       );
+    } else {
+      // Emit a key-only <attributes> block whenever the key signature changes
+      // at this measure (key changes in the MIDI fall on measure boundaries).
+      const k = keyByMeasure.get(m);
+      if (k && k.fifths !== runningFifths) {
+        lines.push(
+          `${ind}<attributes><key><fifths>${k.fifths}</fifths><mode>${k.mode}</mode></key></attributes>`,
+        );
+        runningFifths = k.fifths;
+      }
     }
 
     let cursor = mStart;
@@ -398,8 +444,6 @@ export function midiToMusicXmlWithTracks(
 
   let timeSigNum = 4;
   let timeSigDen = 4;
-  let keyFifths = 0;
-  let keyMode = "major";
 
   for (const track of midiData.tracks) {
     let tick = 0;
@@ -408,9 +452,6 @@ export function midiToMusicXmlWithTracks(
       if (ev.type === "timeSignature") {
         timeSigNum = ev.numerator;
         timeSigDen = ev.denominator;
-      } else if (ev.type === "keySignature") {
-        keyFifths = ev.key;
-        keyMode = ev.scale === 0 ? "major" : "minor";
       }
     }
   }
@@ -418,6 +459,8 @@ export function midiToMusicXmlWithTracks(
   const grid = tpb / 4;
   const snap = (t: number) => Math.round(t / grid) * grid;
   const ticksPerMeasure = (tpb * timeSigNum * 4) / timeSigDen;
+  const keyByMeasure = collectKeyByMeasure(midiData, ticksPerMeasure);
+  const initialKey = keyByMeasure.get(0) ?? { fifths: 0, mode: "major" };
 
   const trackNotes = trackIndices.map((idx) => {
     const raw = extractTrackNotes(midiData.tracks[idx], tpb);
@@ -432,7 +475,12 @@ export function midiToMusicXmlWithTracks(
   const allNotes = trackNotes.flat();
   if (allNotes.length === 0) {
     return {
-      musicxml: emptyScore(keyFifths, keyMode, timeSigNum, timeSigDen),
+      musicxml: emptyScore(
+        initialKey.fifths,
+        initialKey.mode,
+        timeSigNum,
+        timeSigDen,
+      ),
       notes: [],
       ticksPerBeat: tpb,
       timeSigNum,
@@ -462,8 +510,7 @@ export function midiToMusicXmlWithTracks(
       tpb,
       timeSigNum,
       timeSigDen,
-      keyFifths,
-      keyMode,
+      keyByMeasure,
       clef,
       numMeasures,
       i,
@@ -513,8 +560,6 @@ export function midiToMusicXml(midiData: MidiData): string {
   // Defaults
   let timeSigNum = 4;
   let timeSigDen = 4;
-  let keyFifths = 0;
-  let keyMode = "major";
 
   // Collect notes from all tracks
   const rawNotes: RawNote[] = [];
@@ -530,9 +575,6 @@ export function midiToMusicXml(midiData: MidiData): string {
         timeSigNum = ev.numerator;
         // midi-file already converts the MIDI denominator byte to the actual value
         timeSigDen = ev.denominator;
-      } else if (ev.type === "keySignature") {
-        keyFifths = ev.key;
-        keyMode = ev.scale === 0 ? "major" : "minor";
       } else if (ev.type === "noteOn" && ev.velocity > 0) {
         active.set(ev.noteNumber, { startTick: tick, velocity: ev.velocity });
       } else if (
@@ -553,8 +595,17 @@ export function midiToMusicXml(midiData: MidiData): string {
     }
   }
 
+  const ticksPerMeasure = (tpb * timeSigNum * 4) / timeSigDen;
+  const keyByMeasure = collectKeyByMeasure(midiData, ticksPerMeasure);
+  const initialKey = keyByMeasure.get(0) ?? { fifths: 0, mode: "major" };
+
   if (rawNotes.length === 0) {
-    return emptyScore(keyFifths, keyMode, timeSigNum, timeSigDen);
+    return emptyScore(
+      initialKey.fifths,
+      initialKey.mode,
+      timeSigNum,
+      timeSigDen,
+    );
   }
 
   // Quantize to 16th-note grid
@@ -566,7 +617,6 @@ export function midiToMusicXml(midiData: MidiData): string {
     return { ...n, startTick: s, endTick: e };
   });
 
-  const ticksPerMeasure = (tpb * timeSigNum * 4) / timeSigDen;
   const totalTicks = Math.max(...quantized.map((n) => n.endTick));
   const numMeasures = Math.ceil(totalTicks / ticksPerMeasure);
 
@@ -577,6 +627,7 @@ export function midiToMusicXml(midiData: MidiData): string {
 
   const measureXml: string[] = [];
   const ind = "    ";
+  let runningFifths = initialKey.fifths;
 
   for (let m = 0; m < numMeasures; m++) {
     const mStart = m * ticksPerMeasure;
@@ -593,11 +644,19 @@ export function midiToMusicXml(midiData: MidiData): string {
       lines.push(
         `${ind}<attributes>`,
         `${ind}  <divisions>${DIVISIONS}</divisions>`,
-        `${ind}  <key><fifths>${keyFifths}</fifths><mode>${keyMode}</mode></key>`,
+        `${ind}  <key><fifths>${initialKey.fifths}</fifths><mode>${initialKey.mode}</mode></key>`,
         `${ind}  <time><beats>${timeSigNum}</beats><beat-type>${timeSigDen}</beat-type></time>`,
         `${ind}  <clef><sign>G</sign><line>2</line></clef>`,
         `${ind}</attributes>`,
       );
+    } else {
+      const k = keyByMeasure.get(m);
+      if (k && k.fifths !== runningFifths) {
+        lines.push(
+          `${ind}<attributes><key><fifths>${k.fifths}</fifths><mode>${k.mode}</mode></key></attributes>`,
+        );
+        runningFifths = k.fifths;
+      }
     }
 
     let cursor = mStart;

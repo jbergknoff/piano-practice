@@ -16,13 +16,15 @@ import {
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
   DIVISIONS,
   FLAT_POSITIONS,
+  KEY_CHANGE_GLYPH_SPACING_FACTOR,
+  KEY_CHANGE_LEAD_FACTOR,
   MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
   accidentalColumns,
   beamStemDirection,
   eventXPositions,
   groupBeamableEvents,
-  headerWidth,
+  keyChangeGlyphs,
   ledgerLineYs,
   noteY,
   resolveLayout,
@@ -209,14 +211,14 @@ function computeCursorX(
   }
 
   const isFirst = measureIndex === 0;
-  const fifths = score.parts[0]?.keySig?.fifths ?? 0;
   const eventXs = eventXPositions(
     measure.events,
     layout.measureXs[measureIndex],
     isFirst,
-    fifths,
+    measure.activeFifths,
     layout.noteUnitWidth,
     layout.staffSpace,
+    measure.keyChange,
   );
 
   // Walk through measure events to find the X position for the current beat.
@@ -354,7 +356,6 @@ function computeNoteRenderInfos(
   score.parts.forEach((part, p) => {
     const staffBottomY = staffBottomYs[p];
     const clef = part.clef;
-    const fifths = part.keySig.fifths;
     const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
 
     part.measures.forEach((measure, m) => {
@@ -362,9 +363,10 @@ function computeNoteRenderInfos(
         measure.events,
         measureXs[m],
         m === 0,
-        fifths,
+        measure.activeFifths,
         noteUnitWidth,
         staffSpace,
+        measure.keyChange,
       );
       const { beamOverrideMap } = beamStemOverrides(
         measure.events,
@@ -1072,7 +1074,6 @@ const Staff = memo(function Staff({
           measureIndex={m}
           partIndex={partIndex}
           clef={part.clef}
-          keySig={part.keySig}
           beatDivisions={beatDivisions}
           isFirstMeasure={m === 0}
           x={measureXs[m]}
@@ -1159,7 +1160,6 @@ interface MeasureProps {
   measureIndex: number;
   partIndex: number;
   clef: { sign: "G" | "F"; line: number };
-  keySig: { fifths: number; mode: string };
   beatDivisions: number;
   isFirstMeasure: boolean;
   x: number;
@@ -1173,7 +1173,6 @@ function Measure({
   measureIndex: _measureIndex,
   partIndex,
   clef,
-  keySig,
   beatDivisions,
   isFirstMeasure,
   x,
@@ -1192,9 +1191,10 @@ function Measure({
       measure.events,
       x,
       isFirstMeasure,
-      keySig.fifths,
+      measure.activeFifths,
       noteUnitWidth,
       staffSpace,
+      measure.keyChange,
     );
     const { beamGroups, beamOverrideMap } = beamStemOverrides(
       measure.events,
@@ -1209,7 +1209,8 @@ function Measure({
     measure.events,
     x,
     isFirstMeasure,
-    keySig.fifths,
+    measure.activeFifths,
+    measure.keyChange,
     noteUnitWidth,
     staffSpace,
     clef,
@@ -1217,10 +1218,9 @@ function Measure({
     beatDivisions,
   ]);
 
-  const hdrWidth = isFirstMeasure ? headerWidth(keySig.fifths) : 0;
   const clefX = x + 2;
   const keySigX = clefX + 32;
-  const timeSigX = keySigX + Math.abs(keySig.fifths) * 10;
+  const timeSigX = keySigX + Math.abs(measure.activeFifths) * 10;
 
   return (
     <g>
@@ -1252,7 +1252,7 @@ function Measure({
             inkColor={inkColor}
           />
           <KeySig
-            keySig={keySig}
+            keySig={{ fifths: measure.activeFifths }}
             clef={clef}
             x={keySigX}
             staffBottomY={staffBottomY}
@@ -1267,6 +1267,16 @@ function Measure({
             inkColor={inkColor}
           />
         </>
+      )}
+      {!isFirstMeasure && measure.keyChange && (
+        <KeySigChange
+          keyChange={measure.keyChange}
+          clef={clef}
+          x={x + staffSpace * KEY_CHANGE_LEAD_FACTOR}
+          staffBottomY={staffBottomY}
+          staffSpace={staffSpace}
+          inkColor={inkColor}
+        />
       )}
       {(() => {
         let beatOffset = 0;
@@ -1380,6 +1390,54 @@ function KeySig({
         return (
           <text
             key={`${pitch.step}${pitch.octave}`}
+            x={x + i * spacing}
+            y={y}
+            text-anchor="middle"
+            fill={inkColor}
+          >
+            {symbol}
+          </text>
+        );
+      })}
+    </g>
+  );
+}
+
+// ── Mid-staff key change ──────────────────────────────────────────────────────
+
+// Drawn at the start of a measure where the key signature changes: naturals to
+// cancel the outgoing accidentals no longer in the new key, then the new key's
+// sharps or flats. Glyph spacing matches the width reserved by the layout.
+function KeySigChange({
+  keyChange,
+  clef,
+  x,
+  staffBottomY,
+  staffSpace,
+  inkColor,
+}: {
+  keyChange: { fifths: number; prevFifths: number };
+  clef: { sign: "G" | "F" };
+  x: number;
+  staffBottomY: number;
+  staffSpace: number;
+  inkColor: string;
+}) {
+  const { naturals, accidentals } = keyChangeGlyphs(keyChange, clef.sign);
+  const accSymbol = keyChange.fifths > 0 ? G.accSharp : G.accFlat;
+  const glyphs = [
+    ...naturals.map((pitch) => ({ pitch, symbol: G.accNatural })),
+    ...accidentals.map((pitch) => ({ pitch, symbol: accSymbol })),
+  ];
+  const spacing = staffSpace * KEY_CHANGE_GLYPH_SPACING_FACTOR;
+
+  return (
+    <g>
+      {glyphs.map(({ pitch, symbol }, i) => {
+        const y = noteY(pitch, clef, staffBottomY, staffSpace);
+        return (
+          <text
+            key={`${pitch.step}${pitch.octave}-${i}`}
             x={x + i * spacing}
             y={y}
             text-anchor="middle"

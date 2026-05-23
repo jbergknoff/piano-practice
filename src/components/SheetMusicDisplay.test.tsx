@@ -130,6 +130,17 @@ function scoreXml(
   return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
 }
 
+// Two-measure one-part score: measure 1 opens in `openFifths`, measure 2
+// declares a key change to `changeFifths` via a key-only <attributes> block
+// (mirroring the converter's mid-piece output).
+function keyChangeScoreXml(openFifths: number, changeFifths: number): string {
+  const m1Attr = `<attributes><divisions>4</divisions><key><fifths>${openFifths}</fifths><mode>major</mode></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>`;
+  const m2Attr = `<attributes><key><fifths>${changeFifths}</fifths><mode>major</mode></key></attributes>`;
+  const note = noteXml({ step: "B", octave: 4, duration: 16, type: "whole" });
+  const body = `<measure number="1">${m1Attr}${note}</measure><measure number="2">${m2Attr}${note}</measure>`;
+  return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
+}
+
 const QUARTER = (step: string, octave: number, alter = 0): NoteSpec => ({
   step,
   octave,
@@ -337,6 +348,30 @@ describe("SheetMusicDisplay geometry", () => {
     const dMajor = renderSheetMusic(scoreXml([QUARTER("B", 4)], { fifths: 2 }));
     expect(dMajor.textsWith(SHARP)).toHaveLength(2);
   });
+
+  test("a mid-piece key change adds new sharps at the changing measure", () => {
+    // C major → D major (2 sharps). The two sharp glyphs are the key change's
+    // (B4 is unaltered in either key).
+    const { textsWith } = renderSheetMusic(keyChangeScoreXml(0, 2));
+    expect(textsWith(SHARP)).toHaveLength(2);
+    expect(textsWith(NATURAL)).toHaveLength(0);
+  });
+
+  test("returning to C cancels the outgoing sharps with naturals", () => {
+    // A major (3 sharps in the header) → C major. Measure 2 cancels F#, C#, G#
+    // with three naturals and shows no sharps of its own.
+    const { textsWith } = renderSheetMusic(keyChangeScoreXml(3, 0));
+    expect(textsWith(SHARP)).toHaveLength(3); // header only
+    expect(textsWith(NATURAL)).toHaveLength(3); // the cancels
+  });
+
+  test("key-change glyphs sit right of the changing measure's barline", () => {
+    const { textsWith, barlineXs } = renderSheetMusic(keyChangeScoreXml(3, 0));
+    const measure2BarlineX = barlineXs()[1];
+    for (const n of textsWith(NATURAL)) {
+      expect(Number(n.getAttribute("x"))).toBeGreaterThan(measure2BarlineX);
+    }
+  });
 });
 
 // ── SVG snapshots ─────────────────────────────────────────────────────────────
@@ -433,6 +468,9 @@ const SNAPSHOT_CASES: Array<[string, string]> = [
       },
     ]),
   ],
+  // Mid-piece key change (A major → C major): three naturals cancel the
+  // outgoing sharps at the start of measure 2. Mirrors Rondo Alla Turca.
+  ["key-change", keyChangeScoreXml(3, 0)],
 ];
 
 describe("SheetMusicDisplay SVG snapshots", () => {

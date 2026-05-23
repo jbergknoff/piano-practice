@@ -47,8 +47,16 @@ export interface ParsedMeasure {
   number: number;
   events: MeasureEvent[];
   timeSig?: { beats: number; beatType: number };
+  /** The key signature declared in this measure's <attributes>, if any. */
   keySig?: { fifths: number; mode: string };
   clef?: { sign: "G" | "F"; line: number };
+  /** The key signature in effect for this measure (carried forward from the
+   *  last measure that declared one). Resolved by the parser for every measure. */
+  activeFifths: number;
+  /** Present only when this measure starts a new key signature different from
+   *  the running one (and it isn't the first measure, which uses the header).
+   *  Drives the mid-staff key-change rendering (cancel naturals + new accidentals). */
+  keyChange?: { fifths: number; prevFifths: number };
 }
 
 export interface ParsedPart {
