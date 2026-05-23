@@ -135,6 +135,7 @@ function renderNote(
   tieStart: boolean,
   chord: boolean,
   indent: string,
+  staccato = false,
 ): string {
   const [type, dot] = DURATION_TYPE.get(dur) ?? ["quarter", false];
   const i = indent;
@@ -164,7 +165,8 @@ function renderNote(
   if (dot) {
     lines.push(`${i}  <dot/>`);
   }
-  if ((tieStop || tieStart) && pitch !== null) {
+  const hasNotations = (tieStop || tieStart || staccato) && pitch !== null;
+  if (hasNotations) {
     lines.push(`${i}  <notations>`);
     if (tieStop) {
       lines.push(`${i}    <tied type="stop"/>`);
@@ -172,11 +174,18 @@ function renderNote(
     if (tieStart) {
       lines.push(`${i}    <tied type="start"/>`);
     }
+    if (staccato) {
+      lines.push(`${i}    <articulations><staccato/></articulations>`);
+    }
     lines.push(`${i}  </notations>`);
   }
   lines.push(`${i}</note>`);
   return lines.join("\n");
 }
+
+// A note whose sounding length is at most this fraction of the space until the
+// next onset is treated as staccato (detached) and gets a staccato dot.
+const STACCATO_RATIO = 0.5;
 
 // ── Multi-track API ──────────────────────────────────────────────────────────
 
@@ -331,8 +340,22 @@ function buildPartMeasuresXml(
       for (let k = 0; k < chord.length; k++) {
         const p = chord[k];
         const pitch = noteNumberToPitch(p.noteNumber);
+        // The note is staccato when it sounds for much less than the space
+        // until the next onset (displayDur). Tied segments are never staccato.
+        const staccato =
+          !p.tieStart &&
+          !p.tieStop &&
+          p.durationTicks <= displayDur * grid * STACCATO_RATIO;
         lines.push(
-          renderNote(pitch, displayDur, p.tieStop, p.tieStart, k > 0, ind),
+          renderNote(
+            pitch,
+            displayDur,
+            p.tieStop,
+            p.tieStart,
+            k > 0,
+            ind,
+            staccato,
+          ),
         );
         playbackNotes.push({
           noteNumber: p.noteNumber,

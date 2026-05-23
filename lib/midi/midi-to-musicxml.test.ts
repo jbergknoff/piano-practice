@@ -27,7 +27,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
-import { midiToMusicXml } from "./midi-to-musicxml";
+import { midiToMusicXml, midiToMusicXmlWithTracks } from "./midi-to-musicxml";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -503,6 +503,80 @@ describe("midiToMusicXml – programmatic fixtures", () => {
     const xml = midiToMusicXml(makeMidi(withDeltas(pairs)));
 
     expect(tags(xml, "type")).toContain("whole");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Staccato detection (midiToMusicXmlWithTracks)
+//
+// A note that sounds for much less than the space until the next onset is
+// detached and should be marked staccato. This lives in the track-based path
+// (the one the app uses), which preserves the original sounding duration.
+// ---------------------------------------------------------------------------
+
+describe("midiToMusicXmlWithTracks – staccato", () => {
+  function tsEvent(): [number, Record<string, unknown>] {
+    return [
+      0,
+      {
+        type: "timeSignature",
+        meta: true,
+        numerator: 4,
+        denominator: 4,
+        metronome: 24,
+        thirtyseconds: 8,
+      },
+    ];
+  }
+
+  test("a note sounding far shorter than its slot is marked staccato", () => {
+    // C4 occupies a quarter slot (next onset at TPB) but sounds only one 16th.
+    // D4 then fills the rest of the measure (sounds its full value).
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 }],
+      [TPB / 4, { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 }],
+      [TPB, { type: "noteOn", channel: 0, noteNumber: 62, velocity: 64 }],
+      [4 * TPB, { type: "noteOff", channel: 0, noteNumber: 62, velocity: 0 }],
+    ];
+
+    const { musicxml } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    // Exactly one staccato — the clipped C4, not the sustained D4.
+    expect([...musicxml.matchAll(/<staccato\/>/g)]).toHaveLength(1);
+    expect(musicxml).toContain("<articulations><staccato/></articulations>");
+
+    const cBlock = noteBlocks(musicxml).find((b) => b.includes("<step>C<"));
+    const dBlock = noteBlocks(musicxml).find((b) => b.includes("<step>D<"));
+    expect(cBlock).toContain("<staccato/>");
+    expect(dBlock).not.toContain("<staccato/>");
+  });
+
+  test("notes that sustain their full slot are not staccato", () => {
+    // Four quarter notes filling a 4/4 measure, each held the full beat, so no
+    // slot is inflated and none should be flagged.
+    const pairs: Array<[number, Record<string, unknown>]> = [tsEvent()];
+    for (let i = 0; i < 4; i++) {
+      const n = 60 + i;
+      pairs.push([
+        i * TPB,
+        { type: "noteOn", channel: 0, noteNumber: n, velocity: 64 },
+      ]);
+      pairs.push([
+        (i + 1) * TPB,
+        { type: "noteOff", channel: 0, noteNumber: n, velocity: 0 },
+      ]);
+    }
+
+    const { musicxml } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    expect(musicxml).not.toContain("<staccato/>");
   });
 });
 

@@ -12,10 +12,13 @@ import {
   parseScore,
 } from "../../lib/musicxml/musicxml-parser";
 import {
+  ACCIDENTAL_BASE_OFFSET_FACTOR,
+  ACCIDENTAL_COLUMN_WIDTH_FACTOR,
   DIVISIONS,
   FLAT_POSITIONS,
   MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
+  accidentalColumns,
   beamStemDirection,
   eventXPositions,
   groupBeamableEvents,
@@ -26,6 +29,7 @@ import {
   stemDirection,
 } from "../../lib/musicxml/sheet-music-layout";
 import type {
+  AccidentalKind,
   ChordGroup,
   LayoutConfig,
   MeasureEvent,
@@ -51,6 +55,7 @@ const G = {
   fClef: "\uE062",
   accSharp: "\uE262",
   accFlat: "\uE260",
+  accNatural: "\uE261",
   noteheadWhole: "\uE0A2",
   noteheadHalf: "\uE0A3",
   noteheadBlack: "\uE0A4",
@@ -78,17 +83,24 @@ interface BeamGroupData {
   types: NoteType[];
 }
 
+// Beam groups span one beat (one denominator unit) so long runs break into
+// per-beat sub-beams. DIVISIONS is divisions per quarter note.
+function beamUnitDivisions(beatType: number): number {
+  return (DIVISIONS * 4) / beatType;
+}
+
 function computeBeamGroups(
   events: MeasureEvent[],
   eventXs: number[],
   clef: { sign: "G" | "F"; line: number },
   staffBottomY: number,
   staffSpace: number,
+  beatDivisions: number,
 ): BeamGroupData[] {
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
 
-  return groupBeamableEvents(events).map((indices) => {
+  return groupBeamableEvents(events, beatDivisions).map((indices) => {
     const chords = indices.map((i) => events[i] as ChordGroup);
     const stemDir = beamStemDirection(chords, clef);
 
@@ -245,7 +257,9 @@ interface NoteRenderInfo {
   nx: number;
   ny: number;
   type: NoteType;
-  showAccidental: boolean;
+  accidental: AccidentalKind;
+  /** Absolute x of the accidental glyph (staggered within a chord). */
+  accidentalX: number;
   dot: boolean;
   staffSpace: number;
 }
@@ -258,6 +272,7 @@ function beamStemOverrides(
   clef: { sign: "G" | "F"; line: number },
   staffBottomY: number,
   staffSpace: number,
+  beatDivisions: number,
 ): {
   beamGroups: BeamGroupData[];
   beamOverrideMap: Map<number, { stemDir: "up" | "down"; stemTipY: number }>;
@@ -268,6 +283,7 @@ function beamStemOverrides(
     clef,
     staffBottomY,
     staffSpace,
+    beatDivisions,
   );
   const beamOverrideMap = new Map<
     number,
@@ -282,6 +298,22 @@ function beamStemOverrides(
     });
   }
   return { beamGroups, beamOverrideMap };
+}
+
+// Map each note's accidental column (from the shared layout rule) to an absolute
+// x. Column 0 sits ACCIDENTAL_BASE_OFFSET_FACTOR staff-spaces left of the
+// notehead; each further column steps ACCIDENTAL_COLUMN_WIDTH_FACTOR further
+// left. Notes without an accidental get the column-0 x (unused).
+function accidentalColumnXs(
+  notes: ParsedNote[],
+  ex: number,
+  staffSpace: number,
+): number[] {
+  const baseX = ex - staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR;
+  const colWidth = staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
+  return accidentalColumns(notes, staffSpace).map((col) =>
+    col < 0 ? baseX : baseX - col * colWidth,
+  );
 }
 
 // Notehead placement for one chord group. stemDir must already be resolved
@@ -299,12 +331,14 @@ function chordNoteGeometry(
   const { type, notes, noteIndex, dot } = group;
   const nrx = staffSpace * 0.55;
   const xOffsets = chordXOffsets(notes, stemDir, nrx);
+  const accidentalXs = accidentalColumnXs(notes, ex, staffSpace);
   return notes.map((note, v) => ({
     id: `p${partIndex}-m${measureNumber}-n${noteIndex}-v${v}`,
     nx: ex + xOffsets[v],
     ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
     type,
-    showAccidental: note.showAccidental,
+    accidental: note.accidental,
+    accidentalX: accidentalXs[v],
     dot: !!dot,
     staffSpace,
   }));
@@ -321,6 +355,7 @@ function computeNoteRenderInfos(
     const staffBottomY = staffBottomYs[p];
     const clef = part.clef;
     const fifths = part.keySig.fifths;
+    const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
 
     part.measures.forEach((measure, m) => {
       const eventXs = eventXPositions(
@@ -337,6 +372,7 @@ function computeNoteRenderInfos(
         clef,
         staffBottomY,
         staffSpace,
+        beatDivisions,
       );
 
       measure.events.forEach((event, ei) => {
@@ -392,7 +428,8 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
               y={info.ny}
               type={info.type}
               color={color}
-              showAccidental={info.showAccidental}
+              accidental={info.accidental}
+              accidentalX={info.accidentalX}
               staffSpace={info.staffSpace}
             />
             {info.dot && (
@@ -1019,6 +1056,7 @@ const Staff = memo(function Staff({
   inkColor,
 }: StaffProps) {
   const { staffSpace, totalWidth, measureXs, measureWidths } = layout;
+  const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
   return (
     <g visibility={visible ? "visible" : "hidden"}>
       <StaffLines
@@ -1035,6 +1073,7 @@ const Staff = memo(function Staff({
           partIndex={partIndex}
           clef={part.clef}
           keySig={part.keySig}
+          beatDivisions={beatDivisions}
           isFirstMeasure={m === 0}
           x={measureXs[m]}
           staffBottomY={staffBottomY}
@@ -1121,6 +1160,7 @@ interface MeasureProps {
   partIndex: number;
   clef: { sign: "G" | "F"; line: number };
   keySig: { fifths: number; mode: string };
+  beatDivisions: number;
   isFirstMeasure: boolean;
   x: number;
   staffBottomY: number;
@@ -1134,6 +1174,7 @@ function Measure({
   partIndex,
   clef,
   keySig,
+  beatDivisions,
   isFirstMeasure,
   x,
   staffBottomY,
@@ -1161,6 +1202,7 @@ function Measure({
       clef,
       staffBottomY,
       staffSpace,
+      beatDivisions,
     );
     return { eventXs, beamGroups, beamOverrideMap };
   }, [
@@ -1172,6 +1214,7 @@ function Measure({
     staffSpace,
     clef,
     staffBottomY,
+    beatDivisions,
   ]);
 
   const hdrWidth = isFirstMeasure ? headerWidth(keySig.fifths) : 0;
@@ -1468,6 +1511,15 @@ const ChordGroupEl = memo(function ChordGroupEl({
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
 
+  // A staccato chord gets a single dot on the outer notehead away from the
+  // stem (below the lowest note for stem-up, above the highest for stem-down),
+  // not one dot per note. noteGeom is sorted low→high.
+  const staccatoDot = notes.some((n) => n.staccato)
+    ? stemDir === "up"
+      ? { x: noteGeom[0].nx, y: bottomY + staffSpace }
+      : { x: noteGeom[noteGeom.length - 1].nx, y: topY - staffSpace }
+    : null;
+
   let stemX: number;
   let stemY1: number;
   let stemY2: number;
@@ -1514,7 +1566,8 @@ const ChordGroupEl = memo(function ChordGroupEl({
               type={type}
               id={info.id}
               color={inkColor}
-              showAccidental={info.showAccidental}
+              accidental={info.accidental}
+              accidentalX={info.accidentalX}
               staffSpace={staffSpace}
             />
             {ledgerLineYs(notes[v].pitch, clef, staffBottomY, staffSpace).map(
@@ -1541,6 +1594,9 @@ const ChordGroupEl = memo(function ChordGroupEl({
           </g>
         );
       })}
+      {staccatoDot && (
+        <circle cx={staccatoDot.x} cy={staccatoDot.y} r={1.6} fill={inkColor} />
+      )}
     </g>
   );
 });
@@ -1577,13 +1633,21 @@ function Flags({
 
 // ── Notehead ──────────────────────────────────────────────────────────────────
 
+const ACCIDENTAL_GLYPH: Record<AccidentalKind, string> = {
+  none: "",
+  sharp: G.accSharp,
+  flat: G.accFlat,
+  natural: G.accNatural,
+};
+
 function Notehead({
   x,
   y,
   type,
   id,
   color,
-  showAccidental,
+  accidental,
+  accidentalX,
   staffSpace,
 }: {
   x: number;
@@ -1591,7 +1655,9 @@ function Notehead({
   type: NoteType;
   id?: string;
   color: string;
-  showAccidental: boolean;
+  accidental: AccidentalKind;
+  /** Absolute x for the accidental glyph. Defaults to the standard offset. */
+  accidentalX?: number;
   staffSpace: number;
 }) {
   const char =
@@ -1601,11 +1667,13 @@ function Notehead({
         ? G.noteheadHalf
         : G.noteheadBlack;
 
+  const accX = accidentalX ?? x - staffSpace * 1.4;
+
   return (
     <g>
-      {showAccidental && (
-        <text x={x - staffSpace * 1.4} y={y} fill={color} text-anchor="middle">
-          {G.accSharp}
+      {accidental !== "none" && (
+        <text x={accX} y={y} fill={color} text-anchor="middle">
+          {ACCIDENTAL_GLYPH[accidental]}
         </text>
       )}
       <text id={id} x={x} y={y} fill={color} text-anchor="middle">
