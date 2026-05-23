@@ -5,17 +5,17 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { WaitModeResultModal } from "./components/WaitModeResultModal";
-import type { WaitModeDebugEvent } from "./debug-log";
+import { WaitModeResultModal } from "../components/WaitModeResultModal";
+import type { WaitModeDebugEvent } from "../debug-log";
 import type { ModeControl, ModeHandle } from "./mode-control";
-import type { ThemeTokens } from "./theme";
+import type { ThemeTokens } from "../theme";
 import {
   type WaitModeAttempt,
   loadAttemptHistory,
   saveAttempt,
-} from "./use-file-history";
+} from "../hooks/use-file-history";
 
-export type { DebugBeatEvent } from "./debug-log";
+export type { DebugBeatEvent } from "../debug-log";
 
 interface WaitPoint {
   beat: number;

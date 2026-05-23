@@ -1,8 +1,8 @@
 import type { VNode } from "preact";
-import type { DebugBeatEvent } from "./debug-log";
-import type { MidiPlayer } from "./midi-player";
-import type { MidiConversionResult } from "./midi-to-musicxml";
-import type { BtStatus } from "./useBluetooth";
+import type { DebugBeatEvent } from "../debug-log";
+import type { MidiPlayer } from "../../lib/midi/midi-player";
+import type { MidiConversionResult } from "../../lib/midi/midi-to-musicxml";
+import type { BtStatus } from "../hooks/use-bluetooth";
 
 export interface PlayerHandle {
   play(): Promise<void>;

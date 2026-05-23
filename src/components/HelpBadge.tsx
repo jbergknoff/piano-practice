@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import type { DebugBeatEvent } from "../use-wait-mode";
+import type { DebugBeatEvent } from "../modes/use-wait-mode";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
 import { BluetoothIcon } from "./icons";

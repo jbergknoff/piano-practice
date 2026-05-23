@@ -5,23 +5,26 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { DebugBeatEvent } from "../debug-log";
-import { MidiPlayer } from "../midi-player";
-import type { MidiConversionResult, TrackInfo } from "../midi-to-musicxml";
+import type { DebugBeatEvent } from "../../debug-log";
+import { MidiPlayer } from "../../../lib/midi/midi-player";
+import type {
+  MidiConversionResult,
+  TrackInfo,
+} from "../../../lib/midi/midi-to-musicxml";
 import {
   type BluetoothHandle,
   type ModeControl,
   createPlayerHandle,
-} from "../mode-control";
+} from "../../modes/mode-control";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
-import type { ThemeTokens } from "../theme";
-import { cornerBtnStyle, hexA, miniBtnStyle } from "../theme";
-import { useListenMode } from "../use-listen-mode";
-import { usePlayalongMode } from "../use-playalong-mode";
-import { useWaitMode } from "../use-wait-mode";
-import type { useBluetooth } from "../useBluetooth";
-import { ConnectionBadge } from "./ConnectionBadge";
-import { HelpBadge } from "./HelpBadge";
+import type { ThemeTokens } from "../../theme";
+import { cornerBtnStyle, hexA, miniBtnStyle } from "../../theme";
+import { useListenMode } from "../../modes/use-listen-mode";
+import { usePlayalongMode } from "../../modes/use-playalong-mode";
+import { useWaitMode } from "../../modes/use-wait-mode";
+import type { useBluetooth } from "../../hooks/use-bluetooth";
+import { ConnectionBadge } from "../ConnectionBadge";
+import { HelpBadge } from "../HelpBadge";
 import {
   ChevronLeftIcon,
   GearIcon,
@@ -30,9 +33,9 @@ import {
   ResetIcon,
   SectionsIcon,
   StopIcon,
-} from "./icons";
-import { SelectionRangesDrawer } from "./SelectionRangesDrawer";
-import { SettingsDrawer } from "./SettingsDrawer";
+} from "../icons";
+import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
+import { SettingsDrawer } from "../SettingsDrawer";
 
 interface PracticeScreenProps {
   theme: ThemeTokens;

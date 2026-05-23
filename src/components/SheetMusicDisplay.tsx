@@ -6,7 +6,11 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
+import {
+  diatonicIndex,
+  isRest,
+  parseScore,
+} from "../../lib/musicxml/musicxml-parser";
 import {
   DIVISIONS,
   FLAT_POSITIONS,
@@ -20,7 +24,7 @@ import {
   noteY,
   resolveLayout,
   stemDirection,
-} from "./sheet-music-layout";
+} from "../../lib/musicxml/sheet-music-layout";
 import type {
   ChordGroup,
   LayoutConfig,
@@ -32,7 +36,7 @@ import type {
   ParsedRest,
   ParsedScore,
   ResolvedLayout,
-} from "./sheet-music-types";
+} from "../../lib/musicxml/sheet-music-types";
 
 // ── Bravura / SMuFL glyph constants ──────────────────────────────────────────
 

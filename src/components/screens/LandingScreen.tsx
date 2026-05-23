@@ -1,10 +1,10 @@
 import { useState } from "preact/hooks";
-import type { ThemeTokens } from "../theme";
-import { hexA } from "../theme";
-import type { useBluetooth } from "../useBluetooth";
-import { HelpBadge } from "./HelpBadge";
-import { ConnectionBadge } from "./ConnectionBadge";
-import { UploadIcon } from "./icons";
+import type { ThemeTokens } from "../../theme";
+import { hexA } from "../../theme";
+import type { useBluetooth } from "../../hooks/use-bluetooth";
+import { HelpBadge } from "../HelpBadge";
+import { ConnectionBadge } from "../ConnectionBadge";
+import { UploadIcon } from "../icons";
 
 interface LandingScreenProps {
   theme: ThemeTokens;

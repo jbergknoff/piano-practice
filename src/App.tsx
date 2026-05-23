@@ -7,8 +7,8 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { LandingScreen } from "./components/LandingScreen";
-import { PracticeScreen } from "./components/PracticeScreen";
+import { LandingScreen } from "./components/screens/LandingScreen";
+import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import {
   type MidiConversionResult,
@@ -16,7 +16,7 @@ import {
   getMidiTempo,
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "./midi-to-musicxml";
+} from "../lib/midi/midi-to-musicxml";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 import {
   type FileHistory,
@@ -25,9 +25,9 @@ import {
   loadRecentFile,
   saveFileHistory,
   saveRecentFile,
-} from "./use-file-history";
-import { useBluetooth } from "./useBluetooth";
-import { useWakeLock } from "./useWakeLock";
+} from "./hooks/use-file-history";
+import { useBluetooth } from "./hooks/use-bluetooth";
+import { useWakeLock } from "./hooks/use-wake-lock";
 
 function prettyTitle(filename: string): string {
   return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");

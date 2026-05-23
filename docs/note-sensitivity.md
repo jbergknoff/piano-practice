@@ -10,7 +10,7 @@ A configurable **post-advance grace period** (`noteSensitivityMilliseconds`) sup
 
 ## Implementation
 
-The check lives in `onNoteEvent` in `src/use-wait-mode.tsx`, just before the wrong-note buzz logic:
+The check lives in `onNoteEvent` in `src/modes/use-wait-mode.tsx`, just before the wrong-note buzz logic:
 
 ```ts
 if (!expected.has(noteNumber) && msSinceAdvance < sensitivityMs) {

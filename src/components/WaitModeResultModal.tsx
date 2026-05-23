@@ -1,6 +1,6 @@
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
-import type { WaitModeAttempt } from "../use-file-history";
+import type { WaitModeAttempt } from "../hooks/use-file-history";
 
 function formatTime(ms: number): string {
   const totalSec = Math.round(ms / 1000);
