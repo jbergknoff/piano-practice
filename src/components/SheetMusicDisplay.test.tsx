@@ -8,7 +8,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { render } from "preact";
-import { SheetMusicDisplay } from "./SheetMusicDisplay";
+import { parseScore } from "../../lib/musicxml/musicxml-parser";
+import { resolveLayout } from "../../lib/musicxml/sheet-music-layout";
+import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
 
 // SMuFL glyphs we assert on (must match the G map in SheetMusicDisplay.tsx).
 const SHARP = "";
@@ -486,4 +488,60 @@ describe("SheetMusicDisplay SVG snapshots", () => {
       expect(out).toBe(readFileSync(path, "utf8"));
     });
   }
+});
+
+// ── Playback cursor positioning ───────────────────────────────────────────────
+
+describe("computeCursorX", () => {
+  // Two 4/4 measures of four quarter notes each. Quarter-note beats map onto
+  // the shared spine's onset divisions (4 divisions per quarter).
+  const FOUR_QUARTERS = [
+    QUARTER("C", 4),
+    QUARTER("D", 4),
+    QUARTER("E", 4),
+    QUARTER("F", 4),
+  ];
+  const score = parseScore(scoreXml([FOUR_QUARTERS, FOUR_QUARTERS]));
+  const layout = resolveLayout(score);
+  const cx = (beat: number): number => {
+    const x = computeCursorX(beat, score, layout);
+    if (x === null) {
+      throw new Error(`computeCursorX returned null at beat ${beat}`);
+    }
+    return x;
+  };
+
+  test("a downbeat lands on the first notehead, not the barline", () => {
+    // Measure 2's downbeat is beat 4. The clef/key/padding lead-in sits between
+    // the barline and the first note; the cursor must be on the note.
+    const barlineX = layout.measureXs[1];
+    const firstOnsetX = layout.measureSpines[1].xs[0];
+
+    expect(cx(4)).toBe(firstOnsetX);
+    // Regression guard: the old code returned the barline x here.
+    expect(firstOnsetX).toBeGreaterThan(barlineX);
+    expect(cx(4)).toBeGreaterThan(barlineX);
+  });
+
+  test("each beat anchor sits on its own onset", () => {
+    // Beats 4..7 are the four onsets of measure 2.
+    for (let i = 0; i < 4; i++) {
+      expect(cx(4 + i)).toBe(layout.measureSpines[1].xs[i]);
+    }
+  });
+
+  test("between onsets the cursor interpolates monotonically", () => {
+    const a = layout.measureSpines[1].xs[0];
+    const b = layout.measureSpines[1].xs[1];
+    const mid = cx(4.5); // halfway between beats 4 and 5
+    expect(mid).toBeGreaterThan(a);
+    expect(mid).toBeLessThan(b);
+  });
+
+  test("the cursor is continuous across a barline (no jump)", () => {
+    // Approaching the end of measure 1 must converge on measure 2's downbeat x,
+    // so the cursor doesn't snap backward to the barline as the bar turns over.
+    const justBeforeBarline = cx(4 - 1e-6);
+    expect(justBeforeBarline).toBeCloseTo(cx(4), 1);
+  });
 });
