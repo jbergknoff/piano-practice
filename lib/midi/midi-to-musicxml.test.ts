@@ -919,3 +919,209 @@ describe("fixture comparison – underwater theme midi from ninsheetmusic.org vs
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Grace note detection (midiToMusicXmlWithTracks)
+// ---------------------------------------------------------------------------
+
+describe("midiToMusicXmlWithTracks – grace notes", () => {
+  function tsEvent(): [number, Record<string, unknown>] {
+    return [
+      0,
+      {
+        type: "timeSignature",
+        meta: true,
+        numerator: 4,
+        denominator: 4,
+        metronome: 24,
+        thirtyseconds: 8,
+      },
+    ];
+  }
+
+  test("a very short note (< 1/8 beat) before a normal note is emitted as a grace note", () => {
+    // Grace note: E4 at tick 0, duration TPB/16 (64th note at 480 TPB = 30 ticks)
+    // Main note: C4 at tick TPB/16, duration 1 quarter (TPB = 480 ticks).
+    const graceLen = TPB / 16;
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 64, velocity: 64 }],
+      [graceLen, { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 }],
+      [graceLen, { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 }],
+      [
+        graceLen + TPB,
+        { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 },
+      ],
+    ];
+
+    const { musicxml, notes } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    // MusicXML should contain a <grace> element.
+    expect(musicxml).toContain("<grace");
+
+    // Count <note> blocks that contain <grace — those are grace notes.
+    const graceBlocks = noteBlocks(musicxml).filter((b) =>
+      b.includes("<grace"),
+    );
+    expect(graceBlocks).toHaveLength(1);
+    expect(graceBlocks[0]).toContain("<step>E</step>");
+
+    // Grace note should be a PlaybackNote with isGrace=true.
+    const gracePlayback = notes.filter((n) => n.isGrace);
+    expect(gracePlayback).toHaveLength(1);
+    expect(gracePlayback[0].noteNumber).toBe(64); // E4
+
+    // The main note (C4) should be a regular PlaybackNote.
+    const regularPlayback = notes.filter((n) => !n.isGrace);
+    expect(regularPlayback.some((n) => n.noteNumber === 60)).toBe(true);
+  });
+
+  test("very short note (< 1/16 beat) gets acciaccatura slash", () => {
+    // Duration shorter than TPB/16 threshold (30 ticks at 480 TPB).
+    const graceLen = Math.floor(TPB / 20); // ~24 ticks
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 64, velocity: 64 }],
+      [graceLen, { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 }],
+      [graceLen, { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 }],
+      [
+        graceLen + TPB,
+        { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 },
+      ],
+    ];
+
+    const { musicxml } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    expect(musicxml).toContain('<grace slash="yes"/>');
+  });
+
+  test("short note between thresholds (1/16 to 1/8 beat) gets appoggiatura — no slash", () => {
+    // Duration between TPB/16 (30 ticks) and TPB/8 (60 ticks): e.g. 45 ticks.
+    const graceLen = Math.floor(TPB / 12); // ~40 ticks
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 64, velocity: 64 }],
+      [graceLen, { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 }],
+      [graceLen, { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 }],
+      [
+        graceLen + TPB,
+        { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 },
+      ],
+    ];
+
+    const { musicxml } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    // Grace note present but without slash (appoggiatura).
+    expect(musicxml).toContain("<grace/>");
+    expect(musicxml).not.toContain('slash="yes"');
+  });
+
+  test("isolated short note with no following normal note stays as a regular note", () => {
+    // A short note with nothing after it must not be promoted to grace.
+    const graceLen = TPB / 16;
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 64, velocity: 64 }],
+      [graceLen, { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 }],
+    ];
+
+    const { musicxml, notes } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    expect(musicxml).not.toContain("<grace");
+    expect(notes.every((n) => !n.isGrace)).toBe(true);
+  });
+
+  test("grace note has startBeat from raw MIDI, distinct from main note on a clean beat", () => {
+    // Grace note starts just before beat 1 (at tick TPB - graceLen), main note is
+    // exactly on beat 1 (tick TPB). The grace note's rawStartBeat is < 1.0 while
+    // the main note's quantized startBeat is exactly 1.0.
+    const graceLen = TPB / 16; // 30 ticks
+    const mainStart = TPB; // exactly beat 1
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 }], // C4 first beat
+      [
+        mainStart - graceLen,
+        { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 },
+      ],
+      [
+        mainStart - graceLen,
+        { type: "noteOn", channel: 0, noteNumber: 64, velocity: 64 },
+      ], // grace E4
+      [mainStart, { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 }],
+      [mainStart, { type: "noteOn", channel: 0, noteNumber: 62, velocity: 64 }], // D4 main
+      [
+        mainStart + TPB,
+        { type: "noteOff", channel: 0, noteNumber: 62, velocity: 0 },
+      ],
+    ];
+
+    const { notes } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    const graceNote = notes.find((n) => n.isGrace);
+    const mainNote = notes.find((n) => !n.isGrace && n.noteNumber === 62);
+
+    expect(graceNote).toBeDefined();
+    expect(mainNote).toBeDefined();
+    // The grace note's raw startBeat (< 1.0) is less than the main note's
+    // quantized startBeat (= 1.0).
+    if (!graceNote || !mainNote) {
+      throw new Error("notes not found");
+    }
+    expect(graceNote.startBeat).toBeLessThan(mainNote.startBeat);
+  });
+
+  test("multiple grace notes before a chord are all marked isGrace with sequential noteIndex", () => {
+    // Two grace notes (D4, E4) followed by C4.
+    const graceLen = TPB / 16;
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      [0, { type: "noteOn", channel: 0, noteNumber: 62, velocity: 64 }], // D4
+      [graceLen, { type: "noteOff", channel: 0, noteNumber: 62, velocity: 0 }],
+      [graceLen, { type: "noteOn", channel: 0, noteNumber: 64, velocity: 64 }], // E4
+      [
+        2 * graceLen,
+        { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 },
+      ],
+      [
+        2 * graceLen,
+        { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 },
+      ], // C4
+      [
+        2 * graceLen + TPB,
+        { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 },
+      ],
+    ];
+
+    const { musicxml, notes } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    const graceBlocks = noteBlocks(musicxml).filter((b) =>
+      b.includes("<grace"),
+    );
+    expect(graceBlocks).toHaveLength(2);
+
+    const gracePlayback = notes.filter((n) => n.isGrace);
+    expect(gracePlayback).toHaveLength(2);
+    // noteIndex values for grace notes should be distinct.
+    const graceIndices = gracePlayback.map((n) => n.noteIndex);
+    expect(new Set(graceIndices).size).toBe(2);
+  });
+});

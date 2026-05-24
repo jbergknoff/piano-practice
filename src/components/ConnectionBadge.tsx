@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
+import type { useBluetooth } from "../hooks/use-bluetooth";
 import type { ThemeTokens } from "../theme";
 import { hexA } from "../theme";
-import type { useBluetooth } from "../hooks/use-bluetooth";
 import { BluetoothIcon } from "./icons";
 
 const BT_SUPPORTED = typeof navigator !== "undefined" && !!navigator.bluetooth;

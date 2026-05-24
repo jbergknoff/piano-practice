@@ -1,6 +1,7 @@
 import type {
   AccidentalKind,
   ChordGroup,
+  GraceGroup,
   MeasureEvent,
   NoteType,
   ParsedMeasure,
@@ -87,11 +88,16 @@ function parseMeasure(el: Element): ParsedMeasure {
   const rawItems = Array.from(el.querySelectorAll("note")).map(parseRawNote);
   const events = groupEvents(rawItems);
 
-  // Assign noteIndex sequentially to ChordGroups (rests don't count)
+  // Assign noteIndex sequentially to grace groups and ChordGroups (rests don't count).
+  // Grace groups and regular chords share the same counter so their IDs are unique.
   let noteIndex = 0;
   for (const event of events) {
     if (!isRest(event)) {
-      event.noteIndex = noteIndex++;
+      const chord = event as ChordGroup;
+      for (const gg of chord.gracesBefore ?? []) {
+        gg.noteIndex = noteIndex++;
+      }
+      chord.noteIndex = noteIndex++;
     }
   }
 
@@ -158,8 +164,13 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const isRestEl = restEl !== null;
   const fullMeasure = restEl?.getAttribute("measure") === "yes";
 
-  const durationText = el.querySelector("duration")?.textContent ?? "4";
-  const duration = Number.parseInt(durationText, 10);
+  // Grace notes have <grace/> instead of (or in addition to) <duration>.
+  const graceEl = el.querySelector("grace");
+  const isGrace = graceEl !== null;
+
+  // Grace notes carry no rhythmic duration — treat as 0.
+  const durationText = el.querySelector("duration")?.textContent;
+  const duration = isGrace ? 0 : Number.parseInt(durationText ?? "4", 10);
 
   const typeText = el.querySelector("type")?.textContent;
   const type: NoteType =
@@ -189,7 +200,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const staccato =
     el.querySelector("notations > articulations > staccato") !== null;
 
-  return {
+  const note: ParsedNote = {
     kind: "note",
     pitch: { step, alter, octave },
     duration,
@@ -203,6 +214,10 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
     accidental: "none",
     staccato,
   };
+  if (isGrace) {
+    note.grace = { slash: graceEl.getAttribute("slash") === "yes" };
+  }
+  return note;
 }
 
 // Order in which sharps / flats are added by the key signature.
@@ -225,16 +240,17 @@ function keyAlterForStep(step: string, fifths: number): number {
 // the key signature dictates and is updated by every explicit accidental, so a
 // pitch sharped earlier in the measure shows a natural when it returns, and a
 // repeated sharp is not redrawn.
+//
+// Grace note groups that precede a chord are processed first (left to right),
+// matching their left-to-right display order.
 function assignMeasureAccidentals(
   events: MeasureEvent[],
   fifths: number,
 ): void {
   const active = new Map<string, number>();
-  for (const event of events) {
-    if (isRest(event)) {
-      continue;
-    }
-    for (const note of event.notes) {
+
+  function assignForNotes(notes: ParsedNote[]) {
+    for (const note of notes) {
       const key = `${note.pitch.step}${note.pitch.octave}`;
       const current = active.has(key)
         ? (active.get(key) as number)
@@ -250,19 +266,38 @@ function assignMeasureAccidentals(
       active.set(key, alter);
     }
   }
+
+  for (const event of events) {
+    if (isRest(event)) {
+      continue;
+    }
+    // Grace notes appear visually before the main chord — process them first.
+    for (const graceGroup of (event as ChordGroup).gracesBefore ?? []) {
+      assignForNotes(graceGroup.notes);
+    }
+    assignForNotes(event.notes);
+  }
 }
 
 function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
   const events: MeasureEvent[] = [];
+  // Buffer grace notes until we find the main chord they precede.
+  const pendingGraceGroups: GraceGroup[] = [];
+
   let i = 0;
   while (i < items.length) {
     const item = items[i];
+
     if (item.kind === "rest") {
+      // Flush any pending grace notes before the rest (attach to the rest is
+      // not supported — discard them; this is an unusual edge case).
+      pendingGraceGroups.length = 0;
       events.push(item);
       i++;
       continue;
     }
-    // Collect this note plus any immediately following chord members
+
+    // Collect this note plus any immediately following chord members.
     const group: ParsedNote[] = [item];
     i++;
     while (
@@ -273,17 +308,36 @@ function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
       group.push(items[i] as ParsedNote);
       i++;
     }
+
     // Sort low→high by diatonic index
     group.sort((a, b) => diatonicIndex(a.pitch) - diatonicIndex(b.pitch));
+
+    if (group[0].grace) {
+      // This is a grace note group. Buffer it until the following main chord.
+      pendingGraceGroups.push({
+        notes: group,
+        slash: group[0].grace.slash,
+        noteIndex: -1, // filled by parseMeasure
+      });
+      continue;
+    }
+
+    // Regular chord — attach any buffered grace groups and clear the buffer.
     const chord: ChordGroup = {
       notes: group,
       duration: group[0].duration,
       type: group[0].type,
       dot: group[0].dot,
       noteIndex: -1, // filled by caller
+      gracesBefore:
+        pendingGraceGroups.length > 0 ? [...pendingGraceGroups] : undefined,
     };
+    pendingGraceGroups.length = 0;
     events.push(chord);
   }
+
+  // If grace notes appear at the very end of a measure with no following note,
+  // discard them (this shouldn't happen in well-formed MusicXML).
   return events;
 }
 

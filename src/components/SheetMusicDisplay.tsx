@@ -16,6 +16,7 @@ import {
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
   DIVISIONS,
   FLAT_POSITIONS,
+  GRACE_NOTE_ADVANCE,
   KEY_CHANGE_GLYPH_SPACING_FACTOR,
   KEY_CHANGE_LEAD_FACTOR,
   MIN_EVENT_ADVANCE,
@@ -33,6 +34,7 @@ import {
 import type {
   AccidentalKind,
   ChordGroup,
+  GraceGroup,
   LayoutConfig,
   MeasureEvent,
   NoteType,
@@ -1462,6 +1464,134 @@ function TimeSig({
   );
 }
 
+// ── Grace Note Group ─────────────────────────────────────────────────────────
+
+// Grace notes are rendered at ~63% of full notehead size (font-size = 2.5 ×
+// staffSpace vs. 4 × staffSpace for regular notes). They always use filled
+// (black) noteheads, always stem up, and always show an eighth-note flag.
+// Acciaccatura (slash=true) additionally draws a diagonal slash through the stem.
+const GRACE_FONT_FACTOR = 2.5; // × staffSpace
+
+function GraceNoteGroupEl({
+  graceGroup,
+  graceIndex,
+  x,
+  staffBottomY,
+  clef,
+  partIndex,
+  measureNumber,
+  staffSpace,
+  inkColor,
+}: {
+  graceGroup: GraceGroup;
+  /** 0 = leftmost, increasing towards the main note */
+  graceIndex: number;
+  x: number;
+  staffBottomY: number;
+  clef: { sign: "G" | "F"; line: number };
+  partIndex: number;
+  measureNumber: number;
+  staffSpace: number;
+  inkColor: string;
+}) {
+  const { notes, slash, noteIndex } = graceGroup;
+  const fontSize = staffSpace * GRACE_FONT_FACTOR;
+  // Scale factor relative to full size — used for geometry adjustments.
+  const scale = GRACE_FONT_FACTOR / 4;
+  const nrx = staffSpace * 0.55 * scale; // notehead half-width
+  const stemLength = staffSpace * 2.5;
+
+  return (
+    <g data-grace-id={`p${partIndex}-m${measureNumber}-n${noteIndex}`}>
+      {notes.map((note, vi) => {
+        const ny = noteY(note.pitch, clef, staffBottomY, staffSpace);
+        const nx = x + vi * nrx * 0.3; // slight rightward cascade for unisons
+        const stemX = nx + nrx;
+        const stemTipY = ny - stemLength;
+        const noteId = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${vi}`;
+
+        // Accidental offset — scaled down for grace size
+        const accX = nx - staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR * scale;
+
+        return (
+          <g key={noteId}>
+            {/* Accidental */}
+            {note.accidental !== "none" && (
+              <text
+                x={accX}
+                y={ny}
+                fill={inkColor}
+                text-anchor="middle"
+                font-size={fontSize}
+                font-family={BRAVURA}
+              >
+                {ACCIDENTAL_GLYPH[note.accidental]}
+              </text>
+            )}
+            {/* Notehead */}
+            <text
+              id={noteId}
+              x={nx}
+              y={ny}
+              fill={inkColor}
+              text-anchor="middle"
+              font-size={fontSize}
+              font-family={BRAVURA}
+            >
+              {G.noteheadBlack}
+            </text>
+            {/* Ledger lines */}
+            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map(
+              (ly) => (
+                <line
+                  key={ly}
+                  x1={nx - nrx - 3}
+                  x2={nx + nrx + 3}
+                  y1={ly}
+                  y2={ly}
+                  stroke={inkColor}
+                  stroke-width="0.8"
+                />
+              ),
+            )}
+            {/* Stem (upward) */}
+            <line
+              x1={stemX}
+              x2={stemX}
+              y1={ny}
+              y2={stemTipY}
+              stroke={inkColor}
+              stroke-width="1"
+            />
+            {/* Flag — always 8th note, always up */}
+            <text
+              x={stemX}
+              y={stemTipY}
+              text-anchor="start"
+              fill={inkColor}
+              font-size={fontSize}
+              font-family={BRAVURA}
+            >
+              {G.flag8thUp}
+            </text>
+            {/* Acciaccatura slash */}
+            {slash && (
+              <line
+                x1={stemX - 4}
+                x2={stemX + 4}
+                y1={stemTipY + stemLength * 0.6}
+                y2={stemTipY - 3}
+                stroke={inkColor}
+                stroke-width="1"
+              />
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 // ── Chord Group ───────────────────────────────────────────────────────────────
 
 interface ChordGroupElProps {
@@ -1515,7 +1645,8 @@ const ChordGroupEl = memo(function ChordGroupEl({
   inkColor,
   beamStemOverride,
 }: ChordGroupElProps) {
-  const { type, notes } = group;
+  const { type, notes, gracesBefore } = group;
+  const N = gracesBefore?.length ?? 0;
   const hasNoStem = type === "whole";
 
   const stemDir = beamStemOverride?.stemDir ?? stemDirection(group, clef);
@@ -1559,6 +1690,25 @@ const ChordGroupEl = memo(function ChordGroupEl({
 
   return (
     <g data-chord-id={`p${partIndex}-m${measureNumber}-n${group.noteIndex}`}>
+      {/* Grace notes rendered to the left of the main chord */}
+      {gracesBefore?.map((gg, gi) => {
+        // gi=0 is leftmost; x offset increases as we approach the main note.
+        const gx = x - (N - gi) * GRACE_NOTE_ADVANCE;
+        return (
+          <GraceNoteGroupEl
+            key={gg.noteIndex}
+            graceGroup={gg}
+            graceIndex={gi}
+            x={gx}
+            staffBottomY={staffBottomY}
+            clef={clef}
+            partIndex={partIndex}
+            measureNumber={measureNumber}
+            staffSpace={staffSpace}
+            inkColor={inkColor}
+          />
+        );
+      })}
       {!hasNoStem && (
         <line
           x1={stemX}

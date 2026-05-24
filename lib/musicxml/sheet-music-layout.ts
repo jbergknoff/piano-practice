@@ -28,6 +28,11 @@ export const ACCIDENTAL_COLUMN_WIDTH_FACTOR = 1.1;
 // dense 16th-note runs don't collapse noteheads into each other.
 export const MIN_EVENT_ADVANCE = 18;
 
+// Horizontal space reserved per grace-note group to the left of the main
+// notehead. The main chord's onset is pushed right by this amount × the number
+// of grace groups, making room for the small noteheads, stems, and flags.
+export const GRACE_NOTE_ADVANCE = 16;
+
 export const MEASURE_PADDING_LEFT = 14;
 export const MEASURE_PADDING_RIGHT = 4;
 
@@ -250,11 +255,16 @@ export function buildMeasureSpine(
     for (const event of measure.events) {
       onsets.add(pos);
       if (!isRest(event)) {
-        const acc = accidentalAdvance((event as ChordGroup).notes, staffSpace);
-        if (acc > 0) {
+        const chord = event as ChordGroup;
+        const acc = accidentalAdvance(chord.notes, staffSpace);
+        // Each grace group adds GRACE_NOTE_ADVANCE pixels of required left-side
+        // space, stacked on top of any accidental advance.
+        const graceAdv = (chord.gracesBefore?.length ?? 0) * GRACE_NOTE_ADVANCE;
+        const total = acc + graceAdv;
+        if (total > 0) {
           accAdvanceByDiv.set(
             pos,
-            Math.max(accAdvanceByDiv.get(pos) ?? 0, acc),
+            Math.max(accAdvanceByDiv.get(pos) ?? 0, total),
           );
         }
       }

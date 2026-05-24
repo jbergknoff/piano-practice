@@ -5,16 +5,16 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { PlayalongResultModal } from "../components/PlayalongResultModal";
 import type { PlaybackNote } from "../../lib/midi/midi-to-musicxml";
-import type { ModeControl, ModeHandle } from "./mode-control";
-import { useStableNoteColors } from "./note-colors";
-import type { ThemeTokens } from "../theme";
+import { PlayalongResultModal } from "../components/PlayalongResultModal";
 import {
   type PlayalongAttempt,
   loadPlayalongAttemptHistory,
   savePlayalongAttempt,
 } from "../hooks/use-file-history";
+import type { ThemeTokens } from "../theme";
+import type { ModeControl, ModeHandle } from "./mode-control";
+import { useStableNoteColors } from "./note-colors";
 
 export type PlayalongPhase =
   | "idle"
