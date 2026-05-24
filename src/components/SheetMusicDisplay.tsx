@@ -190,7 +190,7 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
-function computeCursorX(
+export function computeCursorX(
   beat: number,
   score: ParsedScore,
   layout: ResolvedLayout,
