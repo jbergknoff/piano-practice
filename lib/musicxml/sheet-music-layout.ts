@@ -28,6 +28,11 @@ export const ACCIDENTAL_COLUMN_WIDTH_FACTOR = 1.1;
 // dense 16th-note runs don't collapse noteheads into each other.
 export const MIN_EVENT_ADVANCE = 18;
 
+// Horizontal space reserved per grace-note group to the left of the main
+// notehead. The main chord's onset is pushed right by this amount × the number
+// of grace groups, making room for the small noteheads, stems, and flags.
+export const GRACE_NOTE_ADVANCE = 20;
+
 export const MEASURE_PADDING_LEFT = 14;
 export const MEASURE_PADDING_RIGHT = 4;
 
@@ -171,19 +176,30 @@ function measureLeftPad(
   isFirst: boolean,
   staffSpace: number,
 ): number {
+  // Extra space needed so grace notes on the first chord don't overflow the
+  // barline. The leftmost grace notehead sits GRACE_NOTE_ADVANCE px left of
+  // the main notehead, so we push the main notehead right by the same amount.
+  const firstGraceAdv =
+    events.length > 0 && !isRest(events[0])
+      ? ((events[0] as ChordGroup).gracesBefore?.length ?? 0) *
+        GRACE_NOTE_ADVANCE
+      : 0;
+
   if (isFirst) {
-    return MEASURE_PADDING_LEFT;
+    return MEASURE_PADDING_LEFT + firstGraceAdv;
   }
   const maxCol = firstEventMaxAccidentalColumn(events, staffSpace);
   if (maxCol < 0) {
-    return MEASURE_PADDING_LEFT;
+    return MEASURE_PADDING_LEFT + firstGraceAdv;
   }
   // staffSpace*2 keeps a single accidental clear of the barline; each extra
   // column shifts the noteheads further right by its own width plus a little
   // breathing room, so the further-left accidentals also sit clear of the
   // barline with some margin.
   const colWidth = staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
-  return staffSpace * 2 + maxCol * (colWidth + staffSpace * 0.5);
+  return (
+    staffSpace * 2 + maxCol * (colWidth + staffSpace * 0.5) + firstGraceAdv
+  );
 }
 
 // Horizontal advance between two onsets `deltaDivs` apart: proportional to the
@@ -241,20 +257,33 @@ export function buildMeasureSpine(
   noteUnitWidth: number,
 ): { divs: number[]; xs: number[]; endDiv: number; endX: number } {
   const onsets = new Set<number>();
-  // Extra advance needed into a given onset so any accidental there clears the
-  // previous notehead — the max requirement across all parts at that onset.
+  // Accidental advance competes with the natural gap: ensures the previous
+  // notehead clears the current accidental glyph (whichever is larger wins).
   const accAdvanceByDiv = new Map<number, number>();
+  // Grace advance is always additive: grace noteheads occupy their own slot
+  // to the left of the main notehead regardless of how tight the surrounding
+  // notes are. Using max() here would let a large natural gap absorb the
+  // grace space, causing the grace notehead to land on top of the previous note.
+  const graceAdvByDiv = new Map<number, number>();
   let contentEnd = 0; // last division any part's notes actually reach
   for (const measure of measures) {
     let pos = 0;
     for (const event of measure.events) {
       onsets.add(pos);
       if (!isRest(event)) {
-        const acc = accidentalAdvance((event as ChordGroup).notes, staffSpace);
+        const chord = event as ChordGroup;
+        const acc = accidentalAdvance(chord.notes, staffSpace);
+        const graceAdv = (chord.gracesBefore?.length ?? 0) * GRACE_NOTE_ADVANCE;
         if (acc > 0) {
           accAdvanceByDiv.set(
             pos,
             Math.max(accAdvanceByDiv.get(pos) ?? 0, acc),
+          );
+        }
+        if (graceAdv > 0) {
+          graceAdvByDiv.set(
+            pos,
+            Math.max(graceAdvByDiv.get(pos) ?? 0, graceAdv),
           );
         }
       }
@@ -270,7 +299,9 @@ export function buildMeasureSpine(
   for (let k = 0; k < divs.length; k++) {
     if (k > 0) {
       const gap = eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
-      x += Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0);
+      x +=
+        Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0) +
+        (graceAdvByDiv.get(divs[k]) ?? 0);
     }
     xs.push(x);
   }

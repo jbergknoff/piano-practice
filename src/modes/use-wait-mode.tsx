@@ -7,13 +7,13 @@ import {
 } from "preact/hooks";
 import { WaitModeResultModal } from "../components/WaitModeResultModal";
 import type { WaitModeDebugEvent } from "../debug-log";
-import type { ModeControl, ModeHandle } from "./mode-control";
-import type { ThemeTokens } from "../theme";
 import {
   type WaitModeAttempt,
   loadAttemptHistory,
   saveAttempt,
 } from "../hooks/use-file-history";
+import type { ThemeTokens } from "../theme";
+import type { ModeControl, ModeHandle } from "./mode-control";
 
 export type { DebugBeatEvent } from "../debug-log";
 

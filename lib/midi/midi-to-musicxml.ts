@@ -61,6 +61,8 @@ export interface PlaybackNote {
   measureNumber: number;
   noteIndex: number; // chord index within measure (matches display noteIndex)
   voiceIndex: number; // note index within chord (0 = lowest pitch)
+  /** True when this note is a grace note (appoggiatura or acciaccatura). */
+  isGrace?: boolean;
 }
 
 export interface MidiConversionResult {
@@ -183,9 +185,47 @@ function renderNote(
   return lines.join("\n");
 }
 
+// Emit a grace note (appoggiatura or acciaccatura) — no <duration>, type is
+// always "eighth". slash=true adds `slash="yes"` to <grace/>.
+function renderGraceNote(
+  pitch: { step: string; alter?: number; octave: number },
+  slash: boolean,
+  chord: boolean,
+  indent: string,
+): string {
+  const i = indent;
+  const lines: string[] = [`${i}<note>`];
+  if (chord) {
+    lines.push(`${i}  <chord/>`);
+  }
+  lines.push(`${i}  <grace${slash ? ' slash="yes"' : ""}/>`);
+  lines.push(`${i}  <pitch>`);
+  lines.push(`${i}    <step>${pitch.step}</step>`);
+  if (pitch.alter !== undefined) {
+    lines.push(`${i}    <alter>${pitch.alter}</alter>`);
+  }
+  lines.push(`${i}    <octave>${pitch.octave}</octave>`);
+  lines.push(`${i}  </pitch>`);
+  lines.push(`${i}  <type>eighth</type>`);
+  lines.push(`${i}</note>`);
+  return lines.join("\n");
+}
+
 // A note whose sounding length is at most this fraction of the space until the
 // next onset is treated as staccato (detached) and gets a staccato dot.
 const STACCATO_RATIO = 0.5;
+
+// Raw MIDI duration thresholds for grace note detection (in ticks).
+// A note shorter than GRACE_NOTE_THRESHOLD (≤ 32nd note) that is immediately
+// followed by a longer note is classified as a grace note. Notes shorter than
+// ACCIACCATURA_THRESHOLD (≤ 64th note) get the acciaccatura slash.
+//
+// These are expressed as multiples of tpb so they scale with the MIDI file's
+// resolution. For the common 480-tpb case:
+//   GRACE_NOTE_THRESHOLD  = 480/8  = 60 ticks (32nd note)
+//   ACCIACCATURA_THRESHOLD= 480/16 = 30 ticks (64th note)
+const GRACE_NOTE_THRESHOLD_FACTOR = 1 / 8; // × tpb
+const ACCIACCATURA_THRESHOLD_FACTOR = 1 / 16; // × tpb
 
 // ── Multi-track API ──────────────────────────────────────────────────────────
 
@@ -296,8 +336,136 @@ function detectClef(notes: RawNote[]): { sign: string; line: number } {
   return median < 60 ? { sign: "F", line: 4 } : { sign: "G", line: 2 };
 }
 
+// A grace note extracted before quantization, associated with the main note
+// it immediately precedes.
+interface GraceNoteInfo {
+  noteNumber: number;
+  /** Raw (pre-quantization) start tick. */
+  rawStartTick: number;
+  /** Raw MIDI duration in ticks. */
+  rawDurationTicks: number;
+  velocity: number;
+  slash: boolean; // acciaccatura (true) vs appoggiatura (false)
+  /** Raw startTick of the main note this grace note is associated with. */
+  mainNoteRawTick: number;
+}
+
+/**
+ * Identify grace note candidates from raw (unquantized) notes. Returns the
+ * grace notes and the remaining regular notes (with grace notes removed).
+ *
+ * A note is a grace note when:
+ *   1. Its raw duration < graceThreshold (≤ 32nd note), AND
+ *   2. It is preceded (in time) by either a normal-duration note or a
+ *      confirmed grace note — this prevents trill-termination figures from
+ *      being misidentified as grace notes, AND
+ *   3. There exists a subsequent note starting within one measure that is
+ *      not itself a grace note candidate — that note is the "main note".
+ * Slash (acciaccatura) is set when duration < acciaccaturaThreshold (≤ 64th).
+ *
+ * Rule 2 in detail: real grace ornaments always follow a "normal" note
+ * (e.g. a quarter or eighth note with duration > graceThreshold).  Multiple
+ * grace notes in a group chain: each subsequent candidate may follow another
+ * confirmed grace note.  Trill endings look like clusters of short notes
+ * preceded by the last trill repeat note which sits exactly at the threshold
+ * — those are rejected because their predecessor has duration ≤ graceThreshold
+ * and is not itself a confirmed grace.
+ */
+function detectGraceNotes(
+  rawNotes: RawNote[],
+  tpb: number,
+  ticksPerMeasure: number,
+): { graces: GraceNoteInfo[]; regulars: RawNote[] } {
+  const graceThreshold = tpb * GRACE_NOTE_THRESHOLD_FACTOR;
+  const acciaccaturaThreshold = tpb * ACCIACCATURA_THRESHOLD_FACTOR;
+
+  // Sort by start tick for sequential processing.
+  const sorted = [...rawNotes].sort(
+    (a, b) => a.startTick - b.startTick || a.noteNumber - b.noteNumber,
+  );
+
+  // First pass: flag all notes shorter than the grace threshold as candidates.
+  const isCandidate = sorted.map(
+    (n) => n.endTick - n.startTick < graceThreshold,
+  );
+
+  const graces: GraceNoteInfo[] = [];
+  const graceIndices = new Set<number>();
+
+  // Second pass: confirm each candidate.
+  for (let i = 0; i < sorted.length; i++) {
+    if (!isCandidate[i]) {
+      continue;
+    }
+    const grace = sorted[i];
+
+    // --- Rule 2: predecessor check ---
+    // Find the tick of the event that starts strictly before this candidate.
+    let prevTick = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (sorted[j].startTick < grace.startTick) {
+        prevTick = sorted[j].startTick;
+        break;
+      }
+    }
+
+    if (prevTick >= 0) {
+      // Examine all notes that share that preceding tick (a potential chord).
+      // The candidate is accepted if ANY predecessor is:
+      //   a) a normal-duration note (dur > graceThreshold), or
+      //   b) a confirmed grace note (chaining).
+      let validPredecessor = false;
+      for (let j = i - 1; j >= 0; j--) {
+        if (sorted[j].startTick !== prevTick) {
+          break;
+        }
+        const prevDur = sorted[j].endTick - sorted[j].startTick;
+        if (prevDur > graceThreshold || graceIndices.has(j)) {
+          validPredecessor = true;
+          break;
+        }
+      }
+      if (!validPredecessor) {
+        continue; // trill-ending or other short-note cluster — skip
+      }
+    }
+    // (If there is no preceding note at all, allow the candidate — it is the
+    // first note in the track, which can legitimately be a grace note.)
+
+    // --- Rule 3: following main note check ---
+    let mainIdx = -1;
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (
+        !isCandidate[j] &&
+        sorted[j].startTick <= grace.startTick + ticksPerMeasure
+      ) {
+        mainIdx = j;
+        break;
+      }
+    }
+    if (mainIdx === -1) {
+      continue; // no following main note — keep as regular
+    }
+
+    graceIndices.add(i);
+    const rawDurationTicks = grace.endTick - grace.startTick;
+    graces.push({
+      noteNumber: grace.noteNumber,
+      rawStartTick: grace.startTick,
+      rawDurationTicks,
+      velocity: grace.velocity,
+      slash: rawDurationTicks < acciaccaturaThreshold,
+      mainNoteRawTick: sorted[mainIdx].startTick,
+    });
+  }
+
+  const regulars = sorted.filter((_, i) => !graceIndices.has(i));
+  return { graces, regulars };
+}
+
 function buildPartMeasuresXml(
   rawNotes: RawNote[],
+  graceNotes: GraceNoteInfo[],
   tpb: number,
   timeSigNum: number,
   timeSigDen: number,
@@ -319,6 +487,21 @@ function buildPartMeasuresXml(
   const parts: NotePart[] = quantized
     .flatMap((n) => splitAtBarlines(n, ticksPerMeasure))
     .sort((a, b) => a.startTick - b.startTick || a.noteNumber - b.noteNumber);
+
+  // Build a map from the quantized tick of each grace note's main note to the
+  // list of grace notes that precede it, sorted by rawStartTick (ascending so
+  // the leftmost grace note is first in display order).
+  const gracesByQuantizedMainTick = new Map<number, GraceNoteInfo[]>();
+  for (const g of graceNotes) {
+    const quantizedMain = snap(g.mainNoteRawTick);
+    const list = gracesByQuantizedMainTick.get(quantizedMain) ?? [];
+    list.push(g);
+    gracesByQuantizedMainTick.set(quantizedMain, list);
+  }
+  // Sort each group so grace notes appear in onset order (left to right).
+  for (const list of gracesByQuantizedMainTick.values()) {
+    list.sort((a, b) => a.rawStartTick - b.rawStartTick);
+  }
 
   const measureXml: string[] = [];
   const playbackNotes: PlaybackNote[] = [];
@@ -374,6 +557,57 @@ function buildPartMeasuresXml(
         j++;
       }
       const chord = mParts.slice(i, j);
+
+      // Emit any grace notes that precede this chord (keyed by its quantized
+      // start tick). Each grace note group is a single note (chord=false for
+      // the first, chord=true for subsequent notes at the same grace onset).
+      const graceList = gracesByQuantizedMainTick.get(startTick);
+      if (graceList) {
+        // Group grace notes that share the same rawStartTick into chords.
+        let gi = 0;
+        while (gi < graceList.length) {
+          const graceStart = graceList[gi].rawStartTick;
+          // Collect all grace notes at this same raw onset.
+          let gj = gi;
+          while (
+            gj < graceList.length &&
+            graceList[gj].rawStartTick === graceStart
+          ) {
+            gj++;
+          }
+          const graceChord = graceList.slice(gi, gj);
+          // All notes in a grace chord share the same slash value (from first).
+          const slash = graceChord[0].slash;
+          // Sort the chord by note number (low → high).
+          graceChord.sort((a, b) => a.noteNumber - b.noteNumber);
+          for (let gk = 0; gk < graceChord.length; gk++) {
+            const g = graceChord[gk];
+            lines.push(
+              renderGraceNote(
+                noteNumberToPitch(g.noteNumber),
+                slash,
+                gk > 0, // chord member for all but the first
+                ind,
+              ),
+            );
+            // PlaybackNote for the grace note using its raw MIDI timing.
+            playbackNotes.push({
+              noteNumber: g.noteNumber,
+              startBeat: g.rawStartTick / tpb,
+              durationBeats: g.rawDurationTicks / tpb,
+              velocity: g.velocity,
+              tieStop: false,
+              partIndex,
+              measureNumber: m + 1,
+              noteIndex,
+              voiceIndex: gk,
+              isGrace: true,
+            });
+          }
+          noteIndex++;
+          gi = gj;
+        }
+      }
 
       // Use the space to the next chord's start as the displayed duration so
       // that short MIDI note-off times (performance articulation) don't create
@@ -462,15 +696,25 @@ export function midiToMusicXmlWithTracks(
   const keyByMeasure = collectKeyByMeasure(midiData, ticksPerMeasure);
   const initialKey = keyByMeasure.get(0) ?? { fifths: 0, mode: "major" };
 
-  const trackNotes = trackIndices.map((idx) => {
-    const raw = extractTrackNotes(midiData.tracks[idx], tpb);
-    const quantized = raw.map((n) => {
+  // Extract raw notes per track, then detect grace notes *before* quantization
+  // so the short-duration ornament notes are identified from the true MIDI data.
+  const rawTrackNotes = trackIndices.map((idx) =>
+    extractTrackNotes(midiData.tracks[idx], tpb),
+  );
+
+  // Detect and remove grace notes from each track's raw notes, then quantize.
+  const trackGraceNotes = rawTrackNotes.map((raw) => {
+    const { graces, regulars } = detectGraceNotes(raw, tpb, ticksPerMeasure);
+    return { graces, regulars };
+  });
+
+  const trackNotes = trackGraceNotes.map(({ regulars }) =>
+    regulars.map((n) => {
       const s = snap(n.startTick);
       const e = Math.max(s + grid, snap(n.endTick));
       return { ...n, startTick: s, endTick: e };
-    });
-    return quantized;
-  });
+    }),
+  );
 
   const allNotes = trackNotes.flat();
   if (allNotes.length === 0) {
@@ -507,6 +751,7 @@ export function midiToMusicXmlWithTracks(
     const clef = detectClef(trackNotes[i]);
     const { measureXml, notes } = buildPartMeasuresXml(
       trackNotes[i],
+      trackGraceNotes[i].graces,
       tpb,
       timeSigNum,
       timeSigDen,
@@ -554,6 +799,16 @@ ${parts}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Convert a MidiData object to a MusicXML string (single-part, all tracks
+ * merged). This is the simple/legacy API used by tests; the app uses
+ * midiToMusicXmlWithTracks instead.
+ *
+ * Note: unlike buildPartMeasuresXml (used by midiToMusicXmlWithTracks), this
+ * function uses the quantized note duration — not "space to next onset" — as
+ * the display duration. This matches the original test expectations and keeps
+ * the two code paths behaviourally distinct.
+ */
 export function midiToMusicXml(midiData: MidiData): string {
   const tpb = midiData.header.ticksPerBeat ?? 480;
 
@@ -561,36 +816,18 @@ export function midiToMusicXml(midiData: MidiData): string {
   let timeSigNum = 4;
   let timeSigDen = 4;
 
-  // Collect notes from all tracks
+  // Collect raw notes from all tracks (merged into one part).
   const rawNotes: RawNote[] = [];
-
   for (const track of midiData.tracks) {
+    const trackRaw = extractTrackNotes(track, tpb);
+    rawNotes.push(...trackRaw);
+    // Also scan for time-signature meta events.
     let tick = 0;
-    const active = new Map<number, { startTick: number; velocity: number }>();
-
     for (const ev of track) {
       tick += ev.deltaTime;
-
       if (ev.type === "timeSignature") {
         timeSigNum = ev.numerator;
-        // midi-file already converts the MIDI denominator byte to the actual value
         timeSigDen = ev.denominator;
-      } else if (ev.type === "noteOn" && ev.velocity > 0) {
-        active.set(ev.noteNumber, { startTick: tick, velocity: ev.velocity });
-      } else if (
-        ev.type === "noteOff" ||
-        (ev.type === "noteOn" && ev.velocity === 0)
-      ) {
-        const a = active.get(ev.noteNumber);
-        if (a) {
-          rawNotes.push({
-            noteNumber: ev.noteNumber,
-            startTick: a.startTick,
-            endTick: tick,
-            velocity: a.velocity,
-          });
-          active.delete(ev.noteNumber);
-        }
       }
     }
   }
@@ -608,14 +845,30 @@ export function midiToMusicXml(midiData: MidiData): string {
     );
   }
 
+  // Detect grace notes before quantization so the very-short ornament notes
+  // are identified from raw timing data.
+  const { graces, regulars } = detectGraceNotes(rawNotes, tpb, ticksPerMeasure);
+
   // Quantize to 16th-note grid
   const grid = tpb / 4;
   const snap = (t: number) => Math.round(t / grid) * grid;
-  const quantized: RawNote[] = rawNotes.map((n) => {
+  const quantized: RawNote[] = regulars.map((n) => {
     const s = snap(n.startTick);
     const e = Math.max(s + grid, snap(n.endTick));
     return { ...n, startTick: s, endTick: e };
   });
+
+  // Build a map from quantized chord start tick → grace notes that precede it.
+  const gracesByQuantizedMainTick = new Map<number, GraceNoteInfo[]>();
+  for (const g of graces) {
+    const quantizedMain = snap(g.mainNoteRawTick);
+    const list = gracesByQuantizedMainTick.get(quantizedMain) ?? [];
+    list.push(g);
+    gracesByQuantizedMainTick.set(quantizedMain, list);
+  }
+  for (const list of gracesByQuantizedMainTick.values()) {
+    list.sort((a, b) => a.rawStartTick - b.rawStartTick);
+  }
 
   const totalTicks = Math.max(...quantized.map((n) => n.endTick));
   const numMeasures = Math.ceil(totalTicks / ticksPerMeasure);
@@ -670,6 +923,36 @@ export function midiToMusicXml(midiData: MidiData): string {
         const restGrid = Math.round((startTick - cursor) / grid);
         for (const d of decompose(restGrid)) {
           lines.push(renderNote(null, d, false, false, false, ind));
+        }
+      }
+
+      // Emit any grace notes that precede this chord.
+      const graceList = gracesByQuantizedMainTick.get(startTick);
+      if (graceList) {
+        let gi = 0;
+        while (gi < graceList.length) {
+          const graceStart = graceList[gi].rawStartTick;
+          let gj = gi;
+          while (
+            gj < graceList.length &&
+            graceList[gj].rawStartTick === graceStart
+          ) {
+            gj++;
+          }
+          const graceChord = graceList.slice(gi, gj);
+          graceChord.sort((a, b) => a.noteNumber - b.noteNumber);
+          const slash = graceChord[0].slash;
+          for (let gk = 0; gk < graceChord.length; gk++) {
+            lines.push(
+              renderGraceNote(
+                noteNumberToPitch(graceChord[gk].noteNumber),
+                slash,
+                gk > 0,
+                ind,
+              ),
+            );
+          }
+          gi = gj;
         }
       }
 

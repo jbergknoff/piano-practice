@@ -23,6 +23,8 @@ export interface ParsedNote {
   isChordMember: boolean;
   accidental: AccidentalKind;
   staccato: boolean;
+  /** Present when this note is a grace note (appoggiatura or acciaccatura). */
+  grace?: { slash: boolean };
 }
 
 export interface ParsedRest {
@@ -33,12 +35,26 @@ export interface ParsedRest {
   fullMeasure: boolean;
 }
 
+/**
+ * A group of grace notes (appoggiatura or acciaccatura) that immediately
+ * precede a main chord. Grace notes take no rhythmic space — they are rendered
+ * to the left of the chord they belong to.
+ */
+export interface GraceGroup {
+  notes: ParsedNote[];
+  slash: boolean;
+  /** Sequential noteIndex shared with ChordGroup.noteIndex for stable SVG IDs. */
+  noteIndex: number;
+}
+
 export interface ChordGroup {
   notes: ParsedNote[];
   duration: number;
   type: NoteType;
   dot: boolean;
   noteIndex: number;
+  /** Grace note groups that precede this chord, in display order (left to right). */
+  gracesBefore?: GraceGroup[];
 }
 
 export type MeasureEvent = ChordGroup | ParsedRest;

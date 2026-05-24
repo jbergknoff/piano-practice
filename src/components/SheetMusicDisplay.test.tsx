@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 /**
  * Render-level tests: mount the real SheetMusicDisplay component into a linkedom
  * DOM (set up in src/test-setup.ts) and inspect the SVG it produces. These
@@ -6,7 +7,6 @@
  * stem direction, ledger lines, chord spacing, accidentals, beams, staccato.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { describe, expect, test } from "bun:test";
 import { render } from "preact";
 import { parseScore } from "../../lib/musicxml/musicxml-parser";
 import { resolveLayout } from "../../lib/musicxml/sheet-music-layout";
