@@ -1124,4 +1124,54 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
     const graceIndices = gracePlayback.map((n) => n.noteIndex);
     expect(new Set(graceIndices).size).toBe(2);
   });
+
+  test("trill-termination notes (short cluster after trill) are NOT detected as grace notes", () => {
+    // Reproduce the M32 pattern: a trill whose repeat notes sit exactly at the
+    // grace threshold (dur = TPB/8 = 60 ticks, NOT candidates) followed by
+    // a short terminating cluster (dur < 60, candidates) and then a main note.
+    // The predecessor check should reject the cluster because the note
+    // immediately before it has duration ≤ graceThreshold.
+    const trillLen = TPB / 8; // 60 ticks — exactly at threshold, NOT a candidate
+    const termLen = Math.floor(TPB / 12); // ~40 ticks — short, IS a candidate
+
+    // Layout: C5 quarter | B4-trill C5-trill | C5-term B4-term | A4-main
+    const t0 = 0;
+    const t1 = TPB; // trill starts after first quarter
+    const t2 = t1 + trillLen; // second trill note
+    const t3 = t1 + 2 * trillLen; // first terminator
+    const t4 = t3 + termLen; // second terminator
+    const t5 = t4 + termLen; // main note (A4)
+
+    const pairs: Array<[number, Record<string, unknown>]> = [
+      tsEvent(),
+      // Normal quarter note C5
+      [t0, { type: "noteOn", channel: 0, noteNumber: 72, velocity: 64 }],
+      [t1, { type: "noteOff", channel: 0, noteNumber: 72, velocity: 0 }],
+      // Trill notes: B4 then C5, each at trillLen (= graceThreshold, NOT a candidate)
+      [t1, { type: "noteOn", channel: 0, noteNumber: 71, velocity: 64 }],
+      [t2, { type: "noteOff", channel: 0, noteNumber: 71, velocity: 0 }],
+      [t2, { type: "noteOn", channel: 0, noteNumber: 72, velocity: 64 }],
+      [t3, { type: "noteOff", channel: 0, noteNumber: 72, velocity: 0 }],
+      // Terminating cluster: C5 then B4, both < graceThreshold — false grace candidates
+      [t3, { type: "noteOn", channel: 0, noteNumber: 72, velocity: 64 }],
+      [t4, { type: "noteOff", channel: 0, noteNumber: 72, velocity: 0 }],
+      [t4, { type: "noteOn", channel: 0, noteNumber: 71, velocity: 64 }],
+      [t5, { type: "noteOff", channel: 0, noteNumber: 71, velocity: 0 }],
+      // Main note: A4, duration = trillLen (≥ graceThreshold, NOT a candidate)
+      [t5, { type: "noteOn", channel: 0, noteNumber: 69, velocity: 64 }],
+      [
+        t5 + trillLen,
+        { type: "noteOff", channel: 0, noteNumber: 69, velocity: 0 },
+      ],
+    ];
+
+    const { musicxml, notes } = midiToMusicXmlWithTracks(
+      makeMidi(withDeltas(pairs)),
+      [0],
+    );
+
+    // None of the terminating short notes should be promoted to grace notes.
+    expect(musicxml).not.toContain("<grace");
+    expect(notes.every((n) => !n.isGrace)).toBe(true);
+  });
 });

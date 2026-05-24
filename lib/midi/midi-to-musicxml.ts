@@ -356,9 +356,20 @@ interface GraceNoteInfo {
  *
  * A note is a grace note when:
  *   1. Its raw duration < graceThreshold (≤ 32nd note), AND
- *   2. There exists a subsequent note starting within one measure that is
+ *   2. It is preceded (in time) by either a normal-duration note or a
+ *      confirmed grace note — this prevents trill-termination figures from
+ *      being misidentified as grace notes, AND
+ *   3. There exists a subsequent note starting within one measure that is
  *      not itself a grace note candidate — that note is the "main note".
  * Slash (acciaccatura) is set when duration < acciaccaturaThreshold (≤ 64th).
+ *
+ * Rule 2 in detail: real grace ornaments always follow a "normal" note
+ * (e.g. a quarter or eighth note with duration > graceThreshold).  Multiple
+ * grace notes in a group chain: each subsequent candidate may follow another
+ * confirmed grace note.  Trill endings look like clusters of short notes
+ * preceded by the last trill repeat note which sits exactly at the threshold
+ * — those are rejected because their predecessor has duration ≤ graceThreshold
+ * and is not itself a confirmed grace.
  */
 function detectGraceNotes(
   rawNotes: RawNote[],
@@ -381,13 +392,47 @@ function detectGraceNotes(
   const graces: GraceNoteInfo[] = [];
   const graceIndices = new Set<number>();
 
-  // Second pass: confirm each candidate by finding a following normal note.
+  // Second pass: confirm each candidate.
   for (let i = 0; i < sorted.length; i++) {
     if (!isCandidate[i]) {
       continue;
     }
     const grace = sorted[i];
-    // Look for the first subsequent non-candidate note within one measure.
+
+    // --- Rule 2: predecessor check ---
+    // Find the tick of the event that starts strictly before this candidate.
+    let prevTick = -1;
+    for (let j = i - 1; j >= 0; j--) {
+      if (sorted[j].startTick < grace.startTick) {
+        prevTick = sorted[j].startTick;
+        break;
+      }
+    }
+
+    if (prevTick >= 0) {
+      // Examine all notes that share that preceding tick (a potential chord).
+      // The candidate is accepted if ANY predecessor is:
+      //   a) a normal-duration note (dur > graceThreshold), or
+      //   b) a confirmed grace note (chaining).
+      let validPredecessor = false;
+      for (let j = i - 1; j >= 0; j--) {
+        if (sorted[j].startTick !== prevTick) {
+          break;
+        }
+        const prevDur = sorted[j].endTick - sorted[j].startTick;
+        if (prevDur > graceThreshold || graceIndices.has(j)) {
+          validPredecessor = true;
+          break;
+        }
+      }
+      if (!validPredecessor) {
+        continue; // trill-ending or other short-note cluster — skip
+      }
+    }
+    // (If there is no preceding note at all, allow the candidate — it is the
+    // first note in the track, which can legitimately be a grace note.)
+
+    // --- Rule 3: following main note check ---
     let mainIdx = -1;
     for (let j = i + 1; j < sorted.length; j++) {
       if (
