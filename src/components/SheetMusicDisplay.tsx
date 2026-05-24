@@ -1466,11 +1466,11 @@ function TimeSig({
 
 // ── Grace Note Group ─────────────────────────────────────────────────────────
 
-// Grace notes are rendered at ~63% of full notehead size (font-size = 2.5 ×
+// Grace notes are rendered at 50% of full notehead size (font-size = 2 ×
 // staffSpace vs. 4 × staffSpace for regular notes). They always use filled
 // (black) noteheads, always stem up, and always show an eighth-note flag.
 // Acciaccatura (slash=true) additionally draws a diagonal slash through the stem.
-const GRACE_FONT_FACTOR = 2.5; // × staffSpace
+const GRACE_FONT_FACTOR = 2.0; // × staffSpace
 
 function GraceNoteGroupEl({
   graceGroup,
