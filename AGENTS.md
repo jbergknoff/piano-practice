@@ -34,7 +34,7 @@ playback derivation are separate steps:
 
 Both paths produce a `ScoreConversion` (`musicxml` string, `notes`, `totalBeats`, `timeSigNum`/`timeSigDen`). `musicXmlToConversion` parses the score with the same `parseScore` the renderer uses, so each `PlaybackNote`'s ID (`p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}`) matches the renderer's by construction. Standard MusicXML has no per-note velocity, so playback uses a constant default velocity and notation-derived durations (staccato shortens the sounding length). The `ScoreConversion` is fed into `MidiPlayer` for playback and into each mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) via the shared `ModeControl`.
 
-Loaded MusicXML currently renders correctly for simple single-voice scores; multi-staff/`<backup>`/multi-voice scores are not yet handled by the parser/layout.
+Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split by the parser into one `ParsedPart` per staff — the renderer stacks them as a grand staff. Each staff's voices are reduced to a single onset-ordered event stream (notes sharing an onset become a chord; durations become the gap to the next onset), and durations are normalized to the layout's base grid (`NORMALIZED_DIVISIONS` = 4 per quarter) so arbitrary file `<divisions>` work without touching the layout. Dense multi-voice passages are thus a rhythmic reduction, not full voice separation.
 
 ### Key files
 

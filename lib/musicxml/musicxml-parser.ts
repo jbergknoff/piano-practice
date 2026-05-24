@@ -37,48 +37,77 @@ export function parseScore(xml: string): ParsedScore {
   );
   const partEls = Array.from(doc.querySelectorAll("score-partwise > part"));
 
-  const parts: ParsedPart[] = scorePartEls.map((scorePartEl, i) => {
+  const parts: ParsedPart[] = [];
+  scorePartEls.forEach((scorePartEl, i) => {
     const id = scorePartEl.getAttribute("id") ?? `P${i + 1}`;
     const partEl = partEls[i];
-    const measures = partEl ? parseMeasures(partEl) : [];
-    const first = measures[0];
-    const keySig = first?.keySig ?? { fifths: 0, mode: "major" };
-    // Resolve the key in effect for each measure: a measure carries the running
-    // key forward unless its <attributes> declares a different one, in which
-    // case it starts a key change (rendered with cancel naturals + new accidentals).
-    let runningFifths = keySig.fifths;
-    // divisions (ticks per quarter note) likewise carries forward from the last
-    // measure that declared one; default to 4 if the file never declares it.
-    let runningDivisions =
-      measures.find((m) => m.divisions > 0)?.divisions ?? 4;
-    measures.forEach((measure, m) => {
-      const declared = measure.keySig;
-      if (m === 0) {
-        runningFifths = declared?.fifths ?? runningFifths;
-      } else if (declared && declared.fifths !== runningFifths) {
-        measure.keyChange = {
-          fifths: declared.fifths,
-          prevFifths: runningFifths,
-        };
-        runningFifths = declared.fifths;
-      }
-      measure.activeFifths = runningFifths;
-      if (measure.divisions > 0) {
-        runningDivisions = measure.divisions;
-      }
-      measure.divisions = runningDivisions;
-      assignMeasureAccidentals(measure.events, runningFifths);
-    });
-    return {
-      id,
-      measures,
-      clef: first?.clef ?? { sign: "G", line: 2 },
-      timeSig: first?.timeSig ?? { beats: 4, beatType: 4 },
-      keySig,
-    };
+    if (!partEl) {
+      parts.push(emptyPart(id));
+      return;
+    }
+    // A piano part with two staves (treble + bass) — or any part using <backup>
+    // to interleave voices — is split into one ParsedPart per staff. The renderer
+    // already stacks parts as vertically aligned staves (a grand staff), and the
+    // split-out durations are normalized to NORMALIZED_DIVISIONS per quarter note
+    // so the layout and playback derivation need no special casing.
+    const staffParts = isMultiStaffPart(partEl)
+      ? parseMultiStaffPart(partEl, id)
+      : [parseSingleStaffPart(partEl, id)];
+    for (const part of staffParts) {
+      parts.push(part);
+    }
   });
 
   return { parts, numMeasures: parts[0]?.measures.length ?? 0 };
+}
+
+function emptyPart(id: string): ParsedPart {
+  return {
+    id,
+    measures: [],
+    clef: { sign: "G", line: 2 },
+    timeSig: { beats: 4, beatType: 4 },
+    keySig: { fifths: 0, mode: "major" },
+  };
+}
+
+function parseSingleStaffPart(partEl: Element, id: string): ParsedPart {
+  const measures = parseMeasures(partEl);
+  resolvePartMeasures(measures);
+  const first = measures[0];
+  return {
+    id,
+    measures,
+    clef: first?.clef ?? { sign: "G", line: 2 },
+    timeSig: first?.timeSig ?? { beats: 4, beatType: 4 },
+    keySig: first?.keySig ?? { fifths: 0, mode: "major" },
+  };
+}
+
+// Resolve, for every measure in a part, the running key signature and divisions
+// (each carries forward from the last measure that declared one), the mid-staff
+// key changes, and the per-measure printed accidentals. Mutates in place.
+function resolvePartMeasures(measures: ParsedMeasure[]): void {
+  let runningFifths = measures[0]?.keySig?.fifths ?? 0;
+  let runningDivisions = measures.find((m) => m.divisions > 0)?.divisions ?? 4;
+  measures.forEach((measure, m) => {
+    const declared = measure.keySig;
+    if (m === 0) {
+      runningFifths = declared?.fifths ?? runningFifths;
+    } else if (declared && declared.fifths !== runningFifths) {
+      measure.keyChange = {
+        fifths: declared.fifths,
+        prevFifths: runningFifths,
+      };
+      runningFifths = declared.fifths;
+    }
+    measure.activeFifths = runningFifths;
+    if (measure.divisions > 0) {
+      runningDivisions = measure.divisions;
+    }
+    measure.divisions = runningDivisions;
+    assignMeasureAccidentals(measure.events, runningFifths);
+  });
 }
 
 function parseMeasures(partEl: Element): ParsedMeasure[] {
@@ -99,19 +128,7 @@ function parseMeasure(el: Element): ParsedMeasure {
 
   const rawItems = Array.from(el.querySelectorAll("note")).map(parseRawNote);
   const events = groupEvents(rawItems);
-
-  // Assign noteIndex sequentially to grace groups and ChordGroups (rests don't count).
-  // Grace groups and regular chords share the same counter so their IDs are unique.
-  let noteIndex = 0;
-  for (const event of events) {
-    if (!isRest(event)) {
-      const chord = event as ChordGroup;
-      for (const gg of chord.gracesBefore ?? []) {
-        gg.noteIndex = noteIndex++;
-      }
-      chord.noteIndex = noteIndex++;
-    }
-  }
+  assignNoteIndices(events);
 
   // activeFifths is a placeholder here; parseScore resolves the running key
   // across measures and overwrites it.
@@ -124,6 +141,309 @@ function parseMeasure(el: Element): ParsedMeasure {
     divisions,
     activeFifths: keySig?.fifths ?? 0,
   };
+}
+
+// Assign noteIndex sequentially to grace groups and ChordGroups (rests don't
+// count). Grace groups and regular chords share the same counter so their SVG
+// IDs are unique within a measure.
+function assignNoteIndices(events: MeasureEvent[]): void {
+  let noteIndex = 0;
+  for (const event of events) {
+    if (!isRest(event)) {
+      for (const gg of event.gracesBefore ?? []) {
+        gg.noteIndex = noteIndex++;
+      }
+      event.noteIndex = noteIndex++;
+    }
+  }
+}
+
+// ── Multi-staff parts (piano grand staff, <backup>, multiple voices) ───────────
+
+// Divisions-per-quarter the layout and renderer assume. Multi-staff durations
+// are normalized to this base so existing onset/spacing math works unchanged.
+const NORMALIZED_DIVISIONS = 4;
+
+interface StaffItem {
+  staff: number;
+  /** Onset within the measure, in the file's own divisions. */
+  onset: number;
+  /** Notated duration in the file's own divisions (0 for grace notes). */
+  durationReal: number;
+  parsed: ParsedNote | ParsedRest;
+  isChord: boolean;
+  isGrace: boolean;
+}
+
+// A part is multi-staff when it declares more than one <staff> or uses <backup>
+// to interleave voices (which the flat single-staff reader cannot place in time).
+function isMultiStaffPart(partEl: Element): boolean {
+  const staves = partEl.querySelector("staves")?.textContent;
+  if (staves && Number.parseInt(staves, 10) > 1) {
+    return true;
+  }
+  return partEl.querySelector("backup") !== null;
+}
+
+function clefsByStaff(
+  partEl: Element,
+  staffCount: number,
+): Array<{ sign: "G" | "F"; line: number }> {
+  // Default a 2-staff piano part to treble over bass; everything else treble.
+  const clefs = Array.from({ length: staffCount }, (_, s) =>
+    s === 1 ? { sign: "F" as const, line: 4 } : { sign: "G" as const, line: 2 },
+  );
+  const seen = new Array<boolean>(staffCount).fill(false);
+  for (const clefEl of Array.from(
+    partEl.querySelectorAll("attributes > clef"),
+  )) {
+    const staffIndex =
+      Number.parseInt(clefEl.getAttribute("number") ?? "1", 10) - 1;
+    if (staffIndex < 0 || staffIndex >= staffCount || seen[staffIndex]) {
+      continue;
+    }
+    const sign = (clefEl.querySelector("sign")?.textContent ?? "G") as
+      | "G"
+      | "F";
+    const line = Number.parseInt(
+      clefEl.querySelector("line")?.textContent ?? "2",
+      10,
+    );
+    clefs[staffIndex] = { sign, line };
+    seen[staffIndex] = true;
+  }
+  return clefs;
+}
+
+// Walk a measure's children in document order, tracking the MusicXML time cursor
+// (advanced by note durations, rewound by <backup>, advanced by <forward>), and
+// record every note/rest with the staff it belongs to and its onset.
+function collectStaffItems(measureEl: Element): StaffItem[] {
+  const items: StaffItem[] = [];
+  let cursor = 0;
+  let lastOnset = 0;
+  for (const child of Array.from(measureEl.children)) {
+    const tag = child.tagName.toLowerCase();
+    if (tag === "note") {
+      const isChord = child.querySelector("chord") !== null;
+      const isGrace = child.querySelector("grace") !== null;
+      const staff = Number.parseInt(
+        child.querySelector("staff")?.textContent ?? "1",
+        10,
+      );
+      const durationReal = isGrace
+        ? 0
+        : Number.parseInt(
+            child.querySelector("duration")?.textContent ?? "0",
+            10,
+          );
+      const onset = isChord ? lastOnset : cursor;
+      items.push({
+        staff,
+        onset,
+        durationReal,
+        parsed: parseRawNote(child),
+        isChord,
+        isGrace,
+      });
+      if (!isChord && !isGrace) {
+        lastOnset = cursor;
+        cursor += durationReal;
+      }
+    } else if (tag === "backup") {
+      cursor -= Number.parseInt(
+        child.querySelector("duration")?.textContent ?? "0",
+        10,
+      );
+    } else if (tag === "forward") {
+      cursor += Number.parseInt(
+        child.querySelector("duration")?.textContent ?? "0",
+        10,
+      );
+    }
+  }
+  return items;
+}
+
+function restEvent(duration: number, fullMeasure = false): ParsedRest {
+  return { kind: "rest", duration, type: "quarter", dot: false, fullMeasure };
+}
+
+// Group a staff's grace notes (which carry no rhythmic time) by the onset of the
+// chord they precede, splitting into grace chords on the <chord/> flag.
+function graceGroupsByOnset(
+  graceItems: StaffItem[],
+): Map<number, GraceGroup[]> {
+  const byOnset = new Map<number, GraceGroup[]>();
+  for (const item of graceItems) {
+    const note = item.parsed as ParsedNote;
+    const groups = byOnset.get(item.onset) ?? [];
+    if (item.isChord && groups.length > 0) {
+      groups[groups.length - 1].notes.push(note);
+    } else {
+      groups.push({
+        notes: [note],
+        slash: note.grace?.slash ?? false,
+        noteIndex: -1,
+      });
+    }
+    byOnset.set(item.onset, groups);
+  }
+  for (const groups of byOnset.values()) {
+    for (const group of groups) {
+      group.notes.sort(
+        (a, b) => diatonicIndex(a.pitch) - diatonicIndex(b.pitch),
+      );
+    }
+  }
+  return byOnset;
+}
+
+// Reduce one staff's items (across all its voices) to a single onset-ordered
+// event stream: notes sharing an onset become a chord, each event's duration is
+// the gap to the next onset so the cumulative-duration layout stays aligned, and
+// gaps before the first onset / an empty staff become rests.
+function buildStaffEvents(
+  items: StaffItem[],
+  contentEndReal: number,
+  scale: number,
+): MeasureEvent[] {
+  if (items.length === 0) {
+    return contentEndReal > 0 ? [restEvent(contentEndReal * scale, true)] : [];
+  }
+
+  const graces = graceGroupsByOnset(items.filter((it) => it.isGrace));
+  const byOnset = new Map<number, StaffItem[]>();
+  for (const item of items) {
+    if (item.isGrace) {
+      continue;
+    }
+    const list = byOnset.get(item.onset) ?? [];
+    list.push(item);
+    byOnset.set(item.onset, list);
+  }
+  const onsets = [...byOnset.keys()].sort((a, b) => a - b);
+
+  const events: MeasureEvent[] = [];
+  if (onsets.length === 0) {
+    return contentEndReal > 0 ? [restEvent(contentEndReal * scale, true)] : [];
+  }
+  if (onsets[0] > 0) {
+    events.push(restEvent(onsets[0] * scale));
+  }
+
+  for (let i = 0; i < onsets.length; i++) {
+    const onset = onsets[i];
+    const nextOnset = i + 1 < onsets.length ? onsets[i + 1] : contentEndReal;
+    const duration = Math.max(nextOnset - onset, 0) * scale;
+    const group = byOnset.get(onset) ?? [];
+    const noteItems = group.filter((it) => it.parsed.kind === "note");
+
+    if (noteItems.length === 0) {
+      const rest = group[0].parsed as ParsedRest;
+      events.push({
+        kind: "rest",
+        duration,
+        type: rest.type,
+        dot: rest.dot,
+        fullMeasure: rest.fullMeasure,
+      });
+      continue;
+    }
+
+    const notes = noteItems
+      .map((it) => it.parsed as ParsedNote)
+      .sort((a, b) => diatonicIndex(a.pitch) - diatonicIndex(b.pitch));
+    // The longest note at this onset defines the notehead glyph (its type/dot).
+    const representative = noteItems.reduce((best, it) =>
+      it.durationReal > best.durationReal ? it : best,
+    ).parsed as ParsedNote;
+    events.push({
+      notes,
+      duration,
+      type: representative.type,
+      dot: representative.dot,
+      noteIndex: -1,
+      gracesBefore: graces.get(onset),
+    });
+  }
+  return events;
+}
+
+function parseMultiStaffPart(partEl: Element, id: string): ParsedPart[] {
+  const measureEls = Array.from(partEl.querySelectorAll("measure"));
+  const staffCount = Math.max(
+    1,
+    Number.parseInt(partEl.querySelector("staves")?.textContent ?? "1", 10),
+  );
+  const clefs = clefsByStaff(partEl, staffCount);
+  const measuresByStaff: ParsedMeasure[][] = Array.from(
+    { length: staffCount },
+    () => [],
+  );
+
+  let runningDivisions =
+    measureEls
+      .map((el) =>
+        Number.parseInt(
+          el.querySelector("attributes > divisions")?.textContent ?? "0",
+          10,
+        ),
+      )
+      .find((d) => d > 0) ?? NORMALIZED_DIVISIONS;
+
+  for (const measureEl of measureEls) {
+    const attrEl = measureEl.querySelector("attributes");
+    const declaredDivisions = attrEl
+      ? Number.parseInt(
+          attrEl.querySelector("divisions")?.textContent ?? "0",
+          10,
+        )
+      : 0;
+    if (declaredDivisions > 0) {
+      runningDivisions = declaredDivisions;
+    }
+    const number = Number.parseInt(measureEl.getAttribute("number") ?? "1", 10);
+    const timeSig = attrEl ? parseTimeSig(attrEl) : undefined;
+    const keySig = attrEl ? parseKeySig(attrEl) : undefined;
+
+    const items = collectStaffItems(measureEl);
+    const scale = NORMALIZED_DIVISIONS / runningDivisions;
+    const contentEndReal = items.reduce(
+      (end, it) => Math.max(end, it.onset + it.durationReal),
+      0,
+    );
+
+    for (let s = 0; s < staffCount; s++) {
+      const events = buildStaffEvents(
+        items.filter((it) => it.staff === s + 1),
+        contentEndReal,
+        scale,
+      );
+      assignNoteIndices(events);
+      measuresByStaff[s].push({
+        number,
+        timeSig,
+        keySig,
+        clef: clefs[s],
+        events,
+        divisions: NORMALIZED_DIVISIONS,
+        activeFifths: keySig?.fifths ?? 0,
+      });
+    }
+  }
+
+  return measuresByStaff.map((measures, s) => {
+    resolvePartMeasures(measures);
+    const first = measures[0];
+    return {
+      id: staffCount > 1 ? `${id}-staff${s + 1}` : id,
+      measures,
+      clef: clefs[s],
+      timeSig: first?.timeSig ?? { beats: 4, beatType: 4 },
+      keySig: first?.keySig ?? { fifths: 0, mode: "major" },
+    };
+  });
 }
 
 function parseTimeSig(
