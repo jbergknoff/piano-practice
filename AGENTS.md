@@ -82,6 +82,8 @@ All cursor changes go through `setCursor(beat, "jump" | "smooth")` in `PracticeS
 
 Mode hooks reach the cursor through `control.setCursor` and the player through `control.player`. `useWaitMode` calls `control.setCursor(beat, "jump")` + `control.player.seek(beat)` synchronously inside `onNoteEvent` whenever the user plays a correct chord, with no intermediate reactive state — eliminating render-cycle lag.
 
+**Beat → X mapping** — `computeCursorX(beat, score, layout, measureStartBeats)` in `SheetMusicDisplay.tsx` turns a quarter-note beat into an SVG x. It binary-searches `measureStartBeats` (the actual beat offset where each measure begins, computed once per piece by `computeMeasureStartBeats` from the parsed events' durations) to find the measure, then walks that measure's rhythm spine to interpolate within it. Using real per-measure offsets — rather than the old `floor(beat / beatsPerMeasure)` — keeps the cursor aligned on scores with pickup (anacrusis) bars or any other irregular measure lengths.
+
 **Scroll detachment** — `SheetMusicDisplay` tracks a `detachedRef` boolean internally:
 - Set `true` by pointer-drag or wheel events on the scroll container (the user scrolled away manually).
 - While detached, the smooth-follow animation does not run.
