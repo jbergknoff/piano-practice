@@ -1,4 +1,11 @@
 import type { MidiData, MidiEvent } from "midi-file";
+import { musicXmlToConversion } from "../musicxml/musicxml-playback";
+import type { ScoreConversion } from "../musicxml/musicxml-playback";
+
+export type {
+  PlaybackNote,
+  ScoreConversion,
+} from "../musicxml/musicxml-playback";
 
 // MusicXML divisions per quarter note (1 division = one 16th note)
 const DIVISIONS = 4;
@@ -49,29 +56,6 @@ interface NotePart {
   velocity: number;
   tieStop: boolean; // continues from previous measure
   tieStart: boolean; // continues into next measure
-}
-
-export interface PlaybackNote {
-  noteNumber: number;
-  startBeat: number; // quarter-note beats from start
-  durationBeats: number;
-  velocity: number;
-  tieStop: boolean;
-  partIndex: number;
-  measureNumber: number;
-  noteIndex: number; // chord index within measure (matches display noteIndex)
-  voiceIndex: number; // note index within chord (0 = lowest pitch)
-  /** True when this note is a grace note (appoggiatura or acciaccatura). */
-  isGrace?: boolean;
-}
-
-export interface MidiConversionResult {
-  musicxml: string;
-  notes: PlaybackNote[];
-  ticksPerBeat: number;
-  timeSigNum: number;
-  timeSigDen: number;
-  totalBeats: number;
 }
 
 function noteNumberToPitch(n: number): {
@@ -472,8 +456,7 @@ function buildPartMeasuresXml(
   keyByMeasure: Map<number, { fifths: number; mode: string }>,
   clef: { sign: string; line: number },
   numMeasures: number,
-  partIndex: number,
-): { measureXml: string[]; notes: PlaybackNote[] } {
+): string[] {
   const grid = tpb / 4;
   const snap = (t: number) => Math.round(t / grid) * grid;
   const quantized: RawNote[] = rawNotes.map((n) => {
@@ -504,7 +487,6 @@ function buildPartMeasuresXml(
   }
 
   const measureXml: string[] = [];
-  const playbackNotes: PlaybackNote[] = [];
   const ind = "    ";
 
   const initialKey = keyByMeasure.get(0) ?? { fifths: 0, mode: "major" };
@@ -590,19 +572,6 @@ function buildPartMeasuresXml(
                 ind,
               ),
             );
-            // PlaybackNote for the grace note using its raw MIDI timing.
-            playbackNotes.push({
-              noteNumber: g.noteNumber,
-              startBeat: g.rawStartTick / tpb,
-              durationBeats: g.rawDurationTicks / tpb,
-              velocity: g.velocity,
-              tieStop: false,
-              partIndex,
-              measureNumber: m + 1,
-              noteIndex,
-              voiceIndex: gk,
-              isGrace: true,
-            });
           }
           noteIndex++;
           gi = gj;
@@ -637,17 +606,6 @@ function buildPartMeasuresXml(
             staccato,
           ),
         );
-        playbackNotes.push({
-          noteNumber: p.noteNumber,
-          startBeat: p.startTick / tpb,
-          durationBeats: p.durationTicks / tpb,
-          velocity: p.velocity,
-          tieStop: p.tieStop,
-          partIndex,
-          measureNumber: m + 1,
-          noteIndex,
-          voiceIndex: k,
-        });
       }
 
       cursor = startTick + displayDur * grid;
@@ -667,13 +625,13 @@ function buildPartMeasuresXml(
     );
   }
 
-  return { measureXml, notes: playbackNotes };
+  return measureXml;
 }
 
 export function midiToMusicXmlWithTracks(
   midiData: MidiData,
   trackIndices: number[],
-): MidiConversionResult {
+): ScoreConversion {
   const tpb = midiData.header.ticksPerBeat ?? 480;
 
   let timeSigNum = 4;
@@ -718,24 +676,13 @@ export function midiToMusicXmlWithTracks(
 
   const allNotes = trackNotes.flat();
   if (allNotes.length === 0) {
-    return {
-      musicxml: emptyScore(
-        initialKey.fifths,
-        initialKey.mode,
-        timeSigNum,
-        timeSigDen,
-      ),
-      notes: [],
-      ticksPerBeat: tpb,
-      timeSigNum,
-      timeSigDen,
-      totalBeats: 0,
-    };
+    return musicXmlToConversion(
+      emptyScore(initialKey.fifths, initialKey.mode, timeSigNum, timeSigDen),
+    );
   }
 
   const totalTicks = Math.max(...allNotes.map((n) => n.endTick));
   const numMeasures = Math.ceil(totalTicks / ticksPerMeasure);
-  const totalBeats = (numMeasures * ticksPerMeasure) / tpb;
 
   const trackNames = getMidiTracks(midiData).reduce<Record<number, string>>(
     (acc, t) => {
@@ -745,11 +692,9 @@ export function midiToMusicXmlWithTracks(
     {},
   );
 
-  const allPlaybackNotes: PlaybackNote[] = [];
-
   const partEntries = trackIndices.map((idx, i) => {
     const clef = detectClef(trackNotes[i]);
-    const { measureXml, notes } = buildPartMeasuresXml(
+    const measureXml = buildPartMeasuresXml(
       trackNotes[i],
       trackGraceNotes[i].graces,
       tpb,
@@ -758,9 +703,7 @@ export function midiToMusicXmlWithTracks(
       keyByMeasure,
       clef,
       numMeasures,
-      i,
     );
-    allPlaybackNotes.push(...notes);
     return {
       id: `P${i + 1}`,
       name: trackNames[idx] ?? `Track ${idx + 1}`,
@@ -787,14 +730,7 @@ ${partList}
 ${parts}
 </score-partwise>`;
 
-  return {
-    musicxml,
-    notes: allPlaybackNotes,
-    ticksPerBeat: tpb,
-    timeSigNum,
-    timeSigDen,
-    totalBeats,
-  };
+  return musicXmlToConversion(musicxml);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

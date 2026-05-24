@@ -1,6 +1,7 @@
 export interface Pitch {
   step: "C" | "D" | "E" | "F" | "G" | "A" | "B";
-  alter: 0 | 1;
+  /** Chromatic alteration in semitones: -1 flat, 0 natural, +1 sharp. */
+  alter: number;
   octave: number;
 }
 
@@ -62,6 +63,9 @@ export type MeasureEvent = ChordGroup | ParsedRest;
 export interface ParsedMeasure {
   number: number;
   events: MeasureEvent[];
+  /** Divisions per quarter note in effect for this measure (carried forward
+   *  from the last measure that declared one). Resolved by the parser. */
+  divisions: number;
   timeSig?: { beats: number; beatType: number };
   /** The key signature declared in this measure's <attributes>, if any. */
   keySig?: { fifths: number; mode: string };

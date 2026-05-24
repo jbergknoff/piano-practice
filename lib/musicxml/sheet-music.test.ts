@@ -699,7 +699,7 @@ describe("buildMeasureSpine + eventXsFromSpine", () => {
   const DIVS = 16; // 4/4 measure
 
   function measureOf(events: MeasureEvent[]): ParsedMeasure {
-    return { number: 1, events, activeFifths: 0 };
+    return { number: 1, events, activeFifths: 0, divisions: 4 };
   }
 
   // x of every event for a single-part measure (relative to measureX = 0).
@@ -1104,7 +1104,7 @@ describe("key signature changes", () => {
   test("a key-change measure pushes its first note right by the key-sig width", () => {
     const events = [chord([p("C", 4)])];
     const baseline = buildMeasureSpine(
-      [{ number: 1, events, activeFifths: 0 }],
+      [{ number: 1, events, activeFifths: 0, divisions: 4 }],
       false,
       16,
       10,
@@ -1116,6 +1116,7 @@ describe("key signature changes", () => {
           number: 1,
           events,
           activeFifths: 2,
+          divisions: 4,
           keyChange: { fifths: 2, prevFifths: 0 },
         },
       ],

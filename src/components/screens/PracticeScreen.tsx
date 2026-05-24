@@ -7,7 +7,7 @@ import {
 } from "preact/hooks";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type {
-  MidiConversionResult,
+  ScoreConversion,
   TrackInfo,
 } from "../../../lib/midi/midi-to-musicxml";
 import type { DebugBeatEvent } from "../../debug-log";
@@ -44,7 +44,7 @@ interface PracticeScreenProps {
   accent: string;
   fileName: string;
   pieceTitle: string;
-  musicxml: MidiConversionResult | null;
+  musicxml: ScoreConversion | null;
   fileHash: string | null;
   bpm: number;
   baseBpm: number;
@@ -934,7 +934,9 @@ export function PracticeScreen({
                   `${baseBpm} BPM${bpm !== baseBpm ? ` (playing at ${bpm})` : ""}`,
                 ],
                 ["Time signature", musicxml ? `${musicxml.timeSigNum}/4` : "—"],
-                ["Tracks", String(tracks.length)],
+                ...(tracks.length > 0
+                  ? ([["Tracks", String(tracks.length)]] as [string, string][])
+                  : []),
               ] as [string, string][]
             ).map(([label, value]) => (
               <div

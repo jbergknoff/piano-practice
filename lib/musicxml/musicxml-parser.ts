@@ -47,6 +47,10 @@ export function parseScore(xml: string): ParsedScore {
     // key forward unless its <attributes> declares a different one, in which
     // case it starts a key change (rendered with cancel naturals + new accidentals).
     let runningFifths = keySig.fifths;
+    // divisions (ticks per quarter note) likewise carries forward from the last
+    // measure that declared one; default to 4 if the file never declares it.
+    let runningDivisions =
+      measures.find((m) => m.divisions > 0)?.divisions ?? 4;
     measures.forEach((measure, m) => {
       const declared = measure.keySig;
       if (m === 0) {
@@ -59,6 +63,10 @@ export function parseScore(xml: string): ParsedScore {
         runningFifths = declared.fifths;
       }
       measure.activeFifths = runningFifths;
+      if (measure.divisions > 0) {
+        runningDivisions = measure.divisions;
+      }
+      measure.divisions = runningDivisions;
       assignMeasureAccidentals(measure.events, runningFifths);
     });
     return {
@@ -84,6 +92,10 @@ function parseMeasure(el: Element): ParsedMeasure {
   const timeSig = attrEl ? parseTimeSig(attrEl) : undefined;
   const keySig = attrEl ? parseKeySig(attrEl) : undefined;
   const clef = attrEl ? parseClef(attrEl) : undefined;
+  // 0 is a sentinel for "not declared here"; parseScore resolves the running value.
+  const divisions = attrEl
+    ? Number.parseInt(attrEl.querySelector("divisions")?.textContent ?? "0", 10)
+    : 0;
 
   const rawItems = Array.from(el.querySelectorAll("note")).map(parseRawNote);
   const events = groupEvents(rawItems);
@@ -109,6 +121,7 @@ function parseMeasure(el: Element): ParsedMeasure {
     keySig,
     clef,
     events,
+    divisions,
     activeFifths: keySig?.fifths ?? 0,
   };
 }
@@ -187,7 +200,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const step = (pitchEl?.querySelector("step")?.textContent ??
     "C") as Pitch["step"];
   const alterText = pitchEl?.querySelector("alter")?.textContent;
-  const alter = alterText ? (Number.parseInt(alterText, 10) as 0 | 1) : 0;
+  const alter = alterText ? Number.parseInt(alterText, 10) : 0;
   const octave = Number.parseInt(
     pitchEl?.querySelector("octave")?.textContent ?? "4",
     10,

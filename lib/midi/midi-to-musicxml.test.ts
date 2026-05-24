@@ -1043,10 +1043,11 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
     expect(notes.every((n) => !n.isGrace)).toBe(true);
   });
 
-  test("grace note has startBeat from raw MIDI, distinct from main note on a clean beat", () => {
+  test("grace note shares the main note's onset and has a short sounding length", () => {
     // Grace note starts just before beat 1 (at tick TPB - graceLen), main note is
-    // exactly on beat 1 (tick TPB). The grace note's rawStartBeat is < 1.0 while
-    // the main note's quantized startBeat is exactly 1.0.
+    // exactly on beat 1 (tick TPB). Playback data is derived from the MusicXML,
+    // where grace notes take no rhythmic space — so the grace note is placed at
+    // the chord onset (beat 1) with a short nominal duration.
     const graceLen = TPB / 16; // 30 ticks
     const mainStart = TPB; // exactly beat 1
     const pairs: Array<[number, Record<string, unknown>]> = [
@@ -1078,12 +1079,12 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
 
     expect(graceNote).toBeDefined();
     expect(mainNote).toBeDefined();
-    // The grace note's raw startBeat (< 1.0) is less than the main note's
-    // quantized startBeat (= 1.0).
     if (!graceNote || !mainNote) {
       throw new Error("notes not found");
     }
-    expect(graceNote.startBeat).toBeLessThan(mainNote.startBeat);
+    // The grace note is placed at the chord onset and sounds briefly.
+    expect(graceNote.startBeat).toBe(mainNote.startBeat);
+    expect(graceNote.durationBeats).toBeLessThan(mainNote.durationBeats);
   });
 
   test("multiple grace notes before a chord are all marked isGrace with sequential noteIndex", () => {
