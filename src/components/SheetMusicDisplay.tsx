@@ -218,22 +218,27 @@ function computeCursorX(
     return barlineX;
   }
 
+  // The cursor must land on the actual downbeat notehead (xs[0]) at the
+  // downbeat — not the barline. The clef/key/padding lead-in that sits to the
+  // left of a measure's first note is dead space the cursor sweeps during the
+  // PREVIOUS measure's final beat, so the terminal anchor is the next measure's
+  // first onset (or the closing barline for the last measure). This keeps the
+  // cursor continuous across barlines while staying glued to the notes.
+  const nextSpine = layout.measureSpines[measureIndex + 1];
+  const measureEndX = nextSpine?.xs[0] ?? endBarlineX;
+
   for (let k = 0; k < divs.length; k++) {
     const segEndDiv = k + 1 < divs.length ? divs[k + 1] : spine.endDiv;
     if (targetDiv < segEndDiv) {
-      // Interpolate between adjacent anchors so the cursor is always continuous:
-      //   k=0  starts at barlineX (matches end of previous measure)
-      //   k>0  starts at xs[k]
-      //   all  end at the next onset's X, or the closing barline for the last
-      const x0 = k === 0 ? barlineX : xs[k];
-      const x1 = k + 1 < xs.length ? xs[k + 1] : endBarlineX;
+      const x0 = xs[k];
+      const x1 = k + 1 < xs.length ? xs[k + 1] : measureEndX;
       const span = segEndDiv - divs[k];
       const frac = span > 0 ? (targetDiv - divs[k]) / span : 0;
       return x0 + frac * (x1 - x0);
     }
   }
 
-  return endBarlineX;
+  return measureEndX;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
