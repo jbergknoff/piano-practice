@@ -11,7 +11,7 @@
 Framework-agnostic, unit-testable domain logic lives under top-level `lib/` (no Preact imports); Preact/app code lives under `src/`. Tests are colocated next to their subject, except shared MIDI/MusicXML fixtures, which live in top-level `test-fixtures/` (referenced by tests via repo-root-relative paths, since `bun test` runs from the repo root).
 
 - `lib/midi/` — `midi-to-musicxml.ts`, `midi-player.ts`, `ble-midi.ts`
-- `lib/musicxml/` — `sheet-music-types.ts`, `musicxml-parser.ts`, `sheet-music-layout.ts`
+- `lib/musicxml/` — `sheet-music-types.ts`, `musicxml-parser.ts`, `sheet-music-layout.ts`, `musicxml-playback.ts` (derives playback notes from MusicXML), `mxl.ts` (unzips `.mxl` containers)
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
@@ -22,17 +22,25 @@ File naming: components are `PascalCase`; everything else is `kebab-case`.
 
 ### Two-screen model
 
-The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether `midiData` is loaded. `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay.
+The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether a file is loaded (either `midiData` from a MIDI file or `loadedXml` from a MusicXML/`.mxl` file). `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay.
 
 ### Data pipeline
 
-MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiConversionResult` (contains `musicxml` string, `notes`, `totalBeats`, `timeSigNum`) → fed into `MidiPlayer` for playback and into each mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) via the shared `ModeControl`.
+The MusicXML string is the single source of playback metadata. Conversion and
+playback derivation are separate steps:
+
+- **MIDI source**: MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` builds a MusicXML string → `musicXmlToConversion` (in `musicxml-playback.ts`) derives the playback notes.
+- **MusicXML source**: `.musicxml`/`.xml` read as text (or `.mxl` unzipped via `extractMusicXmlFromMxl`) → `musicXmlToConversion`.
+
+Both paths produce a `ScoreConversion` (`musicxml` string, `notes`, `totalBeats`, `timeSigNum`/`timeSigDen`). `musicXmlToConversion` parses the score with the same `parseScore` the renderer uses, so each `PlaybackNote`'s ID (`p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}`) matches the renderer's by construction. Standard MusicXML has no per-note velocity, so playback uses a constant default velocity and notation-derived durations (staccato shortens the sounding length). The `ScoreConversion` is fed into `MidiPlayer` for playback and into each mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) via the shared `ModeControl`.
+
+Loaded MusicXML currently renders correctly for simple single-voice scores; multi-staff/`<backup>`/multi-voice scores are not yet handled by the parser/layout.
 
 ### Key files
 
 | File | Role |
 |------|------|
-| `src/App.tsx` | Session shell: file load/parse, history persistence, bluetooth, force-listen-on-disconnect, landing↔practice routing |
+| `src/App.tsx` | Session shell: file load/parse (MIDI + MusicXML/`.mxl`, routed by extension), history persistence, bluetooth, force-listen-on-disconnect, landing↔practice routing |
 | `src/components/screens/PracticeScreen.tsx` | Owns the `MidiPlayer`, the live cursor + snap state, transport delegation, and instantiates the three mode hooks; renders `{active.overlay}` and `{active.modal}` |
 | `src/components/screens/LandingScreen.tsx` | File drop/pick screen |
 | `src/modes/mode-control.ts` | `ModeControl` / `ModeHandle` interfaces and `createPlayerHandle` (stable handle that delegates to whatever `MidiPlayer` the getter currently returns) |
@@ -40,7 +48,9 @@ MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` → `MidiCo
 | `src/modes/use-playalong-mode.tsx` | Mode hook: count-in, audio-to-piano routing, F1 scoring, count-in overlay + result modal |
 | `src/modes/use-listen-mode.ts` | Mode hook: thin wrapper over `MidiPlayer` for play/pause/reset/seek + sounding-note highlights |
 | `lib/midi/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping, count-in scheduling |
-| `lib/midi/midi-to-musicxml.ts` | Converts parsed MIDI to MusicXML + note list used throughout |
+| `lib/midi/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string; derives the `ScoreConversion` via `musicxml-playback.ts` |
+| `lib/musicxml/musicxml-playback.ts` | Derives the `ScoreConversion` (playback notes, timing) from a MusicXML string — shared by the MIDI and direct-load paths |
+| `lib/musicxml/mxl.ts` | Unzips `.mxl` containers (native `DecompressionStream`) and returns the root MusicXML string |
 | `src/components/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |

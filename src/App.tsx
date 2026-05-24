@@ -14,6 +14,7 @@ import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "../lib/midi/midi-to-musicxml";
+import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import { parseScore } from "../lib/musicxml/musicxml-parser";
 import {
   getMusicXmlTempo,
@@ -36,12 +37,12 @@ import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 
 function prettyTitle(filename: string): string {
   return filename
-    .replace(/\.(mid|midi|musicxml|xml)$/i, "")
+    .replace(/\.(mid|midi|musicxml|xml|mxl)$/i, "")
     .replace(/[-_]/g, " ");
 }
 
 function isMusicXmlFile(name: string): boolean {
-  return /\.(musicxml|xml)$/i.test(name);
+  return /\.(musicxml|xml|mxl)$/i.test(name);
 }
 
 export function App() {
@@ -173,7 +174,10 @@ export function App() {
     try {
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
-      const xml = new TextDecoder().decode(bytes);
+      // .mxl is a zipped container; everything else is plain XML text.
+      const xml = /\.mxl$/i.test(file.name)
+        ? await extractMusicXmlFromMxl(bytes)
+        : new TextDecoder().decode(bytes);
       parseScore(xml); // throws on invalid MusicXML
       const hash = await hashFileBytes(bytes);
       setFileHash(hash);
