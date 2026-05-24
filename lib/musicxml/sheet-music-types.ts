@@ -80,11 +80,27 @@ export interface LayoutConfig {
   ledgerMargin?: number;
 }
 
+/**
+ * Shared horizontal rhythm grid for one measure. Onset positions (in divisions)
+ * are the union across every part, so a note in any staff that sounds at a given
+ * division is drawn at the same x — keeping the staves vertically aligned.
+ */
+export interface MeasureSpine {
+  /** Distinct onset divisions in the measure, ascending (always starts at 0). */
+  divs: number[];
+  /** Absolute x for each onset in `divs`. */
+  xs: number[];
+  /** Total divisions in the measure (the closing-barline anchor). */
+  endDiv: number;
+}
+
 export interface ResolvedLayout {
   staffSpace: number;
   noteUnitWidth: number;
   measureXs: number[];
   measureWidths: number[];
+  /** One rhythm spine per measure, shared by all parts (see MeasureSpine). */
+  measureSpines: MeasureSpine[];
   staffBottomYs: number[];
   totalWidth: number;
   totalHeight: number;

@@ -22,7 +22,7 @@ import {
   SHARP_POSITIONS,
   accidentalColumns,
   beamStemDirection,
-  eventXPositions,
+  eventXsFromSpine,
   groupBeamableEvents,
   keyChangeGlyphs,
   ledgerLineYs,
@@ -201,49 +201,36 @@ function computeCursorX(
   const measureIndex = Math.floor(beat / beatsPerMeasure);
   const beatInMeasure = beat % beatsPerMeasure;
 
-  if (measureIndex >= layout.measureXs.length) {
+  const spine = layout.measureSpines[measureIndex];
+  if (!spine) {
     return null;
   }
 
-  const measure = score.parts[0]?.measures[measureIndex];
-  if (!measure) {
-    return null;
-  }
-
-  const isFirst = measureIndex === 0;
-  const eventXs = eventXPositions(
-    measure.events,
-    layout.measureXs[measureIndex],
-    isFirst,
-    measure.activeFifths,
-    layout.noteUnitWidth,
-    layout.staffSpace,
-    measure.keyChange,
-  );
-
-  // Walk through measure events to find the X position for the current beat.
+  // Walk the shared rhythm spine to find the X for the current beat.
   // Duration in MusicXML divisions; 4 divisions = 1 quarter note.
   const divisionsPerBeat = DIVISIONS * (4 / timeSig.beatType);
   const targetDiv = beatInMeasure * divisionsPerBeat;
   const barlineX = layout.measureXs[measureIndex];
   const endBarlineX = barlineX + layout.measureWidths[measureIndex];
 
-  let acc = 0;
-  for (let i = 0; i < measure.events.length; i++) {
-    const event = measure.events[i];
-    const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
+  const { divs, xs } = spine;
+  if (divs.length === 0) {
+    return barlineX;
+  }
 
-    if (acc + dur > targetDiv) {
-      const frac = (targetDiv - acc) / dur;
+  for (let k = 0; k < divs.length; k++) {
+    const segEndDiv = k + 1 < divs.length ? divs[k + 1] : spine.endDiv;
+    if (targetDiv < segEndDiv) {
       // Interpolate between adjacent anchors so the cursor is always continuous:
-      //   i=0  starts at barlineX (matches end of previous measure)
-      //   i>0  starts at eventXs[i]
-      //   all  end at the next note's X, or the closing barline for the last event
-      const x0 = i === 0 ? barlineX : eventXs[i];
-      const x1 = i + 1 < eventXs.length ? eventXs[i + 1] : endBarlineX;
+      //   k=0  starts at barlineX (matches end of previous measure)
+      //   k>0  starts at xs[k]
+      //   all  end at the next onset's X, or the closing barline for the last
+      const x0 = k === 0 ? barlineX : xs[k];
+      const x1 = k + 1 < xs.length ? xs[k + 1] : endBarlineX;
+      const span = segEndDiv - divs[k];
+      const frac = span > 0 ? (targetDiv - divs[k]) / span : 0;
       return x0 + frac * (x1 - x0);
     }
-    acc += dur;
   }
 
   return endBarlineX;
@@ -351,7 +338,7 @@ function computeNoteRenderInfos(
   layout: ResolvedLayout,
 ): Map<string, NoteRenderInfo> {
   const infos = new Map<string, NoteRenderInfo>();
-  const { staffSpace, noteUnitWidth, measureXs, staffBottomYs } = layout;
+  const { staffSpace, measureSpines, staffBottomYs } = layout;
 
   score.parts.forEach((part, p) => {
     const staffBottomY = staffBottomYs[p];
@@ -359,15 +346,7 @@ function computeNoteRenderInfos(
     const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
 
     part.measures.forEach((measure, m) => {
-      const eventXs = eventXPositions(
-        measure.events,
-        measureXs[m],
-        m === 0,
-        measure.activeFifths,
-        noteUnitWidth,
-        staffSpace,
-        measure.keyChange,
-      );
+      const eventXs = eventXsFromSpine(measure.events, measureSpines[m]);
       const { beamOverrideMap } = beamStemOverrides(
         measure.events,
         eventXs,
@@ -1170,7 +1149,7 @@ interface MeasureProps {
 
 function Measure({
   measure,
-  measureIndex: _measureIndex,
+  measureIndex,
   partIndex,
   clef,
   beatDivisions,
@@ -1180,22 +1159,15 @@ function Measure({
   layout,
   inkColor,
 }: MeasureProps) {
-  const { staffSpace, noteUnitWidth } = layout;
+  const { staffSpace } = layout;
+  const spine = layout.measureSpines[measureIndex];
 
   // Note positions and beam geometry depend only on the score + layout, never
   // on note colors. Memoize so color changes during playback don't recompute
   // them — and so beamOverrideMap entries keep a stable identity, letting the
   // memoized ChordGroupEl skip re-rendering.
   const { eventXs, beamGroups, beamOverrideMap } = useMemo(() => {
-    const eventXs = eventXPositions(
-      measure.events,
-      x,
-      isFirstMeasure,
-      measure.activeFifths,
-      noteUnitWidth,
-      staffSpace,
-      measure.keyChange,
-    );
+    const eventXs = eventXsFromSpine(measure.events, spine);
     const { beamGroups, beamOverrideMap } = beamStemOverrides(
       measure.events,
       eventXs,
@@ -1205,18 +1177,7 @@ function Measure({
       beatDivisions,
     );
     return { eventXs, beamGroups, beamOverrideMap };
-  }, [
-    measure.events,
-    x,
-    isFirstMeasure,
-    measure.activeFifths,
-    measure.keyChange,
-    noteUnitWidth,
-    staffSpace,
-    clef,
-    staffBottomY,
-    beatDivisions,
-  ]);
+  }, [measure.events, spine, staffSpace, clef, staffBottomY, beatDivisions]);
 
   const clefX = x + 2;
   const keySigX = clefX + 32;

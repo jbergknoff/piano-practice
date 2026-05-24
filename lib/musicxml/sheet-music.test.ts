@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
 import {
   getMidiTracks,
@@ -9,7 +10,8 @@ import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import {
   DIVISIONS,
   beamStemDirection,
-  eventXPositions,
+  buildMeasureSpine,
+  eventXsFromSpine,
   groupBeamableEvents,
   headerWidth,
   keyChangeGlyphs,
@@ -19,7 +21,13 @@ import {
   resolveLayout,
   stemDirection,
 } from "./sheet-music-layout";
-import type { ChordGroup, ParsedRest, Pitch } from "./sheet-music-types";
+import type {
+  ChordGroup,
+  MeasureEvent,
+  ParsedMeasure,
+  ParsedRest,
+  Pitch,
+} from "./sheet-music-types";
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -344,6 +352,193 @@ describe("parseScore (underwater-theme via MIDI pipeline)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Rondo Alla Turca opening excerpt (programmatic, full pipeline)
+//
+// Mozart, Piano Sonata No. 11 in A, K.331, 3rd movement ("Alla Turca").
+// The note data below is the public-domain composition (the actual opening four
+// measures, both hands) transcribed from the score — we intentionally do NOT
+// vendor the copyrighted piano-midi.de MIDI file. 480 tpb, 2/4, A minor (no
+// accidentals). Every note is a sixteenth (120 ticks). This drives the two
+// features the piece exercised: the no-accidentals opening key (the converter
+// used to show the later 3-sharp section's key at bar 1) and cross-staff note
+// alignment in measure 2, where the right-hand sixteenth run plays against the
+// left-hand chords.
+// ---------------------------------------------------------------------------
+
+describe("Rondo Alla Turca opening excerpt (K.331 III)", () => {
+  const TPB_AT = 480;
+  const SIXTEENTH = 120;
+
+  // Right hand, [absoluteTick, midiNote]; measures 1–4.
+  const RH: Array<[number, number]> = [
+    // m1: beat-1 rest, then B4 A4 G#4 A4
+    [480, 71],
+    [600, 69],
+    [720, 68],
+    [840, 69],
+    // m2: C5 D5 C5 B4 C5
+    [960, 72],
+    [1440, 74],
+    [1560, 72],
+    [1680, 71],
+    [1800, 72],
+    // m3: E5 F5 E5 D#5 E5
+    [1920, 76],
+    [2400, 77],
+    [2520, 76],
+    [2640, 75],
+    [2760, 76],
+    // m4: B5 A5 G#5 A5 B5 A5 G#5 A5
+    [2880, 83],
+    [3000, 81],
+    [3120, 80],
+    [3240, 81],
+    [3360, 83],
+    [3480, 81],
+    [3600, 80],
+    [3720, 81],
+  ];
+
+  // Left hand, [absoluteTick, midiNote]; measure 1 is silent.
+  const LH: Array<[number, number]> = [
+    // m2: A3, then C4+E4 chords
+    [960, 57],
+    [1200, 60],
+    [1200, 64],
+    [1440, 60],
+    [1440, 64],
+    [1680, 60],
+    [1680, 64],
+    // m3
+    [1920, 57],
+    [2160, 60],
+    [2160, 64],
+    [2400, 60],
+    [2400, 64],
+    [2640, 60],
+    [2640, 64],
+    // m4
+    [2880, 57],
+    [3120, 60],
+    [3120, 64],
+    [3360, 57],
+    [3600, 60],
+    [3600, 64],
+  ];
+
+  function noteTrack(
+    name: string,
+    onsets: Array<[number, number]>,
+  ): MidiEvent[] {
+    const pairs: Array<[number, number, Record<string, unknown>]> = [];
+    for (const [tick, note] of onsets) {
+      // sort key 1 = noteOn so an off at tick X is processed before an on at X
+      pairs.push([
+        tick,
+        1,
+        { type: "noteOn", channel: 0, noteNumber: note, velocity: 64 },
+      ]);
+      pairs.push([
+        tick + SIXTEENTH,
+        0,
+        { type: "noteOff", channel: 0, noteNumber: note, velocity: 0 },
+      ]);
+    }
+    pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const events: MidiEvent[] = [
+      {
+        deltaTime: 0,
+        meta: true,
+        type: "trackName",
+        text: name,
+      } as unknown as MidiEvent,
+    ];
+    let prev = 0;
+    for (const [tick, , ev] of pairs) {
+      events.push({ ...ev, deltaTime: tick - prev } as unknown as MidiEvent);
+      prev = tick;
+    }
+    return events;
+  }
+
+  function excerptMidi(): MidiData {
+    const meta: MidiEvent[] = [
+      {
+        deltaTime: 0,
+        meta: true,
+        type: "setTempo",
+        microsecondsPerBeat: 500000,
+      },
+      {
+        deltaTime: 0,
+        meta: true,
+        type: "timeSignature",
+        numerator: 2,
+        denominator: 4,
+        metronome: 24,
+        thirtyseconds: 8,
+      },
+      { deltaTime: 0, meta: true, type: "keySignature", key: 0, scale: 0 },
+      { deltaTime: 0, meta: true, type: "endOfTrack" },
+    ] as unknown as MidiEvent[];
+    return {
+      header: { format: 1, numTracks: 3, ticksPerBeat: TPB_AT },
+      tracks: [meta, noteTrack("Piano right", RH), noteTrack("Piano left", LH)],
+    };
+  }
+
+  const midi = excerptMidi();
+  const { musicxml } = midiToMusicXmlWithTracks(
+    midi,
+    getMidiTracks(midi).map((t) => t.index),
+  );
+  const score = parseScore(musicxml);
+
+  test("two staves, 2/4, A-minor opening (no accidentals)", () => {
+    expect(score.parts).toHaveLength(2);
+    expect(score.parts[0].timeSig).toMatchObject({ beats: 2, beatType: 4 });
+    // Regression: the opening key has no accidentals. The converter used to keep
+    // the LAST key-signature event, which would print the later section's 3
+    // sharps from bar 1.
+    expect(score.parts[0].keySig).toMatchObject({ fifths: 0 });
+    expect(score.parts[0].clef).toMatchObject({ sign: "G" });
+  });
+
+  test("right-hand pitches match the score (measures 1–2)", () => {
+    const rh = score.parts[0].measures;
+    expect(pitchSnapshot(rh[0])).toBe("B4 A4 G4# A4");
+    expect(pitchSnapshot(rh[1])).toBe("C5 D5 C5 B4 C5");
+  });
+
+  test("left hand rests in measure 1 and plays A3 + C4/E4 chords in measure 2", () => {
+    const lh = score.parts[1].measures;
+    expect(pitchSnapshot(lh[0])).toBe(""); // full-measure rest
+    expect(pitchSnapshot(lh[1])).toBe("A3 C4,E4 C4,E4 C4,E4");
+  });
+
+  test("measure 2: both hands align on the shared rhythm grid", () => {
+    const layout = resolveLayout(score);
+    const spine = layout.measureSpines[1]; // measure 2
+    const rhXs = eventXsFromSpine(score.parts[0].measures[1].events, spine);
+    const lhXs = eventXsFromSpine(score.parts[1].measures[1].events, spine);
+    // RH: C5@0, D5@4, C5@5, B4@6, C5@7.  LH: A3@0, chord@2, chord@4, chord@6.
+    expect(rhXs[0]).toBe(lhXs[0]); // both on the downbeat (division 0)
+    expect(rhXs[1]).toBe(lhXs[2]); // D5 and the chord share division 4
+    expect(rhXs[3]).toBe(lhXs[3]); // B4 and the chord share division 6
+  });
+
+  test("measure 1: the G#4 gets extra room so its sharp clears the previous note", () => {
+    const layout = resolveLayout(score);
+    const spine = layout.measureSpines[0]; // measure 1
+    // Events: [quarter rest, B4, A4, G#4, A4] (the last three a tight 16th run).
+    const xs = eventXsFromSpine(score.parts[0].measures[0].events, spine);
+    const intoPlainNote = xs[2] - xs[1]; // B4 -> A4 (no accidental)
+    const intoSharpNote = xs[3] - xs[2]; // A4 -> G#4 (sharp)
+    expect(intoSharpNote).toBeGreaterThan(intoPlainNote);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // noteY
 // ---------------------------------------------------------------------------
 
@@ -495,53 +690,136 @@ describe("headerWidth", () => {
 });
 
 // ---------------------------------------------------------------------------
-// eventXPositions
+// buildMeasureSpine + eventXsFromSpine
 // ---------------------------------------------------------------------------
 
-describe("eventXPositions", () => {
+describe("buildMeasureSpine + eventXsFromSpine", () => {
   const NOTE_UNIT = 48;
-  const MEASURE_X = 100;
-  const PADDING_LEFT = 14;
+  const PAD = 14; // MEASURE_PADDING_LEFT
+  const DIVS = 16; // 4/4 measure
+
+  function measureOf(events: MeasureEvent[]): ParsedMeasure {
+    return { number: 1, events, activeFifths: 0 };
+  }
+
+  // x of every event for a single-part measure (relative to measureX = 0).
+  function singlePartXs(
+    events: MeasureEvent[],
+    { isFirst = false } = {},
+  ): number[] {
+    const spine = buildMeasureSpine(
+      [measureOf(events)],
+      isFirst,
+      DIVS,
+      10,
+      NOTE_UNIT,
+    );
+    return eventXsFromSpine(events, spine);
+  }
 
   test("empty event list returns empty array", () => {
-    expect(eventXPositions([], MEASURE_X, false, 0, NOTE_UNIT, 10)).toEqual([]);
+    expect(singlePartXs([])).toEqual([]);
   });
 
-  test("non-first measure: first event starts at measureX + padding", () => {
-    const events = [chord([p("C", 4)])];
-    const xs = eventXPositions(events, MEASURE_X, false, 0, NOTE_UNIT, 10);
-    expect(xs[0]).toBe(MEASURE_X + PADDING_LEFT);
+  test("non-first measure: first event starts at the left padding", () => {
+    expect(singlePartXs([chord([p("C", 4)])])[0]).toBe(PAD);
   });
 
-  test("first measure: first event starts after header", () => {
-    const events = [chord([p("C", 4)])];
-    const xs = eventXPositions(events, MEASURE_X, true, 0, NOTE_UNIT, 10);
+  test("first measure: first event starts after the header", () => {
     // headerWidth(0) = 60
-    expect(xs[0]).toBe(MEASURE_X + 60 + PADDING_LEFT);
+    expect(singlePartXs([chord([p("C", 4)])], { isFirst: true })[0]).toBe(
+      60 + PAD,
+    );
   });
 
   test("quarter notes advance by noteUnitWidth each", () => {
-    // Each quarter (duration=4): advance = max((4/4)*48, 18) = 48
     const events = [chord([p("C", 4)]), chord([p("D", 4)]), chord([p("E", 4)])];
-    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT, 10);
-    expect(xs).toEqual([PADDING_LEFT, PADDING_LEFT + 48, PADDING_LEFT + 96]);
+    expect(singlePartXs(events)).toEqual([PAD, PAD + 48, PAD + 96]);
   });
 
   test("16th notes respect minimum advance (18px) over proportional (12px)", () => {
-    // duration=1 (16th): proportional = (1/4)*48 = 12 < MIN_EVENT_ADVANCE(18)
     const events = [
       chord([p("C", 4)], "16th", 1),
       chord([p("D", 4)], "16th", 1),
       chord([p("E", 4)], "16th", 1),
     ];
-    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT, 10);
-    expect(xs).toEqual([PADDING_LEFT, PADDING_LEFT + 18, PADDING_LEFT + 36]);
+    expect(singlePartXs(events)).toEqual([PAD, PAD + 18, PAD + 36]);
   });
 
   test("rest events advance by the same rules as chord events", () => {
-    const events = [rest(4, "quarter"), chord([p("C", 4)])];
-    const xs = eventXPositions(events, 0, false, 0, NOTE_UNIT, 10);
+    const xs = singlePartXs([rest(4, "quarter"), chord([p("C", 4)])]);
     expect(xs[1] - xs[0]).toBe(48); // quarter rest = 48px advance
+  });
+
+  test("both staves share one grid: simultaneous onsets get the same x", () => {
+    // Mirrors measure 2 of Rondo Alla Turca. Treble: a quarter then four 16ths
+    // (onsets 0,4,5,6,7). Bass: four eighth chords (onsets 0,2,4,6). With the
+    // old per-staff spacing the beat-1.5 bass chord (div 6) drifted left of the
+    // treble note at the same beat; the shared spine puts them at one x.
+    const treble = [
+      chord([p("C", 5)]), // quarter @0
+      chord([p("D", 5)], "16th", 1), // @4
+      chord([p("C", 5)], "16th", 1), // @5
+      chord([p("B", 4)], "16th", 1), // @6
+      chord([p("C", 5)], "16th", 1), // @7
+    ];
+    const bass = [
+      chord([p("A", 3)], "eighth", 2), // @0
+      chord([p("C", 4), p("E", 4)], "eighth", 2), // @2
+      chord([p("C", 4), p("E", 4)], "eighth", 2), // @4
+      chord([p("C", 4), p("E", 4)], "eighth", 2), // @6
+    ];
+    const spine = buildMeasureSpine(
+      [measureOf(treble), measureOf(bass)],
+      false,
+      DIVS,
+      10,
+      NOTE_UNIT,
+    );
+    const tx = eventXsFromSpine(treble, spine);
+    const bx = eventXsFromSpine(bass, spine);
+    expect(tx[3]).toBe(bx[3]); // both sound at division 6
+    expect(tx[1]).toBe(bx[2]); // both sound at division 4
+  });
+
+  test("a part's own spacing widens to make room for the other staff's onsets", () => {
+    // Bass alone would place its two quarters 48px apart. With a treble note
+    // landing between them (an onset the bass doesn't have), the shared grid
+    // pushes the bass's second quarter further right.
+    const bass = [chord([p("C", 3)]), chord([p("G", 3)])]; // @0, @4
+    const treble = [
+      chord([p("E", 5)], "eighth", 2), // @0
+      chord([p("F", 5)], "eighth", 2), // @2 — between the bass quarters
+      chord([p("G", 5)]), // @4
+    ];
+    const spine = buildMeasureSpine(
+      [measureOf(treble), measureOf(bass)],
+      false,
+      DIVS,
+      10,
+      NOTE_UNIT,
+    );
+    const bx = eventXsFromSpine(bass, spine);
+    // 0→2 and 2→4 each advance 24 (eighth spacing) → 48 total, vs 48 for one
+    // quarter — equal here, but the bass's second note now aligns with the
+    // treble's div-4 note.
+    const tx = eventXsFromSpine(treble, spine);
+    expect(bx[1]).toBe(tx[2]);
+  });
+
+  test("a note with an accidental gets extra advance to clear the previous note", () => {
+    // Three 16ths A4 G#4 A4: the G#'s sharp would collide with the first A4 at
+    // the plain minimum advance, so the advance into it is widened.
+    const sharp = chord([p("G", 4, 1)], "16th", 1);
+    sharp.notes[0].accidental = "sharp";
+    const events = [
+      chord([p("A", 4)], "16th", 1),
+      sharp,
+      chord([p("A", 4)], "16th", 1),
+    ];
+    const xs = singlePartXs(events);
+    expect(xs[1] - xs[0]).toBe(26); // into G#: staffSpace*2.6, vs the 18 floor
+    expect(xs[2] - xs[1]).toBe(18); // into the plain A4: the 16th minimum
   });
 });
 
@@ -825,12 +1103,28 @@ describe("key signature changes", () => {
 
   test("a key-change measure pushes its first note right by the key-sig width", () => {
     const events = [chord([p("C", 4)])];
-    const baseline = eventXPositions(events, 100, false, 0, 48, 10);
-    const withChange = eventXPositions(events, 100, false, 0, 48, 10, {
-      fifths: 2,
-      prevFifths: 0,
-    });
-    expect(withChange[0] - baseline[0]).toBe(
+    const baseline = buildMeasureSpine(
+      [{ number: 1, events, activeFifths: 0 }],
+      false,
+      16,
+      10,
+      48,
+    );
+    const withChange = buildMeasureSpine(
+      [
+        {
+          number: 1,
+          events,
+          activeFifths: 2,
+          keyChange: { fifths: 2, prevFifths: 0 },
+        },
+      ],
+      false,
+      16,
+      10,
+      48,
+    );
+    expect(withChange.xs[0] - baseline.xs[0]).toBe(
       keyChangeWidth({ fifths: 2, prevFifths: 0 }, 10),
     );
   });

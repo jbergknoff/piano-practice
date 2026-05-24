@@ -4,6 +4,7 @@ import type {
   ChordGroup,
   LayoutConfig,
   MeasureEvent,
+  MeasureSpine,
   ParsedMeasure,
   ParsedNote,
   ParsedPart,
@@ -41,13 +42,34 @@ export function resolveLayout(
   const ledgerMargin = config.ledgerMargin ?? 35;
 
   const firstPart = score.parts[0];
+  const numMeasures = firstPart?.measures.length ?? 0;
+  const timeSig = firstPart?.timeSig ?? { beats: 4, beatType: 4 };
+  const divsPerMeasure = DIVISIONS * timeSig.beats * (4 / timeSig.beatType);
 
-  // Compute width of each measure (shared across all parts). All parts share
-  // the same key signature and key changes, so the first part's widths apply.
-  const measureWidths =
-    firstPart?.measures.map((m, i) =>
-      measureWidth(m, i === 0, staffSpace, noteUnitWidth),
-    ) ?? [];
+  // Build each measure's shared rhythm spine from the onsets of ALL parts, so
+  // simultaneous notes line up vertically. Spines are first computed relative to
+  // the measure's left edge (x=0) to derive widths, then offset to absolute x.
+  const relSpines: Array<{
+    divs: number[];
+    xs: number[];
+    endDiv: number;
+    endX: number;
+  }> = [];
+  const measureWidths: number[] = [];
+  for (let m = 0; m < numMeasures; m++) {
+    const measuresAtM = score.parts
+      .map((part) => part.measures[m])
+      .filter((measure): measure is ParsedMeasure => measure !== undefined);
+    const spine = buildMeasureSpine(
+      measuresAtM,
+      m === 0,
+      divsPerMeasure,
+      staffSpace,
+      noteUnitWidth,
+    );
+    relSpines.push(spine);
+    measureWidths.push(spine.endX + MEASURE_PADDING_RIGHT);
+  }
 
   // Accumulate measure X positions
   const measureXs: number[] = [];
@@ -56,6 +78,13 @@ export function resolveLayout(
     measureXs.push(x);
     x += w;
   }
+
+  // Offset each relative spine to its absolute measure position.
+  const measureSpines: MeasureSpine[] = relSpines.map((s, m) => ({
+    divs: s.divs,
+    xs: s.xs.map((v) => v + measureXs[m]),
+    endDiv: s.endDiv,
+  }));
 
   const totalWidth = x;
   const staffStride = 4 * staffSpace + partGap;
@@ -77,6 +106,7 @@ export function resolveLayout(
     noteUnitWidth,
     measureXs,
     measureWidths,
+    measureSpines,
     staffBottomYs,
     totalWidth,
     totalHeight,
@@ -156,29 +186,125 @@ function measureLeftPad(
   return staffSpace * 2 + maxCol * (colWidth + staffSpace * 0.5);
 }
 
-function measureWidth(
-  measure: ParsedMeasure,
+// Horizontal advance between two onsets `deltaDivs` apart: proportional to the
+// gap, but never less than MIN_EVENT_ADVANCE so dense runs stay legible.
+function eventAdvance(deltaDivs: number, noteUnitWidth: number): number {
+  return Math.max((deltaDivs / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
+}
+
+// Minimum advance INTO a note that carries accidentals, so the glyph (drawn to
+// the left of the notehead, possibly stacked into columns) clears the previous
+// notehead in a tight run. 0 when the chord has no accidentals. Mirrors
+// measureLeftPad's barline clearance (staffSpace*2 for one accidental, plus a
+// per-column step) and adds the previous notehead's half width.
+function accidentalAdvance(notes: ParsedNote[], staffSpace: number): number {
+  const maxCol = accidentalColumns(notes, staffSpace).reduce(
+    (max, c) => Math.max(max, c),
+    -1,
+  );
+  if (maxCol < 0) {
+    return 0;
+  }
+  const colWidth = staffSpace * ACCIDENTAL_COLUMN_WIDTH_FACTOR;
+  return staffSpace * 2.6 + maxCol * (colWidth + staffSpace * 0.5);
+}
+
+// Distance from a measure's left barline to its first note: the header (clef,
+// key, time) on the first measure, a mid-staff key-change block, plus left
+// padding. The padding is the max across parts so an accidental on either
+// staff's first note clears the barline.
+function measureLeadIn(
+  measures: ParsedMeasure[],
   isFirst: boolean,
   staffSpace: number,
-  noteUnitWidth: number,
 ): number {
-  const hdrW = isFirst ? headerWidth(measure.activeFifths) : 0;
+  const ref = measures[0];
+  const hdrW = isFirst && ref ? headerWidth(ref.activeFifths) : 0;
   const keyChangeW =
-    !isFirst && measure.keyChange
-      ? keyChangeWidth(measure.keyChange, staffSpace)
-      : 0;
-  let contentW = 0;
-  for (const event of measure.events) {
-    const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
-    contentW += Math.max((dur / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
+    !isFirst && ref?.keyChange ? keyChangeWidth(ref.keyChange, staffSpace) : 0;
+  const leftPad = measures.length
+    ? Math.max(
+        ...measures.map((m) => measureLeftPad(m.events, isFirst, staffSpace)),
+      )
+    : MEASURE_PADDING_LEFT;
+  return hdrW + keyChangeW + leftPad;
+}
+
+// Build one measure's shared rhythm spine from the onsets of every part (the
+// same measure index in each). x positions are relative to the measure's left
+// edge (measureX = 0); resolveLayout offsets them to absolute coordinates.
+export function buildMeasureSpine(
+  measures: ParsedMeasure[],
+  isFirst: boolean,
+  divsPerMeasure: number,
+  staffSpace: number,
+  noteUnitWidth: number,
+): { divs: number[]; xs: number[]; endDiv: number; endX: number } {
+  const onsets = new Set<number>();
+  // Extra advance needed into a given onset so any accidental there clears the
+  // previous notehead — the max requirement across all parts at that onset.
+  const accAdvanceByDiv = new Map<number, number>();
+  let contentEnd = 0; // last division any part's notes actually reach
+  for (const measure of measures) {
+    let pos = 0;
+    for (const event of measure.events) {
+      onsets.add(pos);
+      if (!isRest(event)) {
+        const acc = accidentalAdvance((event as ChordGroup).notes, staffSpace);
+        if (acc > 0) {
+          accAdvanceByDiv.set(
+            pos,
+            Math.max(accAdvanceByDiv.get(pos) ?? 0, acc),
+          );
+        }
+      }
+      pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
+    }
+    contentEnd = Math.max(contentEnd, pos);
   }
-  return (
-    hdrW +
-    keyChangeW +
-    measureLeftPad(measure.events, isFirst, staffSpace) +
-    contentW +
-    MEASURE_PADDING_RIGHT
-  );
+
+  const divs = [...onsets].sort((a, b) => a - b);
+  const contentStart = measureLeadIn(measures, isFirst, staffSpace);
+  const xs: number[] = [];
+  let x = contentStart;
+  for (let k = 0; k < divs.length; k++) {
+    if (k > 0) {
+      const gap = eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
+      x += Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0);
+    }
+    xs.push(x);
+  }
+
+  // Width spans to where the content actually ends (last onset + its duration),
+  // matching the per-event advances of a filled measure. The cursor's terminal
+  // anchor, however, is the full measure (divsPerMeasure) so a beat anywhere in
+  // the bar maps onto the staff even if the notation stops short.
+  const lastDiv = divs.length ? divs[divs.length - 1] : 0;
+  const endX =
+    divs.length && contentEnd > lastDiv
+      ? xs[xs.length - 1] + eventAdvance(contentEnd - lastDiv, noteUnitWidth)
+      : contentStart;
+  return { divs, xs, endDiv: divsPerMeasure, endX };
+}
+
+// Map a single part's events onto the shared spine: each event takes the x of
+// its onset division. Because the spine's onsets are the union across all parts,
+// every event's onset is present.
+export function eventXsFromSpine(
+  events: MeasureEvent[],
+  spine: MeasureSpine,
+): number[] {
+  const xByDiv = new Map<number, number>();
+  for (let i = 0; i < spine.divs.length; i++) {
+    xByDiv.set(spine.divs[i], spine.xs[i]);
+  }
+  const xs: number[] = [];
+  let pos = 0;
+  for (const event of events) {
+    xs.push(xByDiv.get(pos) ?? spine.xs[spine.xs.length - 1] ?? 0);
+    pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
+  }
+  return xs;
 }
 
 export function headerWidth(fifths: number): number {
@@ -312,34 +438,6 @@ export function ledgerLineYs(
     }
   }
   return ys;
-}
-
-// ── Horizontal layout within a measure ───────────────────────────────────────
-
-export function eventXPositions(
-  events: MeasureEvent[],
-  measureX: number,
-  isFirstMeasure: boolean,
-  fifths: number,
-  noteUnitWidth: number,
-  staffSpace: number,
-  keyChange?: { fifths: number; prevFifths: number },
-): number[] {
-  const hdrW = isFirstMeasure ? headerWidth(fifths) : 0;
-  const keyChangeW =
-    !isFirstMeasure && keyChange ? keyChangeWidth(keyChange, staffSpace) : 0;
-  const xs: number[] = [];
-  let x =
-    measureX +
-    hdrW +
-    keyChangeW +
-    measureLeftPad(events, isFirstMeasure, staffSpace);
-  for (const event of events) {
-    xs.push(x);
-    const dur = isRest(event) ? event.duration : (event as ChordGroup).duration;
-    x += Math.max((dur / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
-  }
-  return xs;
 }
 
 // Sharps order by clef for key signature rendering
