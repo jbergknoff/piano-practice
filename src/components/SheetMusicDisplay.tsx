@@ -1474,7 +1474,6 @@ const GRACE_FONT_FACTOR = 2.0; // × staffSpace
 
 function GraceNoteGroupEl({
   graceGroup,
-  graceIndex,
   x,
   staffBottomY,
   clef,
@@ -1482,10 +1481,10 @@ function GraceNoteGroupEl({
   measureNumber,
   staffSpace,
   inkColor,
+  showFlag,
+  stemTipOverride,
 }: {
   graceGroup: GraceGroup;
-  /** 0 = leftmost, increasing towards the main note */
-  graceIndex: number;
   x: number;
   staffBottomY: number;
   clef: { sign: "G" | "F"; line: number };
@@ -1493,6 +1492,10 @@ function GraceNoteGroupEl({
   measureNumber: number;
   staffSpace: number;
   inkColor: string;
+  /** When false the flag is suppressed — the group belongs to a beamed run. */
+  showFlag: boolean;
+  /** When set, stems extend to this Y rather than the default fixed length. */
+  stemTipOverride?: number;
 }) {
   const { notes, slash, noteIndex } = graceGroup;
   const fontSize = staffSpace * GRACE_FONT_FACTOR;
@@ -1507,7 +1510,7 @@ function GraceNoteGroupEl({
         const ny = noteY(note.pitch, clef, staffBottomY, staffSpace);
         const nx = x + vi * nrx * 0.3; // slight rightward cascade for unisons
         const stemX = nx + nrx;
-        const stemTipY = ny - stemLength;
+        const stemTipY = stemTipOverride ?? ny - stemLength;
         const noteId = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${vi}`;
 
         // Accidental offset — scaled down for grace size
@@ -1563,17 +1566,19 @@ function GraceNoteGroupEl({
               stroke={inkColor}
               stroke-width="1"
             />
-            {/* Flag — always 8th note, always up */}
-            <text
-              x={stemX}
-              y={stemTipY}
-              text-anchor="start"
-              fill={inkColor}
-              font-size={fontSize}
-              font-family={BRAVURA}
-            >
-              {G.flag8thUp}
-            </text>
+            {/* Flag — omitted when the group belongs to a beamed run */}
+            {showFlag && (
+              <text
+                x={stemX}
+                y={stemTipY}
+                text-anchor="start"
+                fill={inkColor}
+                font-size={fontSize}
+                font-family={BRAVURA}
+              >
+                {G.flag8thUp}
+              </text>
+            )}
             {/* Acciaccatura slash */}
             {slash && (
               <line
@@ -1666,6 +1671,34 @@ const ChordGroupEl = memo(function ChordGroupEl({
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
 
+  // Grace note geometry — proportional to the smaller grace scale.
+  const graceScale = GRACE_FONT_FACTOR / 4;
+  const graceNrx = staffSpace * 0.55 * graceScale; // grace notehead half-width
+  const graceStemLength = staffSpace * 2.5;
+  const isGraceBeamed = N > 1;
+  // When the main chord has accidentals, push grace notes further left so
+  // the grace stem/flag doesn't overlap the accidental glyph.
+  const mainAccWidth = notes.some((n) => n.accidental !== "none")
+    ? staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR
+    : 0;
+  // Absolute x for each grace group; index 0 = leftmost.
+  const graceXs = Array.from(
+    { length: N },
+    (_, gi) => x - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE,
+  );
+  // When beaming multiple grace groups all stems extend to the same Y.
+  let graceStemTipOverride: number | undefined;
+  if (isGraceBeamed && gracesBefore) {
+    const tipYs = gracesBefore.map((gg) => {
+      // notes are sorted low→high; last = highest pitch.
+      const topNote = gg.notes[gg.notes.length - 1];
+      return (
+        noteY(topNote.pitch, clef, staffBottomY, staffSpace) - graceStemLength
+      );
+    });
+    graceStemTipOverride = Math.min(...tipYs);
+  }
+
   // A staccato chord gets a single dot on the outer notehead away from the
   // stem (below the lowest note for stem-up, above the highest for stem-down),
   // not one dot per note. noteGeom is sorted low→high.
@@ -1691,24 +1724,32 @@ const ChordGroupEl = memo(function ChordGroupEl({
   return (
     <g data-chord-id={`p${partIndex}-m${measureNumber}-n${group.noteIndex}`}>
       {/* Grace notes rendered to the left of the main chord */}
-      {gracesBefore?.map((gg, gi) => {
-        // gi=0 is leftmost; x offset increases as we approach the main note.
-        const gx = x - (N - gi) * GRACE_NOTE_ADVANCE;
-        return (
-          <GraceNoteGroupEl
-            key={gg.noteIndex}
-            graceGroup={gg}
-            graceIndex={gi}
-            x={gx}
-            staffBottomY={staffBottomY}
-            clef={clef}
-            partIndex={partIndex}
-            measureNumber={measureNumber}
-            staffSpace={staffSpace}
-            inkColor={inkColor}
-          />
-        );
-      })}
+      {gracesBefore?.map((gg, gi) => (
+        <GraceNoteGroupEl
+          key={gg.noteIndex}
+          graceGroup={gg}
+          x={graceXs[gi]}
+          staffBottomY={staffBottomY}
+          clef={clef}
+          partIndex={partIndex}
+          measureNumber={measureNumber}
+          staffSpace={staffSpace}
+          inkColor={inkColor}
+          showFlag={!isGraceBeamed}
+          stemTipOverride={graceStemTipOverride}
+        />
+      ))}
+      {/* Beam bar connecting multiple grace note groups */}
+      {isGraceBeamed && graceStemTipOverride !== undefined && (
+        <line
+          x1={graceXs[0] + graceNrx}
+          x2={graceXs[N - 1] + graceNrx}
+          y1={graceStemTipOverride}
+          y2={graceStemTipOverride}
+          stroke={inkColor}
+          stroke-width={staffSpace * 0.5 * graceScale}
+        />
+      )}
       {!hasNoStem && (
         <line
           x1={stemX}
