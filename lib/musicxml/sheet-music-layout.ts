@@ -257,9 +257,14 @@ export function buildMeasureSpine(
   noteUnitWidth: number,
 ): { divs: number[]; xs: number[]; endDiv: number; endX: number } {
   const onsets = new Set<number>();
-  // Extra advance needed into a given onset so any accidental there clears the
-  // previous notehead — the max requirement across all parts at that onset.
+  // Accidental advance competes with the natural gap: ensures the previous
+  // notehead clears the current accidental glyph (whichever is larger wins).
   const accAdvanceByDiv = new Map<number, number>();
+  // Grace advance is always additive: grace noteheads occupy their own slot
+  // to the left of the main notehead regardless of how tight the surrounding
+  // notes are. Using max() here would let a large natural gap absorb the
+  // grace space, causing the grace notehead to land on top of the previous note.
+  const graceAdvByDiv = new Map<number, number>();
   let contentEnd = 0; // last division any part's notes actually reach
   for (const measure of measures) {
     let pos = 0;
@@ -268,14 +273,17 @@ export function buildMeasureSpine(
       if (!isRest(event)) {
         const chord = event as ChordGroup;
         const acc = accidentalAdvance(chord.notes, staffSpace);
-        // Each grace group adds GRACE_NOTE_ADVANCE pixels of required left-side
-        // space, stacked on top of any accidental advance.
         const graceAdv = (chord.gracesBefore?.length ?? 0) * GRACE_NOTE_ADVANCE;
-        const total = acc + graceAdv;
-        if (total > 0) {
+        if (acc > 0) {
           accAdvanceByDiv.set(
             pos,
-            Math.max(accAdvanceByDiv.get(pos) ?? 0, total),
+            Math.max(accAdvanceByDiv.get(pos) ?? 0, acc),
+          );
+        }
+        if (graceAdv > 0) {
+          graceAdvByDiv.set(
+            pos,
+            Math.max(graceAdvByDiv.get(pos) ?? 0, graceAdv),
           );
         }
       }
@@ -291,7 +299,9 @@ export function buildMeasureSpine(
   for (let k = 0; k < divs.length; k++) {
     if (k > 0) {
       const gap = eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
-      x += Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0);
+      x +=
+        Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0) +
+        (graceAdvByDiv.get(divs[k]) ?? 0);
     }
     xs.push(x);
   }
