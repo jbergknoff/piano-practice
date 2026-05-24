@@ -315,6 +315,24 @@ export class MidiPlayer {
     osc3.start(startTime);
     osc3.stop(startTime + totalDuration);
     this.activeOscillators.push(osc3);
+
+    // Once the note finishes playing, disconnect all its nodes and remove them
+    // from the active tracking arrays so they can be garbage collected.
+    // Without this, nodes accumulate for the entire duration of playback.
+    // All three oscillators share the same stop time, so one handler suffices.
+    const noteOscillators: OscillatorNode[] = [osc1, osc2, osc3];
+    const noteGains: AudioNode[] = [gain, gain2, gain3, filter];
+    osc1.onended = () => {
+      for (const node of [...noteOscillators, ...noteGains]) {
+        try {
+          node.disconnect();
+        } catch {}
+      }
+      this.activeOscillators = this.activeOscillators.filter(
+        (o) => !noteOscillators.includes(o),
+      );
+      this.activeGains = this.activeGains.filter((g) => !noteGains.includes(g));
+    };
   }
 
   /**
