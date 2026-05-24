@@ -10,7 +10,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { render } from "preact";
 import { parseScore } from "../../lib/musicxml/musicxml-parser";
 import { resolveLayout } from "../../lib/musicxml/sheet-music-layout";
-import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
+import {
+  SheetMusicDisplay,
+  computeCursorX,
+  computeMeasureStartBeats,
+} from "./SheetMusicDisplay";
 
 // SMuFL glyphs we assert on (must match the G map in SheetMusicDisplay.tsx).
 const SHARP = "";
@@ -503,8 +507,9 @@ describe("computeCursorX", () => {
   ];
   const score = parseScore(scoreXml([FOUR_QUARTERS, FOUR_QUARTERS]));
   const layout = resolveLayout(score);
+  const measureStartBeats = computeMeasureStartBeats(score);
   const cx = (beat: number): number => {
-    const x = computeCursorX(beat, score, layout);
+    const x = computeCursorX(beat, score, layout, measureStartBeats);
     if (x === null) {
       throw new Error(`computeCursorX returned null at beat ${beat}`);
     }
@@ -543,5 +548,50 @@ describe("computeCursorX", () => {
     // so the cursor doesn't snap backward to the barline as the bar turns over.
     const justBeforeBarline = cx(4 - 1e-6);
     expect(justBeforeBarline).toBeCloseTo(cx(4), 1);
+  });
+
+  test("computeMeasureStartBeats handles a pickup (anacrusis) measure", () => {
+    // A pickup measure contains only 1 quarter note (1 beat), followed by two
+    // full 4/4 measures of 4 quarter notes each.  The beat offsets must reflect
+    // the actual measure durations, not assume every measure is 4 beats long.
+    const ONE_QUARTER = [QUARTER("C", 4)];
+    const pickupScore = parseScore(
+      scoreXml([ONE_QUARTER, FOUR_QUARTERS, FOUR_QUARTERS]),
+    );
+    const pickupMeasureStartBeats = computeMeasureStartBeats(pickupScore);
+    // Pickup = 1 beat; first full measure starts at beat 1; second at beat 5.
+    expect(pickupMeasureStartBeats).toEqual([0, 1, 5]);
+  });
+
+  test("cursor lands in the correct measure after a pickup", () => {
+    // With a one-beat pickup, beat 1 is the downbeat of the FIRST full measure
+    // (index 1), not still inside the pickup (index 0).
+    const ONE_QUARTER = [QUARTER("C", 4)];
+    const pickupScore = parseScore(
+      scoreXml([ONE_QUARTER, FOUR_QUARTERS, FOUR_QUARTERS]),
+    );
+    const pickupLayout = resolveLayout(pickupScore);
+    const pickupMeasureStartBeats = computeMeasureStartBeats(pickupScore);
+    const pickupCx = (beat: number): number => {
+      const x = computeCursorX(
+        beat,
+        pickupScore,
+        pickupLayout,
+        pickupMeasureStartBeats,
+      );
+      if (x === null) {
+        throw new Error(`computeCursorX returned null at beat ${beat}`);
+      }
+      return x;
+    };
+
+    // At beat 1 the cursor must be on measure 1's first notehead (not at the
+    // end of measure 0 as the old floor(beat / beatsPerMeasure) formula gave).
+    const measure1FirstNoteX = pickupLayout.measureSpines[1].xs[0];
+    expect(pickupCx(1)).toBe(measure1FirstNoteX);
+
+    // At beat 5 the cursor is on measure 2's first notehead.
+    const measure2FirstNoteX = pickupLayout.measureSpines[2].xs[0];
+    expect(pickupCx(5)).toBe(measure2FirstNoteX);
   });
 });

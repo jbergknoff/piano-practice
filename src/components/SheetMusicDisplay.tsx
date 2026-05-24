@@ -192,16 +192,59 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
+/**
+ * Compute the beat offset (in quarter-note beats from the start of the piece)
+ * at which each measure begins. This correctly handles pickup measures and any
+ * other irregular measure lengths, unlike the naive `floor(beat / beatsPerMeasure)`
+ * formula.
+ *
+ * Uses `measure.divisions` (normalized by the parser) and each event's `duration`
+ * field (the rhythmic advance to the next onset) to accumulate the running offset.
+ */
+export function computeMeasureStartBeats(score: ParsedScore): number[] {
+  const startBeats: number[] = [];
+  let beatCursor = 0;
+  const part = score.parts[0];
+  if (!part) {
+    return startBeats;
+  }
+  for (const measure of part.measures) {
+    startBeats.push(beatCursor);
+    const divisions = measure.divisions || 4;
+    for (const event of measure.events) {
+      beatCursor += event.duration / divisions;
+    }
+  }
+  return startBeats;
+}
+
 export function computeCursorX(
   beat: number,
   score: ParsedScore,
   layout: ResolvedLayout,
+  measureStartBeats: number[],
 ): number | null {
   const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
-  // Convert beat (in quarter notes) to beat count in the time signature's unit
-  const beatsPerMeasure = timeSig.beats * (4 / timeSig.beatType);
-  const measureIndex = Math.floor(beat / beatsPerMeasure);
-  const beatInMeasure = beat % beatsPerMeasure;
+
+  // Binary search for the measure containing `beat`: the largest index i where
+  // measureStartBeats[i] <= beat. This handles pickup measures and any other
+  // irregular measure lengths that the old floor(beat / beatsPerMeasure) formula
+  // would get wrong.
+  let measureIndex = 0;
+  {
+    let low = 0;
+    let high = measureStartBeats.length - 1;
+    while (low < high) {
+      const mid = Math.floor((low + high + 1) / 2);
+      if (measureStartBeats[mid] <= beat) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    measureIndex = low;
+  }
+  const beatInMeasure = beat - (measureStartBeats[measureIndex] ?? 0);
 
   const spine = layout.measureSpines[measureIndex];
   if (!spine) {
@@ -505,9 +548,15 @@ export function SheetMusicDisplay({
     try {
       const score = parseScore(musicxml);
       const layout = resolveLayout(score, layoutConfig);
-      return { score, layout, error: null };
+      const measureStartBeats = computeMeasureStartBeats(score);
+      return { score, layout, measureStartBeats, error: null };
     } catch (e) {
-      return { score: null, layout: null, error: String(e) };
+      return {
+        score: null,
+        layout: null,
+        measureStartBeats: null,
+        error: String(e),
+      };
     }
   }, [musicxml, layoutConfig]);
 
@@ -517,7 +566,7 @@ export function SheetMusicDisplay({
   if (!result.score || !result.layout) {
     return null;
   }
-  const { score, layout } = result;
+  const { score, layout, measureStartBeats } = result;
   if (score.parts.length === 0 || score.numMeasures === 0) {
     return <p>No music to display.</p>;
   }
@@ -591,7 +640,10 @@ export function SheetMusicDisplay({
     let rafId: number;
     const tick = () => {
       const beat = getLiveBeat();
-      const x = beat !== null ? computeCursorX(beat, score, layout) : null;
+      const x =
+        beat !== null
+          ? computeCursorX(beat, score, layout, measureStartBeats)
+          : null;
       if (x !== null && containerWidth > 0) {
         const screenX = leftPad + x - currentScroll;
         if (screenX < 0 || screenX > containerWidth * 0.78) {
@@ -612,7 +664,7 @@ export function SheetMusicDisplay({
       ro.disconnect();
       container?.removeEventListener("scroll", onScroll);
     };
-  }, [getLiveBeat, isPlaying, score, layout, placeCursor]);
+  }, [getLiveBeat, isPlaying, score, layout, measureStartBeats, placeCursor]);
 
   // When not playing (paused, stopped, initial load) the cursor is static, so
   // position it once here instead of burning a rAF loop. Re-runs on pause/stop
@@ -623,7 +675,11 @@ export function SheetMusicDisplay({
       return;
     }
     const beat = getLiveBeat();
-    placeCursor(beat !== null ? computeCursorX(beat, score, layout) : null);
+    placeCursor(
+      beat !== null
+        ? computeCursorX(beat, score, layout, measureStartBeats)
+        : null,
+    );
   }, [getLiveBeat, isPlaying, snapGeneration, score, layout, placeCursor]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
@@ -641,7 +697,7 @@ export function SheetMusicDisplay({
     if (!el) {
       return;
     }
-    const x = computeCursorX(beat, score, layout);
+    const x = computeCursorX(beat, score, layout, measureStartBeats);
     const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
     el.scrollLeft =
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
