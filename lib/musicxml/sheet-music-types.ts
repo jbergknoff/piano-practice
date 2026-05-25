@@ -26,6 +26,12 @@ export interface ParsedNote {
   staccato: boolean;
   /** Present when this note is a grace note (appoggiatura or acciaccatura). */
   grace?: { slash: boolean };
+  /**
+   * Actual sounding duration in the measure's divisions. Set by the parser
+   * when the note element contains a `<play-duration>` child (emitted by the
+   * MIDI-to-MusicXML converter). Propagated to `ChordGroup.playbackDuration`.
+   */
+  playbackDuration?: number;
 }
 
 export interface ParsedRest {
@@ -56,6 +62,14 @@ export interface ChordGroup {
   noteIndex: number;
   /** Grace note groups that precede this chord, in display order (left to right). */
   gracesBefore?: GraceGroup[];
+  /**
+   * Actual sounding duration in the measure's divisions, when it differs from
+   * `duration`. Set by the MIDI-to-MusicXML converter (via `<play-duration>`)
+   * when the real note length is shorter than the space to the next onset.
+   * `musicXmlToConversion` uses this instead of `duration` when computing
+   * per-note `durationBeats` so highlight timing reflects the true note length.
+   */
+  playbackDuration?: number;
 }
 
 export type MeasureEvent = ChordGroup | ParsedRest;

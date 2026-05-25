@@ -27,7 +27,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
-import { midiToMusicXml, midiToMusicXmlWithTracks } from "./midi-to-musicxml";
+import {
+  getMidiTracks,
+  midiToMusicXml,
+  midiToMusicXmlWithTracks,
+} from "./midi-to-musicxml";
+import { musicXmlToConversion } from "../musicxml/musicxml-playback";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -661,6 +666,85 @@ describe("midiToMusicXmlWithTracks – staccato", () => {
     );
 
     expect(musicxml).not.toContain("<staccato/>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-track highlighting accuracy
+//
+// When two tracks have different rhythmic densities the shared rhythm spine
+// (built from the union of both parts' onsets) can advance the playback
+// cursor past a note in one part while the other part still has notes
+// playing.  The `<duration>` written for each note must reflect the actual
+// MIDI note duration so that `durationBeats` (used to decide which noteheads
+// to highlight) is correct.  Using "space to next onset in this part" instead
+// causes notes to stay highlighted after the cursor has moved on.
+// ---------------------------------------------------------------------------
+
+describe("midiToMusicXmlWithTracks – multi-track durationBeats", () => {
+  // 4/4 measure, 480 tpb.
+  // Track 0 (treble): C4 quarter at beat 0 (sound ends at beat 1),
+  //                   then silence, then D4 quarter at beat 2.
+  //   → space to next onset for C4 = 2 beats (half note slot), but actual
+  //     note duration = 1 beat (quarter).
+  // Track 1 (bass):   E3 quarter at beat 0, F3 quarter at beat 1.
+  //
+  // The combined spine has onsets at beats 0, 1, 2, …  At beat 1 the cursor
+  // is at the position of bass note F3.  C4 in the treble must NOT still be
+  // highlighted at beat 1 — i.e., C4.durationBeats must be 1, not 2.
+  test("note followed by rest: durationBeats equals actual note duration not slot size", () => {
+    const ts: [number, Record<string, unknown>] = [
+      0,
+      {
+        type: "timeSignature",
+        meta: true,
+        numerator: 4,
+        denominator: 4,
+        metronome: 24,
+        thirtyseconds: 8,
+      },
+    ];
+
+    const track0: MidiEvent[] = withDeltas([
+      ts,
+      [0, { type: "noteOn", channel: 0, noteNumber: 60, velocity: 64 }], // C4 on
+      [TPB, { type: "noteOff", channel: 0, noteNumber: 60, velocity: 0 }], // C4 off (beat 1)
+      [2 * TPB, { type: "noteOn", channel: 0, noteNumber: 62, velocity: 64 }], // D4 on (beat 2)
+      [3 * TPB, { type: "noteOff", channel: 0, noteNumber: 62, velocity: 0 }], // D4 off (beat 3)
+    ]);
+    const track1: MidiEvent[] = withDeltas([
+      ts,
+      [0, { type: "noteOn", channel: 0, noteNumber: 52, velocity: 64 }], // E3 on
+      [TPB, { type: "noteOff", channel: 0, noteNumber: 52, velocity: 0 }], // E3 off (beat 1)
+      [TPB, { type: "noteOn", channel: 0, noteNumber: 53, velocity: 64 }], // F3 on (beat 1)
+      [2 * TPB, { type: "noteOff", channel: 0, noteNumber: 53, velocity: 0 }], // F3 off (beat 2)
+    ]);
+
+    const midiData: MidiData = {
+      header: { format: 1, numTracks: 2, ticksPerBeat: TPB },
+      tracks: [track0, track1],
+    };
+
+    const trackIndices = getMidiTracks(midiData).map((t) => t.index);
+    const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
+    const { notes } = musicXmlToConversion(musicxml);
+
+    const treble = notes.filter((n) => n.partIndex === 0);
+    const bass = notes.filter((n) => n.partIndex === 1);
+
+    // C4 is held for exactly 1 beat. Even though the next treble onset is 2
+    // beats away, durationBeats must be 1 (the actual MIDI note length).
+    expect(treble[0].noteNumber).toBe(60); // C4
+    expect(treble[0].startBeat).toBe(0);
+    expect(treble[0].durationBeats).toBe(1);
+
+    // D4 starts at beat 2.
+    expect(treble[1].noteNumber).toBe(62); // D4
+    expect(treble[1].startBeat).toBe(2);
+
+    // Bass notes each last 1 beat.
+    expect(bass.map((n) => n.startBeat)).toEqual([0, 1]);
+    expect(bass.every((n) => n.durationBeats === 1)).toBe(true);
   });
 });
 

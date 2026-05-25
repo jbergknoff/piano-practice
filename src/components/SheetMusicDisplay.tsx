@@ -1254,7 +1254,7 @@ function Measure({
         staffSpace={staffSpace}
         inkColor={inkColor}
       />
-      {partIndex === 0 && (
+      {partIndex === 0 && measure.number > 0 && (
         <text
           x={x + 4}
           y={staffBottomY - 4 * staffSpace - 5}

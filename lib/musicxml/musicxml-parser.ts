@@ -303,13 +303,22 @@ function graceGroupsByOnset(
 // event stream: notes sharing an onset become a chord, each event's duration is
 // the gap to the next onset so the cumulative-duration layout stays aligned, and
 // gaps before the first onset / an empty staff become rests.
+//
+// `staffContentEndReal` is the maximum (onset + durationReal) within *this* staff
+// only; it anchors the last note's duration so it isn't stretched to cover notes
+// in another staff. `globalContentEndReal` is the maximum across all staves in the
+// measure; a trailing rest fills any gap between the two so every staff's total
+// beat count stays equal (required for cursor and highlight timing to agree).
 function buildStaffEvents(
   items: StaffItem[],
-  contentEndReal: number,
+  staffContentEndReal: number,
+  globalContentEndReal: number,
   scale: number,
 ): MeasureEvent[] {
   if (items.length === 0) {
-    return contentEndReal > 0 ? [restEvent(contentEndReal * scale, true)] : [];
+    return globalContentEndReal > 0
+      ? [restEvent(globalContentEndReal * scale, true)]
+      : [];
   }
 
   const graces = graceGroupsByOnset(items.filter((it) => it.isGrace));
@@ -326,7 +335,9 @@ function buildStaffEvents(
 
   const events: MeasureEvent[] = [];
   if (onsets.length === 0) {
-    return contentEndReal > 0 ? [restEvent(contentEndReal * scale, true)] : [];
+    return globalContentEndReal > 0
+      ? [restEvent(globalContentEndReal * scale, true)]
+      : [];
   }
   if (onsets[0] > 0) {
     events.push(restEvent(onsets[0] * scale));
@@ -334,7 +345,10 @@ function buildStaffEvents(
 
   for (let i = 0; i < onsets.length; i++) {
     const onset = onsets[i];
-    const nextOnset = i + 1 < onsets.length ? onsets[i + 1] : contentEndReal;
+    // Use staffContentEndReal (not globalContentEndReal) as the terminal anchor
+    // for the last note so its duration reflects only this staff's content.
+    const nextOnset =
+      i + 1 < onsets.length ? onsets[i + 1] : staffContentEndReal;
     const duration = Math.max(nextOnset - onset, 0) * scale;
     const group = byOnset.get(onset) ?? [];
     const noteItems = group.filter((it) => it.parsed.kind === "note");
@@ -367,6 +381,16 @@ function buildStaffEvents(
       gracesBefore: graces.get(onset),
     });
   }
+
+  // If this staff ends before the measure's global content end (because another
+  // staff has notes that extend further), append a rest so the total beat count
+  // matches every other staff — keeping cursor and highlight timing in sync.
+  if (staffContentEndReal < globalContentEndReal) {
+    events.push(
+      restEvent((globalContentEndReal - staffContentEndReal) * scale),
+    );
+  }
+
   return events;
 }
 
@@ -409,15 +433,21 @@ function parseMultiStaffPart(partEl: Element, id: string): ParsedPart[] {
 
     const items = collectStaffItems(measureEl);
     const scale = NORMALIZED_DIVISIONS / runningDivisions;
-    const contentEndReal = items.reduce(
+    const globalContentEndReal = items.reduce(
       (end, it) => Math.max(end, it.onset + it.durationReal),
       0,
     );
 
     for (let s = 0; s < staffCount; s++) {
+      const staffItems = items.filter((it) => it.staff === s + 1);
+      const staffContentEndReal = staffItems.reduce(
+        (end, it) => Math.max(end, it.onset + it.durationReal),
+        0,
+      );
       const events = buildStaffEvents(
-        items.filter((it) => it.staff === s + 1),
-        contentEndReal,
+        staffItems,
+        staffContentEndReal,
+        globalContentEndReal,
         scale,
       );
       assignNoteIndices(events);
@@ -533,6 +563,13 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const staccato =
     el.querySelector("notations > articulations > staccato") !== null;
 
+  // Non-standard element emitted by the MIDI-to-MusicXML converter when the
+  // actual note duration differs from the display duration (space to next onset).
+  const playbackDurationText = el.querySelector("play-duration")?.textContent;
+  const playbackDuration = playbackDurationText
+    ? Number.parseInt(playbackDurationText, 10)
+    : undefined;
+
   const note: ParsedNote = {
     kind: "note",
     pitch: { step, alter, octave },
@@ -546,6 +583,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
     // running accidental state (and the key signature) are known.
     accidental: "none",
     staccato,
+    playbackDuration,
   };
   if (isGrace) {
     note.grace = { slash: graceEl.getAttribute("slash") === "yes" };
@@ -656,6 +694,8 @@ function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
     }
 
     // Regular chord — attach any buffered grace groups and clear the buffer.
+    // Propagate <play-duration> from the first note (set by MIDI-to-MusicXML
+    // converter when the actual note length differs from the display duration).
     const chord: ChordGroup = {
       notes: group,
       duration: group[0].duration,
@@ -664,6 +704,7 @@ function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
       noteIndex: -1, // filled by caller
       gracesBefore:
         pendingGraceGroups.length > 0 ? [...pendingGraceGroups] : undefined,
+      playbackDuration: group[0].playbackDuration,
     };
     pendingGraceGroups.length = 0;
     events.push(chord);

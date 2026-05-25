@@ -122,6 +122,12 @@ function renderNote(
   chord: boolean,
   indent: string,
   staccato = false,
+  /** When provided, emit a `<play-duration>` child so the parser can store the
+   *  actual sounding length separately from the display duration (`dur`).
+   *  `musicXmlToConversion` then uses the playback duration for `durationBeats`
+   *  instead of the display duration, keeping highlight timing accurate when a
+   *  second part has intermediate onsets that advance the cursor. */
+  playbackDur?: number,
 ): string {
   const [type, dot] = DURATION_TYPE.get(dur) ?? ["quarter", false];
   const i = indent;
@@ -141,6 +147,9 @@ function renderNote(
     lines.push(`${i}  </pitch>`);
   }
   lines.push(`${i}  <duration>${dur}</duration>`);
+  if (playbackDur !== undefined) {
+    lines.push(`${i}  <play-duration>${playbackDur}</play-duration>`);
+  }
   if (tieStop) {
     lines.push(`${i}  <tie type="stop"/>`);
   }
@@ -578,13 +587,24 @@ function buildPartMeasuresXml(
         }
       }
 
-      // Use the space to the next chord's start as the displayed duration so
+      // The space to the next chord determines the visual notehead type so
       // that short MIDI note-off times (performance articulation) don't create
-      // spurious rests between notes.  Audio playback keeps the original MIDI
-      // duration via durationTicks.
+      // spurious rests in the notation.  However, `<duration>` uses the actual
+      // quantized note length so that `musicXmlToConversion` derives correct
+      // per-note `durationBeats` for highlighting — especially when a second
+      // part has intermediate onsets that advance the cursor past this note's
+      // X position before the space-to-next-onset expires.
       const nextStartTick = j < mParts.length ? mParts[j].startTick : mEnd;
       const spaceGrid = Math.round((nextStartTick - startTick) / grid);
       const displayDur = STANDARD_DURATIONS.find((d) => d <= spaceGrid) ?? 1;
+
+      // Actual quantized note duration (from MIDI durationTicks), capped to the
+      // space available so it never exceeds the next onset.
+      const actualDurGrid = Math.round(chord[0].durationTicks / grid);
+      const rhythmicDur =
+        STANDARD_DURATIONS.find(
+          (d) => d <= Math.min(actualDurGrid, spaceGrid),
+        ) ?? 1;
 
       for (let k = 0; k < chord.length; k++) {
         const p = chord[k];
@@ -595,6 +615,12 @@ function buildPartMeasuresXml(
           !p.tieStart &&
           !p.tieStop &&
           p.durationTicks <= displayDur * grid * STACCATO_RATIO;
+        // When the actual sounding length is shorter than the display slot,
+        // emit <play-duration> so musicXmlToConversion can use the real length
+        // for durationBeats without an explicit rest disturbing the spine.
+        // `displayDur` is always used for <duration> to keep beatCursor
+        // advancement (and thus subsequent note startBeats) correct.
+        const playbackDur = rhythmicDur < displayDur ? rhythmicDur : undefined;
         lines.push(
           renderNote(
             pitch,
@@ -604,10 +630,15 @@ function buildPartMeasuresXml(
             k > 0,
             ind,
             staccato,
+            playbackDur,
           ),
         );
       }
 
+      // Advance cursor by the display duration (space to next onset in this
+      // part). No explicit rests are needed: the <play-duration> element tells
+      // musicXmlToConversion the actual note length, and beatCursor still
+      // advances correctly via <duration>=displayDur.
       cursor = startTick + displayDur * grid;
       noteIndex++;
       i = j;

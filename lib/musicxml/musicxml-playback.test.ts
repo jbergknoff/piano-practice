@@ -181,3 +181,48 @@ describe("grace note timing", () => {
     expect(grace?.startBeat).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("staccato – durationBeats uses display duration", () => {
+  // Staccato shortens the audible sound but the note must remain highlighted
+  // for its full notated slot so highlighting stays in sync with the cursor.
+  // This also sidesteps the MusicXML quirk where <staccato/> is only placed
+  // on the primary note of a chord and chord members lack the notation.
+  test("staccato notes use displayBeats, not a shortened duration", () => {
+    // Chord: F#5 (staccato notation) + A5 (chord member, no notation).
+    // Both are eighth notes at divisions=4, so displayBeats=0.5.
+    // Neither should have a shortened durationBeats.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>F</step><alter>1</alter><octave>5</octave></pitch>
+        <duration>2</duration><type>eighth</type>
+        <notations><articulations><staccato/></articulations></notations>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>A</step><octave>5</octave></pitch>
+        <duration>2</duration><type>eighth</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const { notes } = musicXmlToConversion(xml);
+    expect(notes).toHaveLength(2);
+
+    const displayBeats = 0.5; // eighth note at divisions=4
+    for (const note of notes) {
+      expect(note.durationBeats).toBe(displayBeats);
+    }
+  });
+});

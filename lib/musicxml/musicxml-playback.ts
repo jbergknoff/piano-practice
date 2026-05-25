@@ -5,9 +5,6 @@ import type { Pitch } from "./sheet-music-types";
 // default velocity for every note.
 export const DEFAULT_VELOCITY = 80;
 
-// A staccato note sounds for this fraction of its notated length.
-export const STACCATO_PLAYBACK_RATIO = 0.5;
-
 // Grace notes take no rhythmic space in the score; give them a short nominal
 // sounding length so they're audible without displacing the main note.
 export const GRACE_NOTE_BEATS = 0.1;
@@ -102,14 +99,26 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
           });
         });
 
-        const durationBeats = event.duration / divisions;
+        // `event.duration` is the display duration (space to next onset in this
+        // part); it drives beatCursor so subsequent notes start at the right beat.
+        // `event.playbackDuration`, when present, is the actual sounding length
+        // (set by the MIDI-to-MusicXML converter via <play-duration>); use it for
+        // durationBeats so highlight timing reflects the true note length rather
+        // than the potentially larger slot size.
+        const displayBeats = event.duration / divisions;
+        const playBeats =
+          event.playbackDuration != null
+            ? event.playbackDuration / divisions
+            : null;
         event.notes.forEach((note, voiceIndex) => {
+          // Use the display duration for highlighting — staccato shortens the
+          // audible sound but the note should remain highlighted for its full
+          // notated slot so the display stays in sync with the cursor.
+          const durationBeats = playBeats ?? displayBeats;
           notes.push({
             noteNumber: pitchToMidiNumber(note.pitch),
             startBeat: beatCursor,
-            durationBeats: note.staccato
-              ? durationBeats * STACCATO_PLAYBACK_RATIO
-              : durationBeats,
+            durationBeats,
             velocity: DEFAULT_VELOCITY,
             tieStop: note.tieStop,
             partIndex,
@@ -118,7 +127,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
             voiceIndex,
           });
         });
-        beatCursor += durationBeats;
+        beatCursor += displayBeats;
       }
     }
   });
