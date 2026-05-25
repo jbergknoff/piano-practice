@@ -263,21 +263,23 @@ export function computeCursorX(
     return barlineX;
   }
 
-  // Snap the cursor to the onset X of the segment that contains the current
-  // beat.  Interpolating between onsets (as was done previously) caused the
-  // cursor to sweep visually past a highlighted notehead while the note was
-  // still sounding.  Snapping keeps the cursor exactly on top of the note it
-  // belongs to for its entire duration — matching how notation editors behave.
-  //
-  // `measureEndX` is the next measure's first-note X (or the closing barline)
-  // and is used as the fallback when the beat is at or past the last onset.
+  // The cursor must land on the actual downbeat notehead (xs[0]) at the
+  // downbeat — not the barline. The clef/key/padding lead-in that sits to the
+  // left of a measure's first note is dead space the cursor sweeps during the
+  // PREVIOUS measure's final beat, so the terminal anchor is the next measure's
+  // first onset (or the closing barline for the last measure). This keeps the
+  // cursor continuous across barlines while staying glued to the notes.
   const nextSpine = layout.measureSpines[measureIndex + 1];
   const measureEndX = nextSpine?.xs[0] ?? endBarlineX;
 
   for (let k = 0; k < divs.length; k++) {
     const segEndDiv = k + 1 < divs.length ? divs[k + 1] : spine.endDiv;
     if (targetDiv < segEndDiv) {
-      return xs[k]; // snap: cursor stays at current onset until next onset begins
+      const x0 = xs[k];
+      const x1 = k + 1 < xs.length ? xs[k + 1] : measureEndX;
+      const span = segEndDiv - divs[k];
+      const frac = span > 0 ? (targetDiv - divs[k]) / span : 0;
+      return x0 + frac * (x1 - x0);
     }
   }
 

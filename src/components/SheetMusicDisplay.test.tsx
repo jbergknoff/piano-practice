@@ -535,21 +535,19 @@ describe("computeCursorX", () => {
     }
   });
 
-  test("between onsets the cursor stays at the current onset (snapped)", () => {
-    // The cursor snaps to the onset it belongs to and stays there until the
-    // next onset begins.  This prevents the cursor from sweeping visually past
-    // a highlighted notehead while the note is still sounding.
+  test("between onsets the cursor interpolates monotonically", () => {
     const a = layout.measureSpines[1].xs[0];
-    const midBeat = cx(4.5); // halfway between beats 4 and 5
-    expect(midBeat).toBe(a); // still at first onset — hasn't moved yet
+    const b = layout.measureSpines[1].xs[1];
+    const mid = cx(4.5); // halfway between beats 4 and 5
+    expect(mid).toBeGreaterThan(a);
+    expect(mid).toBeLessThan(b);
   });
 
-  test("the cursor stays at the last onset while the final note sounds", () => {
-    // Just before the barline the cursor is still at the last onset of the
-    // current measure (not swept through dead space toward the next barline).
-    const lastOnsetX = layout.measureSpines[0].xs[3]; // 4th quarter of measure 1
+  test("the cursor is continuous across a barline (no jump)", () => {
+    // Approaching the end of measure 1 must converge on measure 2's downbeat x,
+    // so the cursor doesn't snap backward to the barline as the bar turns over.
     const justBeforeBarline = cx(4 - 1e-6);
-    expect(justBeforeBarline).toBe(lastOnsetX);
+    expect(justBeforeBarline).toBeCloseTo(cx(4), 1);
   });
 
   test("computeMeasureStartBeats handles a pickup (anacrusis) measure", () => {

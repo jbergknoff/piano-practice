@@ -5,9 +5,6 @@ import type { Pitch } from "./sheet-music-types";
 // default velocity for every note.
 export const DEFAULT_VELOCITY = 80;
 
-// A staccato note sounds for this fraction of its notated length.
-export const STACCATO_PLAYBACK_RATIO = 0.5;
-
 // Grace notes take no rhythmic space in the score; give them a short nominal
 // sounding length so they're audible without displacing the main note.
 export const GRACE_NOTE_BEATS = 0.1;
@@ -113,17 +110,11 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
           event.playbackDuration != null
             ? event.playbackDuration / divisions
             : null;
-        // In MusicXML, articulations like staccato are placed on the primary
-        // note of a chord; chord members (<chord/>) don't repeat the notation.
-        // Use chord-level staccato so all notes in the group expire together.
-        const chordStaccato = event.notes.some((n) => n.staccato);
         event.notes.forEach((note, voiceIndex) => {
-          const durationBeats =
-            playBeats != null
-              ? playBeats
-              : chordStaccato
-                ? displayBeats * STACCATO_PLAYBACK_RATIO
-                : displayBeats;
+          // Use the display duration for highlighting — staccato shortens the
+          // audible sound but the note should remain highlighted for its full
+          // notated slot so the display stays in sync with the cursor.
+          const durationBeats = playBeats ?? displayBeats;
           notes.push({
             noteNumber: pitchToMidiNumber(note.pitch),
             startBeat: beatCursor,

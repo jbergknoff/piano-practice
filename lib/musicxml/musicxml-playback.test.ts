@@ -182,15 +182,15 @@ describe("grace note timing", () => {
   });
 });
 
-describe("staccato chord – uniform durationBeats", () => {
-  // In MusicXML, articulations (staccato) are only on the primary note of a
-  // chord; <chord/> members don't repeat the notation.  All voices within the
-  // same chord must receive the same durationBeats so they are highlighted and
-  // un-highlighted together.
-  test("both notes of a staccato chord expire at the same time", () => {
+describe("staccato – durationBeats uses display duration", () => {
+  // Staccato shortens the audible sound but the note must remain highlighted
+  // for its full notated slot so highlighting stays in sync with the cursor.
+  // This also sidesteps the MusicXML quirk where <staccato/> is only placed
+  // on the primary note of a chord and chord members lack the notation.
+  test("staccato notes use displayBeats, not a shortened duration", () => {
     // Chord: F#5 (staccato notation) + A5 (chord member, no notation).
     // Both are eighth notes at divisions=4, so displayBeats=0.5.
-    // With the fix, both should get durationBeats = 0.5 * STACCATO_PLAYBACK_RATIO = 0.25.
+    // Neither should have a shortened durationBeats.
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
   "http://www.musicxml.org/dtds/partwise.dtd">
@@ -213,35 +213,16 @@ describe("staccato chord – uniform durationBeats", () => {
         <pitch><step>A</step><octave>5</octave></pitch>
         <duration>2</duration><type>eighth</type>
       </note>
-      <note>
-        <pitch><step>C</step><octave>5</octave></pitch>
-        <duration>2</duration><type>eighth</type>
-      </note>
-      <note>
-        <chord/>
-        <pitch><step>E</step><octave>5</octave></pitch>
-        <duration>2</duration><type>eighth</type>
-        <notations><articulations><staccato/></articulations></notations>
-      </note>
     </measure>
   </part>
 </score-partwise>`;
 
     const { notes } = musicXmlToConversion(xml);
-    // All notes are at noteIndex 0 (F#5+A5) or noteIndex 1 (C5+E5).
-    const chord0 = notes.filter((n) => n.noteIndex === 0);
-    const chord1 = notes.filter((n) => n.noteIndex === 1);
+    expect(notes).toHaveLength(2);
 
-    expect(chord0).toHaveLength(2);
-    expect(chord1).toHaveLength(2);
-
-    // Both notes in chord0 should have the same durationBeats (staccato applied
-    // to the whole chord even though only F#5 carries the notation element).
-    expect(chord0[0].durationBeats).toBe(chord0[1].durationBeats);
-    expect(chord0[0].durationBeats).toBeLessThan(0.5); // staccato shortens it
-
-    // Both notes in chord1 should have the same durationBeats.
-    expect(chord1[0].durationBeats).toBe(chord1[1].durationBeats);
-    expect(chord1[0].durationBeats).toBeLessThan(0.5); // staccato shortens it
+    const displayBeats = 0.5; // eighth note at divisions=4
+    for (const note of notes) {
+      expect(note.durationBeats).toBe(displayBeats);
+    }
   });
 });
