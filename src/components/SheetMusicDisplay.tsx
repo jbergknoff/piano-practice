@@ -45,6 +45,7 @@ import type {
   ParsedScore,
   ResolvedLayout,
 } from "../../lib/musicxml/sheet-music-types";
+import { FONT_SANS } from "../theme";
 
 // ── Bravura / SMuFL glyph constants ──────────────────────────────────────────
 
@@ -73,6 +74,16 @@ const G = {
   flag16thUp: "\uE242",
   flag16thDown: "\uE243",
 } as const;
+
+// SMuFL time-signature digits are U+E080 (0) \u2026 U+E089 (9). Mapping each decimal
+// digit to its glyph lets multi-digit values (e.g. 12) render as adjacent
+// figures using the same Bravura font the rest of the staff uses.
+function timeSigGlyphs(value: number): string {
+  return String(value)
+    .split("")
+    .map((digit) => String.fromCharCode(0xe080 + Number(digit)))
+    .join("");
+}
 
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
@@ -1267,7 +1278,7 @@ function Measure({
           x={x + 4}
           y={staffBottomY - 4 * staffSpace - 5}
           font-size={staffSpace * 0.85}
-          font-family="Geist, ui-sans-serif, system-ui, sans-serif"
+          font-family={FONT_SANS}
           fill={inkColor}
           fill-opacity={0.38}
         >
@@ -1499,30 +1510,18 @@ function TimeSig({
   inkColor: string;
 }) {
   const centerX = x + 10;
-  const fontSize = staffSpace * 2;
+  // Inherit the staff's Bravura font and base size (4 × staffSpace), so the
+  // SMuFL digits sit at the engraving-standard height of two staff spaces each.
+  // SMuFL time-signature glyphs are registered centered on the baseline, so we
+  // use the default (alphabetic) baseline and place each y at the desired
+  // vertical center — numerator in the upper half, denominator in the lower.
   return (
     <g fill={inkColor}>
-      <text
-        x={centerX}
-        y={staffBottomY - staffSpace * 3}
-        font-size={fontSize}
-        font-family="Fraunces, serif"
-        font-weight="700"
-        text-anchor="middle"
-        dominant-baseline="middle"
-      >
-        {timeSig.beats}
+      <text x={centerX} y={staffBottomY - staffSpace * 3} text-anchor="middle">
+        {timeSigGlyphs(timeSig.beats)}
       </text>
-      <text
-        x={centerX}
-        y={staffBottomY - staffSpace * 1}
-        font-size={fontSize}
-        font-family="Fraunces, serif"
-        font-weight="700"
-        text-anchor="middle"
-        dominant-baseline="middle"
-      >
-        {timeSig.beatType}
+      <text x={centerX} y={staffBottomY - staffSpace * 1} text-anchor="middle">
+        {timeSigGlyphs(timeSig.beatType)}
       </text>
     </g>
   );

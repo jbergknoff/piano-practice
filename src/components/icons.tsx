@@ -1,3 +1,5 @@
+import { FONT_MONO } from "../theme";
+
 export function PlayIcon({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -200,7 +202,7 @@ export function SectionsIcon({ size = 16 }: { size?: number }) {
       style={{
         fontSize: size * 0.9,
         lineHeight: 1,
-        fontFamily: "ui-monospace, 'Geist Mono', monospace",
+        fontFamily: FONT_MONO,
         letterSpacing: "-0.05em",
         display: "inline-flex",
         alignItems: "center",

@@ -7,6 +7,7 @@ import {
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
+import { serifTitle } from "../theme";
 import { PencilIcon } from "./icons";
 
 interface SelectionRangesDrawerProps {
@@ -244,15 +245,7 @@ export function SelectionRangesDrawer({
             justifyContent: "space-between",
           }}
         >
-          <span
-            style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontSize: 22,
-              fontStyle: "italic",
-            }}
-          >
-            Ranges
-          </span>
+          <span style={serifTitle(theme, 22)}>Ranges</span>
           <button
             type="button"
             onClick={onClose}

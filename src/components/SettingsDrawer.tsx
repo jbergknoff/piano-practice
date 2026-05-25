@@ -1,5 +1,6 @@
 import type { TrackInfo } from "../../lib/midi/midi-to-musicxml";
 import type { ThemeTokens } from "../theme";
+import { serifTitle } from "../theme";
 import { ResetIcon } from "./icons";
 
 interface SettingsDrawerProps {
@@ -109,15 +110,7 @@ export function SettingsDrawer({
             justifyContent: "space-between",
           }}
         >
-          <span
-            style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontSize: 22,
-              fontStyle: "italic",
-            }}
-          >
-            Settings
-          </span>
+          <span style={serifTitle(theme, 22)}>Settings</span>
           <button
             type="button"
             onClick={onClose}

@@ -1,3 +1,5 @@
+import type { JSX } from "preact";
+
 export type ThemeName = "cream" | "sepia" | "dark";
 
 export interface ThemeTokens {
@@ -63,6 +65,53 @@ export const ACCENT_COLORS = [
   "#9A6FB4",
 ] as const;
 
+// ── Font stacks ───────────────────────────────────────────────────────────────
+// Single source of truth for every font-family string in the app. Bravura (the
+// music-notation font) is intentionally not here — it lives in SheetMusicDisplay
+// next to the SMuFL glyph code that needs it.
+export const FONT_SANS = "'Geist', ui-sans-serif, system-ui, sans-serif";
+export const FONT_SERIF = "'Instrument Serif', serif"; // loaded italic-only
+export const FONT_MONO = "'Geist Mono', ui-monospace, monospace";
+
+// ── Design scales ─────────────────────────────────────────────────────────────
+// Shared vocabulary for spacing, radii, type sizes, and weights. Prefer these
+// over ad-hoc pixel literals so values stay consistent across components.
+export const space = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+} as const;
+
+export const radius = {
+  sm: 6,
+  md: 10,
+  lg: 12,
+  xl: 16,
+  xxl: 20,
+  pill: 999,
+} as const;
+
+export const fontSizes = {
+  xs: 10,
+  sm: 12,
+  base: 13,
+  md: 16,
+  lg: 22,
+  xl: 26,
+  display: 40,
+} as const;
+
+// All four weights are present in the loaded Geist cuts (see index.html).
+export const fontWeight = {
+  regular: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+} as const;
+
 export function hexA(hex: string, a: number): string {
   const h = hex.replace("#", "");
   const r = Number.parseInt(h.slice(0, 2), 16);
@@ -71,16 +120,56 @@ export function hexA(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-export function cornerBtnStyle(theme: ThemeTokens): Record<string, unknown> {
+// ── Shared style recipes ──────────────────────────────────────────────────────
+
+// Pairs the standard and -webkit- backdrop-filter so Safari is always covered.
+export function blurFilter(value: string): JSX.CSSProperties {
+  return { backdropFilter: value, WebkitBackdropFilter: value };
+}
+
+// Frosted-glass surface (used by floating panels, menus, badges, modals).
+export function glassPanel(
+  theme: ThemeTokens,
+  blur = 20,
+  saturate = 160,
+): JSX.CSSProperties {
+  return {
+    background: theme.panel,
+    border: `0.5px solid ${theme.border}`,
+    ...blurFilter(`blur(${blur}px) saturate(${saturate}%)`),
+  };
+}
+
+// Full-screen dim layer rendered behind modals/drawers.
+export function dimBackdrop(opacity = 0.3, blur = 4): JSX.CSSProperties {
+  return {
+    position: "fixed",
+    inset: 0,
+    background: `rgba(0,0,0,${opacity})`,
+    ...blurFilter(`blur(${blur}px)`),
+  };
+}
+
+// Italic serif heading used for titles across modals and screens.
+export function serifTitle(
+  theme: ThemeTokens,
+  size: number = fontSizes.xl,
+): JSX.CSSProperties {
+  return {
+    fontFamily: FONT_SERIF,
+    fontStyle: "italic",
+    fontSize: size,
+    color: theme.ink,
+  };
+}
+
+export function cornerBtnStyle(theme: ThemeTokens): JSX.CSSProperties {
   return {
     width: 38,
     height: 38,
-    background: theme.panel,
     color: theme.ink,
-    border: `0.5px solid ${theme.border}`,
-    borderRadius: 12,
-    backdropFilter: "blur(20px) saturate(160%)",
-    WebkitBackdropFilter: "blur(20px) saturate(160%)",
+    borderRadius: radius.lg,
+    ...glassPanel(theme),
     boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
     display: "inline-flex",
     alignItems: "center",
@@ -91,7 +180,7 @@ export function cornerBtnStyle(theme: ThemeTokens): Record<string, unknown> {
   };
 }
 
-export function miniBtnStyle(theme: ThemeTokens): Record<string, unknown> {
+export function miniBtnStyle(theme: ThemeTokens): JSX.CSSProperties {
   return {
     width: 22,
     height: 22,
@@ -102,7 +191,7 @@ export function miniBtnStyle(theme: ThemeTokens): Record<string, unknown> {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
+    borderRadius: radius.sm,
     outline: "none",
   };
 }

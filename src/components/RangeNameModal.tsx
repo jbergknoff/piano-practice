@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import type { RangeEditorState } from "../hooks/use-custom-ranges";
 import type { ThemeTokens } from "../theme";
+import { dimBackdrop, FONT_SANS, glassPanel, serifTitle } from "../theme";
 
 interface RangeNameModalProps {
   editor: RangeEditorState;
@@ -12,8 +13,6 @@ interface RangeNameModalProps {
   theme: ThemeTokens;
   accent: string;
 }
-
-const fontFamily = "'Geist', ui-sans-serif, system-ui, sans-serif";
 
 export function RangeNameModal({
   editor,
@@ -42,14 +41,7 @@ export function RangeNameModal({
     <>
       <div
         role="presentation"
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 199,
-          background: "rgba(0,0,0,0.3)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-        }}
+        style={{ ...dimBackdrop(), zIndex: 199 }}
         onClick={onCancel}
         onKeyDown={(e) => {
           if ((e as unknown as KeyboardEvent).key === "Escape") {
@@ -64,11 +56,8 @@ export function RangeNameModal({
           left: "50%",
           transform: "translate(-50%, -50%)",
           zIndex: 200,
-          background: theme.panel,
-          border: `0.5px solid ${theme.border}`,
+          ...glassPanel(theme, 24, 160),
           borderRadius: 16,
-          backdropFilter: "blur(24px) saturate(160%)",
-          WebkitBackdropFilter: "blur(24px) saturate(160%)",
           padding: "24px 28px",
           boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
           width: 300,
@@ -76,15 +65,7 @@ export function RangeNameModal({
           boxSizing: "border-box",
         }}
       >
-        <div
-          style={{
-            fontFamily: "'Instrument Serif', serif",
-            fontStyle: "italic",
-            fontSize: 24,
-            color: theme.ink,
-            marginBottom: 4,
-          }}
-        >
+        <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>
           {editor.kind === "create" ? "Name this range" : "Edit range"}
         </div>
         <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
@@ -113,7 +94,7 @@ export function RangeNameModal({
             border: `0.5px solid ${theme.border}`,
             borderRadius: 10,
             outline: "none",
-            fontFamily,
+            fontFamily: FONT_SANS,
             marginBottom: 18,
           }}
         />
@@ -138,7 +119,7 @@ export function RangeNameModal({
                   fontSize: 13,
                   padding: "8px 4px",
                   outline: "none",
-                  fontFamily,
+                  fontFamily: FONT_SANS,
                 }}
               >
                 Delete
@@ -158,7 +139,7 @@ export function RangeNameModal({
                 padding: "8px 16px",
                 borderRadius: 10,
                 outline: "none",
-                fontFamily,
+                fontFamily: FONT_SANS,
               }}
             >
               Cancel
@@ -178,7 +159,7 @@ export function RangeNameModal({
                 padding: "8px 16px",
                 borderRadius: 10,
                 outline: "none",
-                fontFamily,
+                fontFamily: FONT_SANS,
               }}
             >
               Save

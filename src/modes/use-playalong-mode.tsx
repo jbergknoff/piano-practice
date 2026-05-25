@@ -13,6 +13,7 @@ import {
   savePlayalongAttempt,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
+import { blurFilter } from "../theme";
 import type { ModeControl, ModeHandle } from "./mode-control";
 import { useStableNoteColors } from "./note-colors";
 
@@ -565,8 +566,7 @@ function CountInOverlay({
       <div
         style={{
           background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
+          ...blurFilter("blur(8px)"),
           borderRadius: 16,
           padding: "14px 28px",
           display: "flex",
@@ -620,8 +620,7 @@ function WaitingForNoteOverlay() {
       <div
         style={{
           background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
+          ...blurFilter("blur(8px)"),
           borderRadius: 16,
           padding: "18px 28px",
           display: "flex",
