@@ -113,11 +113,15 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
           event.playbackDuration != null
             ? event.playbackDuration / divisions
             : null;
+        // In MusicXML, articulations like staccato are placed on the primary
+        // note of a chord; chord members (<chord/>) don't repeat the notation.
+        // Use chord-level staccato so all notes in the group expire together.
+        const chordStaccato = event.notes.some((n) => n.staccato);
         event.notes.forEach((note, voiceIndex) => {
           const durationBeats =
             playBeats != null
               ? playBeats
-              : note.staccato
+              : chordStaccato
                 ? displayBeats * STACCATO_PLAYBACK_RATIO
                 : displayBeats;
           notes.push({
