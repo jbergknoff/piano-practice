@@ -12,3 +12,18 @@ jobs:
       - uses: actions/checkout@v4
       - run: make pr-ready
       - run: git diff --exit-code
+      - run: make down
+      - name: Print Playwright failure details
+        if: failure()
+        run: |
+          find tests/integration/results -type f -name '*.md' | sort | while read f; do
+            echo "===== $f ====="
+            cat "$f"
+            echo
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-results
+          path: tests/integration/results/
+          if-no-files-found: ignore
