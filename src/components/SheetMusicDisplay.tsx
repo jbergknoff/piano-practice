@@ -1512,22 +1512,15 @@ function TimeSig({
   const centerX = x + 10;
   // Inherit the staff's Bravura font and base size (4 × staffSpace), so the
   // SMuFL digits sit at the engraving-standard height of two staff spaces each.
+  // SMuFL time-signature glyphs are registered centered on the baseline, so we
+  // use the default (alphabetic) baseline and place each y at the desired
+  // vertical center — numerator in the upper half, denominator in the lower.
   return (
     <g fill={inkColor}>
-      <text
-        x={centerX}
-        y={staffBottomY - staffSpace * 3}
-        text-anchor="middle"
-        dominant-baseline="middle"
-      >
+      <text x={centerX} y={staffBottomY - staffSpace * 3} text-anchor="middle">
         {timeSigGlyphs(timeSig.beats)}
       </text>
-      <text
-        x={centerX}
-        y={staffBottomY - staffSpace * 1}
-        text-anchor="middle"
-        dominant-baseline="middle"
-      >
+      <text x={centerX} y={staffBottomY - staffSpace * 1} text-anchor="middle">
         {timeSigGlyphs(timeSig.beatType)}
       </text>
     </g>
