@@ -109,9 +109,10 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
         // durationBeats so highlight timing reflects the true note length rather
         // than the potentially larger slot size.
         const displayBeats = event.duration / divisions;
-        const playBeats = event.playbackDuration != null
-          ? event.playbackDuration / divisions
-          : null;
+        const playBeats =
+          event.playbackDuration != null
+            ? event.playbackDuration / divisions
+            : null;
         event.notes.forEach((note, voiceIndex) => {
           const durationBeats =
             playBeats != null

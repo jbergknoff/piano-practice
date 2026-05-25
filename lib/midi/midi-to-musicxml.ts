@@ -602,8 +602,9 @@ function buildPartMeasuresXml(
       // space available so it never exceeds the next onset.
       const actualDurGrid = Math.round(chord[0].durationTicks / grid);
       const rhythmicDur =
-        STANDARD_DURATIONS.find((d) => d <= Math.min(actualDurGrid, spaceGrid)) ??
-        1;
+        STANDARD_DURATIONS.find(
+          (d) => d <= Math.min(actualDurGrid, spaceGrid),
+        ) ?? 1;
 
       for (let k = 0; k < chord.length; k++) {
         const p = chord[k];
