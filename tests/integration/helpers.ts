@@ -34,3 +34,26 @@ export async function blockExternalFonts(page: Page): Promise<void> {
 export async function waitForFonts(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
+
+/**
+ * Inject a crypto.subtle stub before page load for non-secure HTTP origins
+ * (e.g. http://server:3456 inside Docker). Browsers only expose SubtleCrypto
+ * in secure contexts; localhost qualifies automatically but other hostnames
+ * do not, so the app's file-hashing logic would throw without this mock.
+ *
+ * Must be called before page.goto().
+ */
+export async function mockCryptoSubtle(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    if (window.crypto.subtle) {
+      return;
+    }
+    Object.defineProperty(window.crypto, "subtle", {
+      value: {
+        digest: async (_algorithm: string, _data: ArrayBuffer) =>
+          new ArrayBuffer(32),
+      },
+      configurable: true,
+    });
+  });
+}
