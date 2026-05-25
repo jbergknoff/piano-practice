@@ -900,9 +900,17 @@ export function SheetMusicDisplay({
         const measureX = layout.measureXs[measureIndex];
         const measureW = layout.measureWidths[measureIndex];
         const frac = Math.max(0, Math.min(1, (svgX - measureX) / measureW));
+        // Use the authoritative per-measure start-beat array (same source the
+        // playback cursor uses) so the seek target is correct even for pickup
+        // measures and pieces with non-uniform time signatures.
+        const mStart =
+          measureStartBeats?.[measureIndex] ?? measureIndex * beatsPerMeasure;
+        const mEnd =
+          measureStartBeats?.[measureIndex + 1] ??
+          (measureIndex + 1) * beatsPerMeasure;
         onSheetContextMenu({
           measureNumber: measureIndex + 1,
-          beat: (measureIndex + frac) * beatsPerMeasure,
+          beat: mStart + frac * (mEnd - mStart),
           clientX: me.clientX,
           clientY: me.clientY,
         });
