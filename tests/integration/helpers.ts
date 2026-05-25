@@ -5,7 +5,7 @@ import type { Page } from "@playwright/test";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Absolute path to the shared test-fixtures directory. */
-export const FIXTURES = path.join(__dirname, "../test-fixtures");
+export const FIXTURES = path.join(__dirname, "../../test-fixtures");
 
 /**
  * Upload a file from test-fixtures/ through the landing screen's hidden file
