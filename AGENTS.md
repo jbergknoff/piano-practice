@@ -168,6 +168,13 @@ if (!value) return;
 
 `bun.lock` is committed. When adding or removing packages, commit the updated `bun.lock` alongside `package.json`.
 
+## Pull requests
+
+A PR description should always lead with the motivation for the change — the
+problem being solved or the reason the change is needed — before describing what
+was changed. A reviewer should understand *why* the PR exists from the first
+paragraph, not have to infer it from a list of edits.
+
 ## CI
 
 GitHub Actions runs `make pr-ready` on every push and pull request (`.github/workflows/ci.yml`), followed by `git diff --exit-code` to fail with a visible diff if files weren't pre-formatted.
