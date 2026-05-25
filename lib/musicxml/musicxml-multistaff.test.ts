@@ -87,6 +87,44 @@ describe("multi-staff parsing", () => {
     }
   });
 
+  test("a staff that ends early gets a trailing rest and correct note durations", () => {
+    // Treble: C5 quarter + D5 quarter (2 beats). Bass: C3 half (2 beats).
+    // Both staves fill a 2/4 measure, but treble has two separate onsets while
+    // bass has only one. The treble's D5 (last note) must have duration 1 beat,
+    // NOT 2 beats (which would happen if it were anchored to the bass's end).
+    const xml = `<?xml version="1.0"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions><key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <backup><duration>8</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>8</duration><voice>5</voice><type>half</type><staff>2</staff></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const { notes } = musicXmlToConversion(xml);
+    const treble = notes.filter((n) => n.partIndex === 0);
+    const bass = notes.filter((n) => n.partIndex === 1);
+
+    // Both treble notes must start at the correct beat.
+    expect(treble.map((n) => n.startBeat)).toEqual([0, 1]);
+    // Each treble note should only last 1 beat — not be stretched to 2.
+    expect(treble.map((n) => n.durationBeats)).toEqual([1, 1]);
+
+    // Bass half note: 2 beats.
+    expect(bass.map((n) => n.startBeat)).toEqual([0]);
+    expect(bass.map((n) => n.durationBeats)).toEqual([2]);
+  });
+
   test("a staff that enters late gets a leading rest", () => {
     // Bass rests for the first quarter, then plays C3.
     const xml = `<?xml version="1.0"?>
