@@ -48,8 +48,6 @@ fi
 log "docker is up ($(docker version --format '{{.Server.Version}}' 2>/dev/null))"
 
 # Pre-pull compose images (cached into container state for future sessions).
-bun_version="$(sed -nE 's/.*BUN_VERSION[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' netlify.toml 2>/dev/null | head -1)"
-docker pull "oven/bun:${bun_version:-1}" >/dev/null 2>&1 || log "warning: failed to pull oven/bun"
-docker pull "mcr.microsoft.com/playwright:v1.60.0-noble" >/dev/null 2>&1 || log "warning: failed to pull playwright image"
+docker compose pull --quiet || log "warning: failed to pull one or more compose images"
 
 log "setup complete"
