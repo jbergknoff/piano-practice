@@ -1,7 +1,7 @@
 # Netlify sets NETLIFY=true; use tools directly there since Docker isn't available.
 ifdef NETLIFY
 run = $(1)
-playwright = node_modules/.bin/playwright
+playwright = SKIP_SCREENSHOTS=1 node_modules/.bin/playwright
 else
 run = docker compose run --rm $(2) main $(1)
 playwright = docker compose run --rm playwright node_modules/.bin/playwright

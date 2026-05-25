@@ -14,10 +14,10 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-// Screenshot baselines are rendered by the Docker playwright image; skip the
-// pixel comparison when running directly (NETLIFY=true) since the local
-// Chrome headless shell may render fractionally differently.
-const screenshotsEnabled = !process.env.NETLIFY;
+// Screenshot baselines are generated inside the Docker playwright image.
+// Outside of Docker the Chrome version is unspecified and may be anything,
+// so pixel-level output is not stable against those baselines.
+const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 test("renders sheet music from a MusicXML file", async ({ page }) => {
   await loadFile(page, "underwater-theme.musicxml");
