@@ -1254,7 +1254,7 @@ function Measure({
         staffSpace={staffSpace}
         inkColor={inkColor}
       />
-      {partIndex === 0 && measure.number > 0 && (
+      {partIndex === 0 && (
         <text
           x={x + 4}
           y={staffBottomY - 4 * staffSpace - 5}
@@ -1263,7 +1263,7 @@ function Measure({
           fill={inkColor}
           fill-opacity={0.38}
         >
-          {measure.number}
+          {measureIndex + 1}
         </text>
       )}
       {isFirstMeasure && (
