@@ -1,8 +1,10 @@
 # Netlify sets NETLIFY=true; use tools directly there since Docker isn't available.
 ifdef NETLIFY
 run = $(1)
+playwright = node_modules/.bin/playwright
 else
 run = docker compose run --rm $(2) main $(1)
+playwright = docker compose run --rm playwright node_modules/.bin/playwright
 endif
 
 bun = $(call run,bun)
@@ -47,20 +49,11 @@ tests/integration/fixtures/screenshots:
 	mkdir -p tests/integration/fixtures/screenshots
 
 integration-test: build node_modules tests/integration/results tests/integration/fixtures/screenshots
-ifdef NETLIFY
-	node_modules/.bin/playwright test
-else
-	docker compose run --rm playwright
-endif
+	$(playwright) test
 
 # Re-generate screenshot baselines (run after intentional visual changes).
 update-screenshots: build node_modules tests/integration/results tests/integration/fixtures/screenshots
-ifdef NETLIFY
-	node_modules/.bin/playwright test --update-snapshots
-else
-	docker compose run --rm playwright \
-		node_modules/.bin/playwright test --update-snapshots
-endif
+	$(playwright) test --update-snapshots
 
 test: unit-test integration-test
 
