@@ -5,3 +5,34 @@ services:
     volumes:
       - ${PWD}:${PWD}
     working_dir: ${PWD}
+
+  server:
+    image: oven/bun:${BUN_VERSION:-1}
+    command: bun scripts/serve.ts
+    volumes:
+      - ${PWD}:${PWD}
+    working_dir: ${PWD}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://localhost:3456').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 3s
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.60.0-noble
+    command: node_modules/.bin/playwright test
+    volumes:
+      - ${PWD}:${PWD}
+    working_dir: ${PWD}
+    environment:
+      - BASE_URL=http://server:3456
+    depends_on:
+      server:
+        condition: service_healthy

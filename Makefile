@@ -28,7 +28,7 @@ typecheck: node_modules
 	$(tsc) --noEmit
 
 test: node_modules
-	$(bun) test
+	$(bun) test src lib
 
 build: node_modules
 	mkdir -p dist
@@ -36,3 +36,14 @@ build: node_modules
 	cp node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2 dist/bravura.woff2
 
 pr-ready: format lint typecheck test build
+
+# Run Playwright browser tests against the compiled app.
+# The server and playwright containers are defined in docker-compose.yml;
+# docker compose starts the server dependency automatically.
+playwright-test: build
+	docker compose run --rm playwright
+
+# Re-generate screenshot baselines (run after intentional visual changes).
+update-screenshots: build
+	docker compose run --rm playwright \
+		node_modules/.bin/playwright test --update-snapshots
