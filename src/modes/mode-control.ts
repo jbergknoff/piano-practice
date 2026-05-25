@@ -1,6 +1,6 @@
 import type { VNode } from "preact";
 import type { MidiPlayer } from "../../lib/midi/midi-player";
-import type { MidiConversionResult } from "../../lib/midi/midi-to-musicxml";
+import type { ScoreConversion } from "../../lib/midi/midi-to-musicxml";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
 
@@ -133,7 +133,7 @@ export interface ModeControl {
    */
   currentBeat: number;
   currentBeatRef: { current: number };
-  musicxml: MidiConversionResult | null;
+  musicxml: ScoreConversion | null;
   measureRange: { from: number; to: number } | null;
   fileHash: string | null;
   appendToDebugLog: (event: DebugBeatEvent) => void;

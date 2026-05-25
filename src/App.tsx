@@ -8,12 +8,18 @@ import {
   useState,
 } from "preact/hooks";
 import {
-  type MidiConversionResult,
+  type ScoreConversion,
   type TrackInfo,
   getMidiTempo,
   getMidiTracks,
   midiToMusicXmlWithTracks,
 } from "../lib/midi/midi-to-musicxml";
+import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
+import { parseScore } from "../lib/musicxml/musicxml-parser";
+import {
+  getMusicXmlTempo,
+  musicXmlToConversion,
+} from "../lib/musicxml/musicxml-playback";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
@@ -30,12 +36,20 @@ import { useWakeLock } from "./hooks/use-wake-lock";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 
 function prettyTitle(filename: string): string {
-  return filename.replace(/\.(mid|midi)$/i, "").replace(/[-_]/g, " ");
+  return filename
+    .replace(/\.(mid|midi|musicxml|xml|mxl)$/i, "")
+    .replace(/[-_]/g, " ");
+}
+
+function isMusicXmlFile(name: string): boolean {
+  return /\.(musicxml|xml|mxl)$/i.test(name);
 }
 
 export function App() {
   // ── File / MIDI state ────────────────────────────────────────────────────
   const [midiData, setMidiData] = useState<MidiData | null>(null);
+  // MusicXML loaded directly from a .musicxml/.xml file (no MIDI source).
+  const [loadedXml, setLoadedXml] = useState<string | null>(null);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -74,12 +88,15 @@ export function App() {
   const accent = ACCENT_COLORS[0];
   const theme = THEMES[themeName];
 
-  const musicxml = useMemo<MidiConversionResult | null>(() => {
+  const musicxml = useMemo<ScoreConversion | null>(() => {
+    if (loadedXml) {
+      return musicXmlToConversion(loadedXml);
+    }
     if (!midiData || selectedTracks.length === 0) {
       return null;
     }
     return midiToMusicXmlWithTracks(midiData, selectedTracks);
-  }, [midiData, selectedTracks]);
+  }, [loadedXml, midiData, selectedTracks]);
 
   // ── Debug log ────────────────────────────────────────────────────────────
   const debugBufferRef = useRef(newDebugBuffer());
@@ -124,15 +141,25 @@ export function App() {
     if (!recent) {
       return;
     }
-    parseMidiFile(
-      new File([recent.bytes], recent.name, { type: "audio/midi" }),
-    );
+    loadFile(new File([recent.bytes], recent.name));
   }, []);
 
-  async function parseMidiFile(file: File) {
-    setFileName(file.name);
+  // Route a dropped/selected/restored file to the right parser by extension.
+  function loadFile(file: File) {
+    if (isMusicXmlFile(file.name)) {
+      parseMusicXmlFile(file);
+    } else {
+      parseMidiFile(file);
+    }
+  }
+
+  // Reset all file-derived state before loading a new file (shared by both
+  // the MIDI and MusicXML paths).
+  function resetForNewFile(name: string) {
+    setFileName(name);
     setFileError(null);
     setMidiData(null);
+    setLoadedXml(null);
     setTracks([]);
     setSelectedTracks([]);
     currentBeatRef.current = 0;
@@ -140,6 +167,47 @@ export function App() {
     setMode("listen");
     setFileHash(null);
     setInitialBeat(0);
+  }
+
+  async function parseMusicXmlFile(file: File) {
+    resetForNewFile(file.name);
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      // .mxl is a zipped container; everything else is plain XML text.
+      const xml = /\.mxl$/i.test(file.name)
+        ? await extractMusicXmlFromMxl(bytes)
+        : new TextDecoder().decode(bytes);
+      parseScore(xml); // throws on invalid MusicXML
+      const hash = await hashFileBytes(bytes);
+      setFileHash(hash);
+      saveRecentFile(file.name, bytes);
+
+      const tempo = getMusicXmlTempo(xml);
+      const history = loadFileHistory(hash);
+
+      setLoadedXml(xml);
+      setBaseBpm(tempo);
+
+      if (history) {
+        setBpm(Math.round(tempo * history.bpmRatio));
+        setMeasureRange(history.measureRange);
+        setMode(history.mode);
+        setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
+        if (history.playalongTimingBeats !== undefined) {
+          setPlayalongTimingBeats(history.playalongTimingBeats);
+        }
+        setInitialBeat(history.currentBeat);
+      } else {
+        setBpm(tempo);
+      }
+    } catch (err) {
+      setFileError(String(err));
+    }
+  }
+
+  async function parseMidiFile(file: File) {
+    resetForNewFile(file.name);
 
     try {
       const buffer = await file.arrayBuffer();
@@ -185,7 +253,7 @@ export function App() {
   function handleFileInput(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (file) {
-      parseMidiFile(file);
+      loadFile(file);
     }
   }
 
@@ -193,12 +261,13 @@ export function App() {
     e.preventDefault();
     const file = e.dataTransfer?.files?.[0];
     if (file) {
-      parseMidiFile(file);
+      loadFile(file);
     }
   }
 
   function handleGoToLanding() {
     setMidiData(null);
+    setLoadedXml(null);
     setFileName(null);
     setFileHash(null);
     setTracks([]);
@@ -215,7 +284,7 @@ export function App() {
   );
 
   useEffect(() => {
-    if (!fileHash || !midiData) {
+    if (!fileHash || (!midiData && !loadedXml)) {
       snapshotRef.current = null;
       return;
     }
@@ -234,6 +303,7 @@ export function App() {
   }, [
     fileHash,
     midiData,
+    loadedXml,
     bpm,
     baseBpm,
     measureRange,
@@ -285,7 +355,7 @@ export function App() {
   const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
 
   // ── Render ───────────────────────────────────────────────────────────────
-  if (midiData === null) {
+  if (midiData === null && loadedXml === null) {
     return (
       <LandingScreen
         theme={theme}

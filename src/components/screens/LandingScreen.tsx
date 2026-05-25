@@ -121,7 +121,7 @@ export function LandingScreen({
         >
           <input
             type="file"
-            accept=".mid,.midi,audio/midi"
+            accept=".mid,.midi,audio/midi,.musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml"
             onChange={onFile}
             style={{
               position: "absolute",
@@ -186,7 +186,7 @@ export function LandingScreen({
               bottom: 18,
             }}
           >
-            {[".mid", ".midi"].map((ext) => (
+            {[".mid", ".midi", ".musicxml", ".xml", ".mxl"].map((ext) => (
               <span
                 key={ext}
                 style={{
