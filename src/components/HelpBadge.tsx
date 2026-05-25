@@ -1,7 +1,14 @@
 import { useState } from "preact/hooks";
 import type { DebugBeatEvent } from "../modes/use-wait-mode";
 import type { ThemeTokens } from "../theme";
-import { hexA } from "../theme";
+import {
+  blurFilter,
+  dimBackdrop,
+  FONT_MONO,
+  FONT_SANS,
+  hexA,
+  serifTitle,
+} from "../theme";
 import { DebugLogTab } from "./DebugLogTab";
 import { BluetoothIcon } from "./icons";
 
@@ -36,11 +43,10 @@ export function HelpBadge({
           borderRadius: "50%",
           border: `1px solid ${theme.border}`,
           background: theme.panel,
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
+          ...blurFilter("blur(12px)"),
           color: theme.inkSoft,
           fontSize: 12,
-          fontFamily: "'Geist', sans-serif",
+          fontFamily: FONT_SANS,
           fontWeight: 600,
           cursor: "pointer",
           display: "flex",
@@ -58,14 +64,7 @@ export function HelpBadge({
           {/* Backdrop */}
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
           <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 199,
-              background: "rgba(0,0,0,0.3)",
-              backdropFilter: "blur(4px)",
-              WebkitBackdropFilter: "blur(4px)",
-            }}
+            style={{ ...dimBackdrop(), zIndex: 199 }}
             onClick={() => setOpen(false)}
           />
 
@@ -85,7 +84,7 @@ export function HelpBadge({
               maxHeight: "calc(100vh - 80px)",
               display: "flex",
               flexDirection: "column",
-              fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+              fontFamily: FONT_SANS,
               overflow: "hidden",
             }}
           >
@@ -99,16 +98,7 @@ export function HelpBadge({
                 flexShrink: 0,
               }}
             >
-              <span
-                style={{
-                  fontFamily: "'Instrument Serif', serif",
-                  fontStyle: "italic",
-                  fontSize: 22,
-                  color: theme.ink,
-                }}
-              >
-                Help
-              </span>
+              <span style={serifTitle(theme, 22)}>Help</span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -158,7 +148,7 @@ export function HelpBadge({
                       fontWeight: active ? 600 : 400,
                       cursor: "pointer",
                       outline: "none",
-                      fontFamily: "'Geist', sans-serif",
+                      fontFamily: FONT_SANS,
                       transition: "background 0.15s, color 0.15s",
                     }}
                   >
@@ -374,11 +364,11 @@ function BluetoothTab({
             Enable Web Bluetooth in Brave (one-time):
           </span>{" "}
           open{" "}
-          <span style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10 }}>
             brave://flags
           </span>{" "}
           in Brave, search for{" "}
-          <span style={{ fontFamily: "'Geist Mono', monospace", fontSize: 10 }}>
+          <span style={{ fontFamily: FONT_MONO, fontSize: 10 }}>
             enable-experimental-web-platform-features
           </span>
           , set it to <span style={{ fontWeight: 600 }}>Enabled</span>, then tap{" "}

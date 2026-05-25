@@ -1,7 +1,13 @@
 import { useState } from "preact/hooks";
 import type { useBluetooth } from "../../hooks/use-bluetooth";
 import type { ThemeTokens } from "../../theme";
-import { hexA } from "../../theme";
+import {
+  blurFilter,
+  FONT_MONO,
+  FONT_SANS,
+  hexA,
+  serifTitle,
+} from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
 import { HelpBadge } from "../HelpBadge";
 import { UploadIcon } from "../icons";
@@ -34,7 +40,7 @@ export function LandingScreen({
         boxSizing: "border-box",
         background: `radial-gradient(120% 80% at 50% 0%, ${theme.bg} 0%, ${theme.bgDeep} 100%)`,
         color: theme.ink,
-        fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+        fontFamily: FONT_SANS,
         position: "relative",
         overflow: "hidden",
         display: "flex",
@@ -109,8 +115,7 @@ export function LandingScreen({
             background: hovering ? hexA(accent, 0.08) : theme.panel,
             border: `1.5px dashed ${hovering ? accent : hexA(theme.ink, 0.18)}`,
             borderRadius: 24,
-            backdropFilter: "blur(20px) saturate(160%)",
-            WebkitBackdropFilter: "blur(20px) saturate(160%)",
+            ...blurFilter("blur(20px) saturate(160%)"),
             cursor: "pointer",
             position: "relative",
             boxShadow: hovering
@@ -148,15 +153,7 @@ export function LandingScreen({
           </div>
 
           <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontFamily: "'Instrument Serif', serif",
-                fontStyle: "italic",
-                fontSize: 28,
-                color: theme.ink,
-                lineHeight: 1.2,
-              }}
-            >
+            <div style={{ ...serifTitle(theme, 28), lineHeight: 1.2 }}>
               Drop a piece here
             </div>
             <div style={{ fontSize: 13, color: theme.inkSoft, marginTop: 6 }}>
@@ -190,7 +187,7 @@ export function LandingScreen({
               <span
                 key={ext}
                 style={{
-                  fontFamily: "'Geist Mono', monospace",
+                  fontFamily: FONT_MONO,
                   fontSize: 9,
                   letterSpacing: "0.04em",
                   padding: "2px 6px",

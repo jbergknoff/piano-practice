@@ -22,7 +22,15 @@ import { useListenMode } from "../../modes/use-listen-mode";
 import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
 import type { ThemeTokens } from "../../theme";
-import { cornerBtnStyle, hexA, miniBtnStyle } from "../../theme";
+import {
+  cornerBtnStyle,
+  dimBackdrop,
+  FONT_SANS,
+  glassPanel,
+  hexA,
+  miniBtnStyle,
+  serifTitle,
+} from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
 import { HelpBadge } from "../HelpBadge";
 import { RangeNameModal } from "../RangeNameModal";
@@ -415,7 +423,7 @@ export function PracticeScreen({
         height: "100%",
         background: theme.bg,
         color: theme.ink,
-        fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+        fontFamily: FONT_SANS,
         position: "relative",
         overflow: "hidden",
       }}
@@ -519,7 +527,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onGoToLanding}
-            style={cornerBtnStyle(theme) as Record<string, string | number>}
+            style={cornerBtnStyle(theme)}
             title="Back"
           >
             <ChevronLeftIcon />
@@ -537,12 +545,9 @@ export function PracticeScreen({
           >
             <div
               style={{
-                fontFamily: "'Instrument Serif', serif",
-                fontStyle: "italic",
-                fontSize: 28,
+                ...serifTitle(theme, 28),
                 lineHeight: 1,
                 letterSpacing: "-0.01em",
-                color: theme.ink,
               }}
             >
               {pieceTitle}
@@ -562,7 +567,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={() => setRangesDrawerOpen(true)}
-              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              style={cornerBtnStyle(theme)}
               title="Select range"
             >
               <SectionsIcon />
@@ -572,7 +577,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handleReset}
-              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              style={cornerBtnStyle(theme)}
               title={
                 measureRange
                   ? "Return to start of selection. Click to reset."
@@ -586,7 +591,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handlePlayPause}
-              style={cornerBtnStyle(theme) as Record<string, string | number>}
+              style={cornerBtnStyle(theme)}
               title={showStopIcon ? "Stop" : isPlaying ? "Pause" : "Play"}
             >
               {showStopIcon ? (
@@ -603,11 +608,8 @@ export function PracticeScreen({
               style={{
                 height: 38,
                 padding: "0 8px",
-                background: theme.panel,
-                border: `0.5px solid ${theme.border}`,
+                ...glassPanel(theme),
                 borderRadius: 12,
-                backdropFilter: "blur(20px) saturate(160%)",
-                WebkitBackdropFilter: "blur(20px) saturate(160%)",
                 display: "flex",
                 alignItems: "center",
                 gap: 4,
@@ -636,10 +638,7 @@ export function PracticeScreen({
                     type="button"
                     onClick={() => onBpmChange(targetBpm)}
                     style={{
-                      ...(miniBtnStyle(theme) as Record<
-                        string,
-                        string | number
-                      >),
+                      ...miniBtnStyle(theme),
                       padding: "0 10px",
                       minWidth: 44,
                       background: isActive ? accent : undefined,
@@ -667,11 +666,8 @@ export function PracticeScreen({
             class="bl-modes"
             style={{
               padding: "4px 6px",
-              background: theme.panel,
-              border: `0.5px solid ${theme.border}`,
+              ...glassPanel(theme),
               borderRadius: 12,
-              backdropFilter: "blur(20px) saturate(160%)",
-              WebkitBackdropFilter: "blur(20px) saturate(160%)",
               display: "flex",
               alignItems: "center",
               gap: 2,
@@ -695,7 +691,7 @@ export function PracticeScreen({
                   disabled={disabled}
                   onClick={() => handleModeChange(m)}
                   style={{
-                    ...(miniBtnStyle(theme) as Record<string, string | number>),
+                    ...miniBtnStyle(theme),
                     padding: "0 14px",
                     minWidth: 60,
                     height: 30,
@@ -748,7 +744,7 @@ export function PracticeScreen({
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          style={cornerBtnStyle(theme) as Record<string, string | number>}
+          style={cornerBtnStyle(theme)}
         >
           <GearIcon />
         </button>
@@ -787,11 +783,8 @@ export function PracticeScreen({
               left: contextMenu.clientX + 4,
               top: contextMenu.clientY + 4,
               zIndex: 100,
-              background: theme.panel,
-              border: `0.5px solid ${theme.border}`,
+              ...glassPanel(theme),
               borderRadius: 12,
-              backdropFilter: "blur(20px) saturate(160%)",
-              WebkitBackdropFilter: "blur(20px) saturate(160%)",
               padding: 4,
               boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
               display: "flex",
@@ -853,7 +846,7 @@ export function PracticeScreen({
                   fontSize: 13,
                   color: theme.ink,
                   borderRadius: 8,
-                  fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+                  fontFamily: FONT_SANS,
                   width: "100%",
                 }}
               >
@@ -883,14 +876,7 @@ export function PracticeScreen({
         <>
           <div
             role="presentation"
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 199,
-              background: "rgba(0,0,0,0.3)",
-              backdropFilter: "blur(4px)",
-              WebkitBackdropFilter: "blur(4px)",
-            }}
+            style={{ ...dimBackdrop(), zIndex: 199 }}
             onClick={() => setPieceInfoOpen(false)}
             onKeyDown={(e) => {
               if ((e as unknown as KeyboardEvent).key === "Escape") {
@@ -905,25 +891,14 @@ export function PracticeScreen({
               left: "50%",
               transform: "translate(-50%, -50%)",
               zIndex: 200,
-              background: theme.panel,
-              border: `0.5px solid ${theme.border}`,
+              ...glassPanel(theme, 24, 160),
               borderRadius: 16,
-              backdropFilter: "blur(24px) saturate(160%)",
-              WebkitBackdropFilter: "blur(24px) saturate(160%)",
               padding: "24px 28px",
               boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
               minWidth: 280,
             }}
           >
-            <div
-              style={{
-                fontFamily: "'Instrument Serif', serif",
-                fontStyle: "italic",
-                fontSize: 24,
-                color: theme.ink,
-                marginBottom: 20,
-              }}
-            >
+            <div style={{ ...serifTitle(theme, 24), marginBottom: 20 }}>
               {pieceTitle}
             </div>
             {(

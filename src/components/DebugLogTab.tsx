@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { DebugBeatEvent } from "../debug-log";
 import type { ThemeTokens } from "../theme";
-import { hexA } from "../theme";
+import { FONT_MONO, FONT_SANS, hexA } from "../theme";
 
 const NOTE_NAMES = [
   "C",
@@ -110,7 +110,7 @@ export function DebugLogTab({
             fontWeight: 600,
             cursor: "pointer",
             outline: "none",
-            fontFamily: "'Geist', sans-serif",
+            fontFamily: FONT_SANS,
           }}
         >
           {copied ? "Copied!" : "Copy"}
@@ -124,7 +124,7 @@ export function DebugLogTab({
           borderRadius: 10,
           border: `0.5px solid ${theme.border}`,
           background: hexA(theme.ink, 0.03),
-          fontFamily: "'Geist Mono', 'Fira Mono', monospace",
+          fontFamily: FONT_MONO,
           fontSize: 10,
           color: theme.inkSoft,
           lineHeight: 1.6,

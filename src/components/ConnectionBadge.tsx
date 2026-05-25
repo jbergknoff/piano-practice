@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { useBluetooth } from "../hooks/use-bluetooth";
 import type { ThemeTokens } from "../theme";
-import { hexA } from "../theme";
+import { dimBackdrop, FONT_SANS, glassPanel, hexA, serifTitle } from "../theme";
 import { BluetoothIcon } from "./icons";
 
 const BT_SUPPORTED = typeof navigator !== "undefined" && !!navigator.bluetooth;
@@ -94,11 +94,8 @@ export function ConnectionBadge({
 
   const pillStyle = {
     height: 38,
-    background: theme.panel,
-    border: `0.5px solid ${theme.border}`,
+    ...glassPanel(theme),
     borderRadius: 999,
-    backdropFilter: "blur(20px) saturate(160%)",
-    WebkitBackdropFilter: "blur(20px) saturate(160%)",
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     display: "inline-flex",
     alignItems: "center",
@@ -152,20 +149,13 @@ export function ConnectionBadge({
     boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
     width: "min(360px, calc(100vw - 40px))",
     padding: "24px 28px",
-    fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+    fontFamily: FONT_SANS,
     display: "flex",
     flexDirection: "column" as const,
     gap: 14,
   };
 
-  const backdropStyle = {
-    position: "fixed" as const,
-    inset: 0,
-    zIndex: 299,
-    background: "rgba(0,0,0,0.3)",
-    backdropFilter: "blur(4px)",
-    WebkitBackdropFilter: "blur(4px)",
-  };
+  const backdropStyle = { ...dimBackdrop(), zIndex: 299 };
 
   const closeBtnStyle = {
     background: "transparent",
@@ -240,16 +230,7 @@ export function ConnectionBadge({
                 justifyContent: "space-between",
               }}
             >
-              <span
-                style={{
-                  fontFamily: "'Instrument Serif', serif",
-                  fontStyle: "italic",
-                  fontSize: 20,
-                  color: theme.ink,
-                }}
-              >
-                Bluetooth unavailable
-              </span>
+              <span style={serifTitle(theme, 20)}>Bluetooth unavailable</span>
               <button
                 type="button"
                 onClick={() => setShowUnsupportedModal(false)}
@@ -287,16 +268,7 @@ export function ConnectionBadge({
                 justifyContent: "space-between",
               }}
             >
-              <span
-                style={{
-                  fontFamily: "'Instrument Serif', serif",
-                  fontStyle: "italic",
-                  fontSize: 20,
-                  color: theme.ink,
-                }}
-              >
-                Piano connection
-              </span>
+              <span style={serifTitle(theme, 20)}>Piano connection</span>
               <button
                 type="button"
                 onClick={() => setShowStatusModal(false)}

@@ -1,6 +1,6 @@
 import type { PlayalongAttempt } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
-import { hexA } from "../theme";
+import { dimBackdrop, FONT_SANS, glassPanel, hexA, serifTitle } from "../theme";
 
 function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
@@ -70,14 +70,7 @@ export function PlayalongResultModal({
       {/* Backdrop */}
       <div
         role="presentation"
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 299,
-          background: "rgba(0,0,0,0.28)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-        }}
+        style={{ ...dimBackdrop(0.28), zIndex: 299 }}
         onClick={onClose}
         onKeyDown={(e: Event) => {
           if ((e as unknown as KeyboardEvent).key === "Escape") {
@@ -94,11 +87,8 @@ export function PlayalongResultModal({
           left: "50%",
           transform: "translate(-50%, -50%)",
           zIndex: 300,
-          background: theme.panel,
-          border: `0.5px solid ${theme.border}`,
+          ...glassPanel(theme, 28, 180),
           borderRadius: 20,
-          backdropFilter: "blur(28px) saturate(180%)",
-          WebkitBackdropFilter: "blur(28px) saturate(180%)",
           padding: "28px 32px 24px",
           boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
           width: "min(420px, calc(100vw - 40px))",
@@ -111,15 +101,7 @@ export function PlayalongResultModal({
       >
         {/* Title */}
         <div>
-          <div
-            style={{
-              fontFamily: "'Instrument Serif', serif",
-              fontStyle: "italic",
-              fontSize: 26,
-              color: theme.ink,
-              lineHeight: 1.1,
-            }}
-          >
+          <div style={{ ...serifTitle(theme), lineHeight: 1.1 }}>
             {selectionLabel} complete
           </div>
         </div>
@@ -281,7 +263,7 @@ export function PlayalongResultModal({
             fontSize: 13,
             fontWeight: 600,
             cursor: "pointer",
-            fontFamily: "'Geist', ui-sans-serif, system-ui, sans-serif",
+            fontFamily: FONT_SANS,
             boxShadow: `0 4px 12px ${hexA(accent, 0.35)}`,
             letterSpacing: "0.02em",
           }}
