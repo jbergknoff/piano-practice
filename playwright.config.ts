@@ -8,6 +8,15 @@ export default defineConfig({
     // falls back to localhost for any direct (non-Docker) invocation.
     baseURL: process.env.BASE_URL ?? "http://localhost:3456",
   },
+  // When BASE_URL is not provided (direct / non-Docker run), start the Bun
+  // static server automatically so tests work without any manual setup.
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: "bun scripts/serve.ts",
+        url: "http://localhost:3456",
+        reuseExistingServer: true,
+      },
   // Store screenshot baselines inside the integration test tree
   snapshotDir: "tests/integration/fixtures/screenshots",
   // Flat names: <arg>-<projectName>.png — easy to find, no nested dirs

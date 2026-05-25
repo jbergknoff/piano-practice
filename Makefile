@@ -48,15 +48,19 @@ tests/integration/fixtures/screenshots:
 
 integration-test: build node_modules tests/integration/results tests/integration/fixtures/screenshots
 ifdef NETLIFY
-	@echo "Skipping integration tests (Docker unavailable on Netlify)"
+	node_modules/.bin/playwright test
 else
 	docker compose run --rm playwright
 endif
 
 # Re-generate screenshot baselines (run after intentional visual changes).
 update-screenshots: build node_modules tests/integration/results tests/integration/fixtures/screenshots
+ifdef NETLIFY
+	node_modules/.bin/playwright test --update-snapshots
+else
 	docker compose run --rm playwright \
 		node_modules/.bin/playwright test --update-snapshots
+endif
 
 test: unit-test integration-test
 
