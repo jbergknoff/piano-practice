@@ -18,8 +18,17 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+// Minimal XMLSerializer stub for linkedom (which exposes outerHTML but not
+// XMLSerializer).  Used by expand-repeats.ts when running under Bun/linkedom.
+class XMLSerializerStub {
+  serializeToString(node: { outerHTML?: string; toString(): string }): string {
+    return node.outerHTML ?? node.toString();
+  }
+}
+
 Object.assign(globalThis, {
   DOMParser,
+  XMLSerializer: XMLSerializerStub,
   window,
   document,
   ResizeObserver: ResizeObserverStub,
