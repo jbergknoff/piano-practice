@@ -6,7 +6,11 @@ import {
   midiToMusicXmlWithTracks,
 } from "../midi/midi-to-musicxml";
 import { isRest, parseScore } from "./musicxml-parser";
-import { musicXmlToConversion, pitchToMidiNumber } from "./musicxml-playback";
+import {
+  GRACE_NOTE_BEATS,
+  musicXmlToConversion,
+  pitchToMidiNumber,
+} from "./musicxml-playback";
 
 // The set of note IDs the renderer assigns from a parsed score, built exactly
 // as SheetMusicDisplay does: chords and their preceding grace groups, keyed by
@@ -82,5 +86,98 @@ describe("pitchToMidiNumber", () => {
     expect(pitchToMidiNumber({ step: "C", alter: 1, octave: 4 })).toBe(61);
     expect(pitchToMidiNumber({ step: "D", alter: -1, octave: 4 })).toBe(61);
     expect(pitchToMidiNumber({ step: "C", alter: 0, octave: -1 })).toBe(0);
+  });
+});
+
+// Minimal MusicXML helpers for grace-note timing tests.
+function makeScoreXml(measureContent: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      ${measureContent}
+    </measure>
+  </part>
+</score-partwise>`;
+}
+
+describe("grace note timing", () => {
+  test("single grace note plays before the main note", () => {
+    // E5 quarter at beat 0, then grace D5 before C5 quarter at beat 1.
+    const xml = makeScoreXml(`
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><grace/><pitch><step>D</step><octave>5</octave></pitch><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+
+    const grace = notes.find((n) => n.isGrace);
+    const main = notes.find(
+      (n) =>
+        !n.isGrace &&
+        n.noteNumber === pitchToMidiNumber({ step: "C", alter: 0, octave: 5 }),
+    );
+
+    expect(grace).toBeDefined();
+    expect(main).toBeDefined();
+    if (!grace || !main) {
+      throw new Error("notes not found");
+    }
+    // Grace note must start before the main note it precedes.
+    expect(grace.startBeat).toBeLessThan(main.startBeat);
+    // Grace note starts exactly GRACE_NOTE_BEATS before the main note.
+    expect(grace.startBeat).toBeCloseTo(main.startBeat - GRACE_NOTE_BEATS);
+  });
+
+  test("multiple grace notes are staggered before the main note", () => {
+    // E5 quarter at beat 0, then grace notes D5 and C#5 before C5 quarter at beat 1.
+    const xml = makeScoreXml(`
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><grace/><pitch><step>D</step><octave>5</octave></pitch><type>sixteenth</type></note>
+      <note><grace/><pitch><step>C</step><alter>1</alter><octave>5</octave></pitch><type>sixteenth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+
+    const graces = notes.filter((n) => n.isGrace);
+    const main = notes.find(
+      (n) =>
+        !n.isGrace &&
+        n.noteNumber === pitchToMidiNumber({ step: "C", alter: 0, octave: 5 }),
+    );
+
+    expect(graces).toHaveLength(2);
+    expect(main).toBeDefined();
+    if (!main) {
+      throw new Error("main note not found");
+    }
+
+    // Both grace notes must start before the main note.
+    for (const g of graces) {
+      expect(g.startBeat).toBeLessThan(main.startBeat);
+    }
+    // They must be staggered (not simultaneous).
+    const starts = graces.map((g) => g.startBeat).sort((a, b) => a - b);
+    expect(starts[0]).toBeCloseTo(main.startBeat - 2 * GRACE_NOTE_BEATS);
+    expect(starts[1]).toBeCloseTo(main.startBeat - GRACE_NOTE_BEATS);
+  });
+
+  test("grace note at the very start of a score is clamped to beat 0", () => {
+    // Grace D5 immediately before C5 at beat 0 — can't go negative.
+    const xml = makeScoreXml(`
+      <note><grace/><pitch><step>D</step><octave>5</octave></pitch><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+
+    const grace = notes.find((n) => n.isGrace);
+    expect(grace).toBeDefined();
+    expect(grace?.startBeat).toBeGreaterThanOrEqual(0);
   });
 });

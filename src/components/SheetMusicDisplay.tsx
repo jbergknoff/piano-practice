@@ -646,8 +646,8 @@ export function SheetMusicDisplay({
           : null;
       if (x !== null && containerWidth > 0) {
         const screenX = leftPad + x - currentScroll;
-        if (screenX < 0 || screenX > containerWidth * 0.78) {
-          currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
+        if (screenX < 0 || screenX > containerWidth * 0.85) {
+          currentScroll = Math.max(0, leftPad + x - containerWidth * 0.2);
           if (container) {
             container.scrollLeft = currentScroll;
           }
@@ -700,7 +700,7 @@ export function SheetMusicDisplay({
     const x = computeCursorX(beat, score, layout, measureStartBeats);
     const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
     el.scrollLeft =
-      x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.38) : 0;
+      x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.2) : 0;
   }, [snapGeneration, score, layout]);
 
   // Focus handle drag state — ref tracks the live value between renders, state
