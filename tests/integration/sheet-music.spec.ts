@@ -14,6 +14,11 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+// Screenshot baselines are rendered by the Docker playwright image; skip the
+// pixel comparison when running directly (NETLIFY=true) since the local
+// Chrome headless shell may render fractionally differently.
+const screenshotsEnabled = !process.env.NETLIFY;
+
 test("renders sheet music from a MusicXML file", async ({ page }) => {
   await loadFile(page, "underwater-theme.musicxml");
 
@@ -22,8 +27,10 @@ test("renders sheet music from a MusicXML file", async ({ page }) => {
   await expect(svg).toBeVisible();
   await expect(svg.locator("text").first()).toBeVisible();
 
-  await waitForFonts(page);
-  await expect(page).toHaveScreenshot("sheet-music-musicxml.png");
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("sheet-music-musicxml.png");
+  }
 });
 
 test("renders sheet music from a MIDI file", async ({ page }) => {
@@ -33,6 +40,8 @@ test("renders sheet music from a MIDI file", async ({ page }) => {
   await expect(svg).toBeVisible();
   await expect(svg.locator("text").first()).toBeVisible();
 
-  await waitForFonts(page);
-  await expect(page).toHaveScreenshot("sheet-music-midi.png");
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("sheet-music-midi.png");
+  }
 });
