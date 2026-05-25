@@ -1082,8 +1082,8 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
     if (!graceNote || !mainNote) {
       throw new Error("notes not found");
     }
-    // The grace note is placed at the chord onset and sounds briefly.
-    expect(graceNote.startBeat).toBe(mainNote.startBeat);
+    // The grace note is played slightly before the main note and sounds briefly.
+    expect(graceNote.startBeat).toBeLessThan(mainNote.startBeat);
     expect(graceNote.durationBeats).toBeLessThan(mainNote.durationBeats);
   });
 

@@ -10,7 +10,7 @@ export const STACCATO_PLAYBACK_RATIO = 0.5;
 
 // Grace notes take no rhythmic space in the score; give them a short nominal
 // sounding length so they're audible without displacing the main note.
-const GRACE_NOTE_BEATS = 0.1;
+export const GRACE_NOTE_BEATS = 0.1;
 
 export interface PlaybackNote {
   noteNumber: number;
@@ -77,11 +77,19 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
           continue;
         }
 
-        for (const graceGroup of event.gracesBefore ?? []) {
+        const gracesBefore = event.gracesBefore ?? [];
+        gracesBefore.forEach((graceGroup, groupIndex) => {
+          // Grace notes are played slightly before the main note. When there
+          // are multiple grace groups, each group is staggered so the earliest
+          // one starts furthest before the main beat. All offsets are clamped
+          // to zero so no note gets a negative start time.
+          const graceOffset =
+            (gracesBefore.length - groupIndex) * GRACE_NOTE_BEATS;
+          const graceStartBeat = Math.max(0, beatCursor - graceOffset);
           graceGroup.notes.forEach((note, voiceIndex) => {
             notes.push({
               noteNumber: pitchToMidiNumber(note.pitch),
-              startBeat: beatCursor,
+              startBeat: graceStartBeat,
               durationBeats: GRACE_NOTE_BEATS,
               velocity: DEFAULT_VELOCITY,
               tieStop: false,
@@ -92,7 +100,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
               isGrace: true,
             });
           });
-        }
+        });
 
         const durationBeats = event.duration / divisions;
         event.notes.forEach((note, voiceIndex) => {
