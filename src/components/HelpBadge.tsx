@@ -7,6 +7,7 @@ import {
   FONT_MONO,
   FONT_SANS,
   hexA,
+  radius,
   serifTitle,
 } from "../theme";
 import { DebugLogTab } from "./DebugLogTab";
@@ -40,7 +41,7 @@ export function HelpBadge({
         style={{
           width: 38,
           height: 38,
-          borderRadius: "50%",
+          borderRadius: radius.lg,
           border: `1px solid ${theme.border}`,
           background: theme.panel,
           ...blurFilter("blur(12px)"),
