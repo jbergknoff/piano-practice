@@ -2,11 +2,10 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash(git commit*)",
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit*)",
             "command": "if docker info >/dev/null 2>&1; then make_cmd='make pr-ready'; else make_cmd='NETLIFY=true make pr-ready'; fi; output=$(eval \"$make_cmd\" 2>&1); exit_code=$?; if [ $exit_code -ne 0 ]; then printf \"%s\\n\" \"$output\" >&2; echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"make pr-ready failed - fix issues before committing\"}}'; exit 1; fi",
             "timeout": 120,
             "statusMessage": "Running make pr-ready..."
