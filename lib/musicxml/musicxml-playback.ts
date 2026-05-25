@@ -1,3 +1,4 @@
+import { expandRepeatsMusicXml } from "./expand-repeats";
 import { isRest, parseScore } from "./musicxml-parser";
 import type { Pitch } from "./sheet-music-types";
 
@@ -61,7 +62,10 @@ export function getMusicXmlTempo(xml: string): number {
  * renderer assigns from the same parsed score, so highlighting stays in sync.
  */
 export function musicXmlToConversion(xml: string): ScoreConversion {
-  const score = parseScore(xml);
+  // Expand repeat sections into a flat linear measure sequence so both
+  // the display and playback see the fully-unrolled score.
+  const expandedXml = expandRepeatsMusicXml(xml);
+  const score = parseScore(expandedXml);
   const notes: PlaybackNote[] = [];
 
   score.parts.forEach((part, partIndex) => {
@@ -136,7 +140,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
   const totalBeats = (score.numMeasures * timeSig.beats * 4) / timeSig.beatType;
 
   return {
-    musicxml: xml,
+    musicxml: expandedXml,
     notes,
     timeSigNum: timeSig.beats,
     timeSigDen: timeSig.beatType,
