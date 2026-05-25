@@ -646,7 +646,7 @@ export function SheetMusicDisplay({
           : null;
       if (x !== null && containerWidth > 0) {
         const screenX = leftPad + x - currentScroll;
-        if (screenX < 0 || screenX > containerWidth * 0.78) {
+        if (screenX < 0 || screenX > containerWidth * 0.85) {
           currentScroll = Math.max(0, leftPad + x - containerWidth * 0.38);
           if (container) {
             container.scrollLeft = currentScroll;
