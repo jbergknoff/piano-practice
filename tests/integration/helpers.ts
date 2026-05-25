@@ -15,7 +15,9 @@ export async function loadFile(page: Page, filename: string): Promise<void> {
   await page
     .locator('input[type="file"]')
     .setInputFiles(path.join(FIXTURES, filename));
-  await page.waitForSelector("svg", { timeout: 10_000 });
+  // Wait for the first rendered glyph, not just the SVG shell — the SVG
+  // element appears before notation is painted on a subsequent render tick.
+  await page.waitForSelector("svg text", { timeout: 10_000 });
 }
 
 /**
