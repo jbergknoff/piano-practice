@@ -563,6 +563,13 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
   const staccato =
     el.querySelector("notations > articulations > staccato") !== null;
 
+  // Non-standard element emitted by the MIDI-to-MusicXML converter when the
+  // actual note duration differs from the display duration (space to next onset).
+  const playbackDurationText = el.querySelector("play-duration")?.textContent;
+  const playbackDuration = playbackDurationText
+    ? Number.parseInt(playbackDurationText, 10)
+    : undefined;
+
   const note: ParsedNote = {
     kind: "note",
     pitch: { step, alter, octave },
@@ -576,6 +583,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
     // running accidental state (and the key signature) are known.
     accidental: "none",
     staccato,
+    playbackDuration,
   };
   if (isGrace) {
     note.grace = { slash: graceEl.getAttribute("slash") === "yes" };
@@ -686,6 +694,8 @@ function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
     }
 
     // Regular chord — attach any buffered grace groups and clear the buffer.
+    // Propagate <play-duration> from the first note (set by MIDI-to-MusicXML
+    // converter when the actual note length differs from the display duration).
     const chord: ChordGroup = {
       notes: group,
       duration: group[0].duration,
@@ -694,6 +704,7 @@ function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
       noteIndex: -1, // filled by caller
       gracesBefore:
         pendingGraceGroups.length > 0 ? [...pendingGraceGroups] : undefined,
+      playbackDuration: group[0].playbackDuration,
     };
     pendingGraceGroups.length = 0;
     events.push(chord);

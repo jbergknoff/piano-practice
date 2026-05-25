@@ -102,14 +102,27 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
           });
         });
 
-        const durationBeats = event.duration / divisions;
+        // `event.duration` is the display duration (space to next onset in this
+        // part); it drives beatCursor so subsequent notes start at the right beat.
+        // `event.playbackDuration`, when present, is the actual sounding length
+        // (set by the MIDI-to-MusicXML converter via <play-duration>); use it for
+        // durationBeats so highlight timing reflects the true note length rather
+        // than the potentially larger slot size.
+        const displayBeats = event.duration / divisions;
+        const playBeats = event.playbackDuration != null
+          ? event.playbackDuration / divisions
+          : null;
         event.notes.forEach((note, voiceIndex) => {
+          const durationBeats =
+            playBeats != null
+              ? playBeats
+              : note.staccato
+                ? displayBeats * STACCATO_PLAYBACK_RATIO
+                : displayBeats;
           notes.push({
             noteNumber: pitchToMidiNumber(note.pitch),
             startBeat: beatCursor,
-            durationBeats: note.staccato
-              ? durationBeats * STACCATO_PLAYBACK_RATIO
-              : durationBeats,
+            durationBeats,
             velocity: DEFAULT_VELOCITY,
             tieStop: note.tieStop,
             partIndex,
@@ -118,7 +131,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
             voiceIndex,
           });
         });
-        beatCursor += durationBeats;
+        beatCursor += displayBeats;
       }
     }
   });
