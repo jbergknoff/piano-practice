@@ -114,6 +114,7 @@ export function SettingsDrawer({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close settings"
             style={{
               background: "transparent",
               border: "none",

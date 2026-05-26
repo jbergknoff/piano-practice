@@ -128,19 +128,32 @@ See `docs/debug-log.md` for the full format reference and a field-by-field guide
 
 When investigating a note-matching bug from a submitted log, the key fields are `expected` vs `held` at the failing event, and `msSinceAdvance` to determine whether grace-period or debounce logic was involved.
 
+## Integration tests
+
+Playwright specs live in `tests/integration/` and run via `make integration-test`. To exercise the wait/playalong/listen pipelines deterministically, two browser APIs are mocked in `tests/integration/mocks/`:
+
+- `audio-context.ts` — replaces `window.AudioContext` with one whose `currentTime` is driven by `window.__advanceAudioTime(seconds)`. `MidiPlayer` derives the cursor beat from `audioCtx.currentTime`, so this gives tests precise control over cursor advance without depending on real wall-clock time.
+- `bluetooth.ts` — installs a fake `navigator.bluetooth` whose `getDevices()` returns one device. The App's `useBluetooth` auto-reconnect flips status to `"connected"` on mount, enabling the Wait and Playalong mode buttons. `window.__sendBleMidi(bytes)` dispatches a raw BLE-MIDI packet through the captured `characteristicvaluechanged` listener, exercising the full `parseBLEMIDI` → dispatch pipeline.
+
+The helpers in `tests/integration/helpers.ts` (`installMocks`, `sendNoteOn`/`sendNoteOff`/`sendChordOn`/`sendChordOff`, `advanceAudioTime`, `waitForHighlightedNoteIds`) wrap these mocks. DOM assertions on highlighted notes rely on `data-color-id` attributes set by `NoteColorOverlay` in `SheetMusicDisplay.tsx`.
+
 ## Local development
 
 The only local requirements are `make` and `docker`. Bun, Node, and Biome are all run inside a Docker container via `docker-compose`; nothing needs to be installed on the host.
 
 ```sh
-make build      # compile src/ → dist/main.js
-make format     # auto-format all JS/TS files
-make lint       # run Biome linter
-make typecheck  # run tsc --noEmit (type-checks without building)
-make pr-ready   # runs format, lint, typecheck, build
+make build              # compile src/ → dist/main.js
+make format             # auto-format all JS/TS files
+make lint               # run Biome linter
+make typecheck          # run tsc --noEmit (type-checks without building)
+make unit-test          # run `bun test` against src/ and lib/
+make integration-test   # run Playwright specs in tests/integration/
+make update-screenshots # regenerate Playwright screenshot baselines
+make test               # unit-test + integration-test
+make pr-ready           # runs format, lint, typecheck, build, test
 ```
 
-Run `make pr-ready` before committing to ensure formatting, linting, type-checking, and build all pass.
+Run `make pr-ready` before committing to ensure formatting, linting, type-checking, build, and the full test suite all pass.
 
 The first run of any target will install dependencies into `node_modules/` (which is mounted from the host, so subsequent runs skip reinstall).
 

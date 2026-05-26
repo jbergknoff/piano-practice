@@ -745,6 +745,7 @@ export function PracticeScreen({
           type="button"
           onClick={() => setDrawerOpen(true)}
           style={cornerBtnStyle(theme)}
+          title="Settings"
         >
           <GearIcon />
         </button>

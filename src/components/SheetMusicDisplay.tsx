@@ -464,7 +464,7 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
         }
         const nrx = info.staffSpace * 0.55;
         return (
-          <g key={id}>
+          <g key={id} data-color-id={id}>
             <Notehead
               x={info.nx}
               y={info.ny}
