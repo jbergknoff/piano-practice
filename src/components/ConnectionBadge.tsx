@@ -1,7 +1,14 @@
 import { useState } from "preact/hooks";
 import type { useBluetooth } from "../hooks/use-bluetooth";
 import type { ThemeTokens } from "../theme";
-import { dimBackdrop, FONT_SANS, glassPanel, hexA, serifTitle } from "../theme";
+import {
+  dimBackdrop,
+  FONT_SANS,
+  glassPanel,
+  hexA,
+  radius,
+  serifTitle,
+} from "../theme";
 import { BluetoothIcon } from "./icons";
 
 const BT_SUPPORTED = typeof navigator !== "undefined" && !!navigator.bluetooth;
@@ -95,7 +102,7 @@ export function ConnectionBadge({
   const pillStyle = {
     height: 38,
     ...glassPanel(theme),
-    borderRadius: 999,
+    borderRadius: radius.lg,
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     display: "inline-flex",
     alignItems: "center",
