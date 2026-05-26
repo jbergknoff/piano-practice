@@ -10,12 +10,12 @@ VexFlow's rendering model is deeply imperative: you construct `Stave`, `StaveNot
 
 ## Why building from scratch is tractable here
 
-A general-purpose notation renderer (Sibelius, Finale, LilyPond) takes years. But the MusicXML our generator produces is a narrow subset:
+A general-purpose notation renderer (Sibelius, Finale, LilyPond) takes years. But the MusicXML we render is a narrow subset:
 
-- One staff per part, with multiple parts stacked (e.g. treble + bass) and horizontally aligned by a shared rhythm spine
+- One staff per part, with multiple parts stacked (e.g. treble + bass). Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split by the parser into one rendered part per staff, all horizontally aligned by a shared rhythm spine
 - Five note types: whole, half, quarter, eighth, 16th (with dotted variants)
-- Chords (simultaneous notes on one stem), beamed eighth/16th groups
-- No grace notes, no multi-voice, no ornaments, no dynamics
+- Chords (simultaneous notes on one stem), beamed eighth/16th groups, grace notes (appoggiatura/acciaccatura)
+- Multi-voice rhythmic reduction: voices within a staff are merged into a single onset-ordered event stream (notes at the same onset become a chord). Full voice separation, ornaments, and dynamics are not rendered
 - Accidentals as sharps, plus naturals to cancel an earlier sharp in the bar (never flats)
 
 That subset is a few hundred lines of SVG-producing Preact components.
@@ -55,13 +55,13 @@ One subtlety: a measure's first note is *not* at the barline — the clef/key-si
 
 ### Scroll following
 
-The scroll container (`<div style="overflow-x: auto">`) is driven by a `useEffect` that fires whenever `cursorX` changes:
+The scroll container (`<div style="overflow-x: auto">`) follows the cursor in one of three modes:
 
-- **Smooth follow** (incremental beat changes during playback): an easing RAF loop moves `scrollLeft` by 12% of the remaining distance each frame, keeping the cursor centered without jarring jumps.
-- **Instant snap** (reset, seek, mode change): the caller sets `snapPendingRef.current = true` before changing the beat. The effect sees this flag on its first run after the re-render, skips the animation, sets `scrollLeft` directly, and clears the flag.
-- **Detached** (user scrolled manually): a `detachedRef` boolean is set `true` by pointer-drag or wheel events. While detached the smooth-follow effect returns early. It re-attaches automatically when the cursor drifts back into the visible viewport, or immediately on any instant snap.
+- **Smooth follow** (incremental beat changes during playback): a follow RAF loop in `SheetMusicDisplay` eases `scrollLeft` toward the cursor each frame, keeping it centered without jarring jumps.
+- **Instant snap** (reset, seek, mode change, end-of-piece, wait-mode advance): `setCursor(beat, "jump")` in `PracticeScreen` writes the target beat into `snapBeatRef.current` and bumps `snapGeneration` (React state). `SheetMusicDisplay`'s snap effect depends on `snapGeneration` so it fires on every jump — even when the beat is identical to the previous one. It reads the beat from `snapBeatRef`, computes the scroll position via `computeCursorX`, and sets `scrollLeft` directly. Using the beat rather than `cursorX` ensures the snap fires even when `playbackBeat` is undefined (e.g. resetting to beat 0 in listen mode).
+- **Detached** (user scrolled manually): a `detachedRef` boolean is set `true` by pointer-drag or wheel events. While detached the smooth-follow loop does nothing. It re-attaches automatically when the cursor drifts back into the visible viewport, or immediately on any instant snap.
 
-The `snapPendingRef` flag is set by `setCursor(beat, "jump")` in `PracticeScreen.tsx` and consumed (and cleared) by `SheetMusicDisplay` — there is no function call crossing the component boundary, just a shared ref.
+The `snapBeatRef` + `snapGeneration` pair (rather than a single boolean flag) lets the snap effect re-fire on consecutive jumps to the same beat — e.g. two resets in a row.
 
 ## Future extension: ad-hoc note overlay
 

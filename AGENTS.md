@@ -142,14 +142,18 @@ The helpers in `tests/integration/helpers.ts` (`installMocks`, `sendNoteOn`/`sen
 The only local requirements are `make` and `docker`. Bun, Node, and Biome are all run inside a Docker container via `docker-compose`; nothing needs to be installed on the host.
 
 ```sh
-make build      # compile src/ → dist/main.js
-make format     # auto-format all JS/TS files
-make lint       # run Biome linter
-make typecheck  # run tsc --noEmit (type-checks without building)
-make pr-ready   # runs format, lint, typecheck, build
+make build              # compile src/ → dist/main.js
+make format             # auto-format all JS/TS files
+make lint               # run Biome linter
+make typecheck          # run tsc --noEmit (type-checks without building)
+make unit-test          # run `bun test` against src/ and lib/
+make integration-test   # run Playwright specs in tests/integration/
+make update-screenshots # regenerate Playwright screenshot baselines
+make test               # unit-test + integration-test
+make pr-ready           # runs format, lint, typecheck, build, test
 ```
 
-Run `make pr-ready` before committing to ensure formatting, linting, type-checking, and build all pass.
+Run `make pr-ready` before committing to ensure formatting, linting, type-checking, build, and the full test suite all pass.
 
 The first run of any target will install dependencies into `node_modules/` (which is mounted from the host, so subsequent runs skip reinstall).
 
