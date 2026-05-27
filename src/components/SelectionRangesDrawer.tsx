@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import type { RepeatSection } from "../../lib/musicxml/musicxml-playback";
 import {
   type CustomRange,
   type PlayalongAttempt,
@@ -22,6 +23,7 @@ interface SelectionRangesDrawerProps {
   markedBpm: number;
   customRanges: CustomRange[];
   onEditCustomRange: (range: CustomRange) => void;
+  repeatSections: RepeatSection[];
 }
 
 function rangesEqual(
@@ -126,6 +128,7 @@ export function SelectionRangesDrawer({
   markedBpm,
   customRanges,
   onEditCustomRange,
+  repeatSections,
 }: SelectionRangesDrawerProps) {
   const n = totalMeasures;
 
@@ -324,6 +327,38 @@ export function SelectionRangesDrawer({
           }
           onClick={() => handleSelect(null)}
         />
+
+        {/* Repeat sections */}
+        {repeatSections.length > 0 && (
+          <Section label="Sections" theme={theme}>
+            {repeatSections.map((sec) => {
+              const range = { from: sec.from, to: sec.to };
+              const active = rangesEqual(measureRange, range);
+              return (
+                <PresetButton
+                  key={sec.label}
+                  label={sec.label}
+                  sublabel={`mm. ${sec.from}–${sec.to}`}
+                  best={bestForRange(range)}
+                  bestPlayalong={bestPlayalongForRange(range)}
+                  active={active}
+                  accent={accent}
+                  theme={theme}
+                  miniBar={
+                    <MiniBar
+                      from={sec.from}
+                      to={sec.to}
+                      total={n}
+                      accent={accent}
+                      active={active}
+                    />
+                  }
+                  onClick={() => handleSelect(range)}
+                />
+              );
+            })}
+          </Section>
+        )}
 
         {/* Halves */}
         {n >= 2 && (
