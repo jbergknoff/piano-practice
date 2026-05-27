@@ -144,17 +144,26 @@ export function useWaitMode(
       return;
     }
     const tSig = controlRef.current.musicxml?.timeSigNum ?? 4;
-    const { first } = rangeBounds(
-      waitPointsRef.current,
-      control.measureRange,
-      tSig,
-    );
+    const points = waitPointsRef.current;
+    const { first } = rangeBounds(points, control.measureRange, tSig);
     setPointIndex(first);
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
+
+    // Move the cursor and player to the new range start so the user can see
+    // what they are about to play.
+    let targetBeat: number;
+    if (points.length > 0 && first < points.length) {
+      targetBeat = points[first].beat;
+    } else {
+      const range = control.measureRange;
+      targetBeat = range ? (range.from - 1) * tSig : 0;
+    }
+    controlRef.current.setCursor(targetBeat, "jump");
+    controlRef.current.player.seek(targetBeat);
   }, [control.measureRange]);
 
   const noteColors = useMemo<Record<string, string>>(() => {

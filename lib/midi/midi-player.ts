@@ -35,7 +35,7 @@ export class MidiPlayer {
 
   onPositionUpdate?: (beat: number) => void;
   onEnd?: (beat: number) => void;
-  /** When set, the player restarts from startBeat once beat reaches endBeat. */
+  /** When set, the player loops back to startBeat once beat reaches endBeat. */
   focusRange: { startBeat: number; endBeat: number } | null = null;
   /** When true, skip Web Audio synthesis (phone speaker) for scheduled notes. */
   skipWebAudio = false;
@@ -406,14 +406,12 @@ export class MidiPlayer {
 
       const beat = this.elapsedBeat();
 
-      // Focus range: stop and return cursor to range start.
+      // Focus range: loop back to the range start.
       if (this.focusRange && beat >= this.focusRange.endBeat) {
         this.cancelAll();
         this.stopTick();
-        this._state = "stopped";
-        this.resumeBeat = this.focusRange.startBeat;
+        this.startSchedule(this.focusRange.startBeat);
         this.onPositionUpdate?.(this.focusRange.startBeat);
-        this.onEnd?.(this.focusRange.startBeat);
         return;
       }
 

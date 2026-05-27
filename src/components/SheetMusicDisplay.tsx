@@ -769,6 +769,24 @@ export function SheetMusicDisplay({
     if (!drag || !focusRange) {
       return;
     }
+
+    // Auto-scroll the container when the pointer is near or beyond the edges.
+    const container = containerRef.current;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const edgeScrollZone = 60;
+      const maxScrollStep = 10;
+      const distanceFromRight = containerRect.right - e.clientX;
+      const distanceFromLeft = e.clientX - containerRect.left;
+      if (distanceFromRight < edgeScrollZone) {
+        container.scrollLeft +=
+          maxScrollStep * (1 - Math.max(0, distanceFromRight) / edgeScrollZone);
+      } else if (distanceFromLeft < edgeScrollZone) {
+        container.scrollLeft -=
+          maxScrollStep * (1 - Math.max(0, distanceFromLeft) / edgeScrollZone);
+      }
+    }
+
     const svgX =
       e.clientX - (svgRef.current?.getBoundingClientRect().left ?? 0);
     const current = dragFocusRangeRef.current ?? focusRange;

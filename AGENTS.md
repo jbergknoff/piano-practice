@@ -98,8 +98,10 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 
 - `null` → whole piece; no orange overlay or drag handles rendered in `SheetMusicDisplay`
 - non-null → section highlighted with a translucent orange overlay and two draggable handles
-- Set via right-click context menu ("Focus measure X"); cleared via "Clear focus" in the same menu
-- When non-null, `MidiPlayer.focusRange` loops playback within that range, and `useWaitMode` constrains wait points to that range
+- Set via right-click context menu ("Focus measure X") or the ranges drawer; cleared via "Clear focus" in the context menu or "Whole piece" in the drawer
+- When non-null, `MidiPlayer.focusRange` **loops** playback within that range: once `beat >= endBeat`, `startTick` calls `startSchedule(startBeat)` to restart from the range start (rather than stopping). `useWaitMode` also constrains wait points to that range.
+- Changing the range while in listen/playalong mode: `PracticeScreen.measureRange` effect calls `player.seek(startBeat)` and `setCursor(startBeat, "jump")`, snapping the cursor to the new range start. In wait mode that effect skips the cursor move (wait mode owns the cursor); `useWaitMode`'s own `measureRange` effect handles it instead by calling `setCursor` and `player.seek` to the first wait point in the new range.
+- Dragging the overlay handles auto-scrolls the sheet when the pointer approaches the container edge (`SheetMusicDisplay.onHandlePointerMove`).
 
 ### PracticeScreen control areas
 
