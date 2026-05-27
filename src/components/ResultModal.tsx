@@ -1,15 +1,8 @@
-import type { WaitModeAttempt } from "../hooks/use-file-history";
+import type { ComponentChildren } from "preact";
 import type { ThemeTokens } from "../theme";
 import { dimBackdrop, FONT_SANS, glassPanel, hexA, serifTitle } from "../theme";
 
-function formatTime(ms: number): string {
-  const totalSec = Math.round(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatDate(timestamp: number): string {
+export function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
   const now = new Date();
   const isToday =
@@ -25,7 +18,7 @@ function formatDate(timestamp: number): string {
     : `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${timeStr}`;
 }
 
-function scoreColor(score: number): string {
+export function scoreColor(score: number): string {
   if (score >= 80) {
     return "#2e7d32";
   }
@@ -35,7 +28,7 @@ function scoreColor(score: number): string {
   return "#c62828";
 }
 
-function ScoreChip({ score }: { score: number }) {
+export function ScoreChip({ score }: { score: number }) {
   return (
     <span
       style={{
@@ -49,29 +42,54 @@ function ScoreChip({ score }: { score: number }) {
   );
 }
 
-interface WaitModeResultModalProps {
+function motivationalMessage(score: number): string {
+  if (score === 100) {
+    return "Perfect — every note right on time!";
+  }
+  if (score >= 80) {
+    return "Great playing — keep it up.";
+  }
+  if (score >= 50) {
+    return "Good effort — practice makes perfect.";
+  }
+  return "Keep practicing — you'll get there!";
+}
+
+export interface ResultRow {
+  key: string | number;
+  isLatest: boolean;
+  when: string;
+  cells: ComponentChildren[];
+}
+
+interface ResultModalProps {
   theme: ThemeTokens;
   accent: string;
   selectionLabel: string;
-  history: WaitModeAttempt[];
-  expectedDurationMs: number;
+  latest: {
+    score: number;
+    headerRight?: string;
+    stats?: { label: string; value: string }[];
+  } | null;
+  history: {
+    label: string;
+    gridTemplate: string;
+    columns: string[];
+    rows: ResultRow[];
+  };
   onClose: () => void;
 }
 
-export function WaitModeResultModal({
+export function ResultModal({
   theme,
   accent,
   selectionLabel,
+  latest,
   history,
-  expectedDurationMs,
   onClose,
-}: WaitModeResultModalProps) {
-  const latest = history[history.length - 1];
-  const prior = history.slice(0, -1).reverse().slice(0, 9);
-
+}: ResultModalProps) {
   return (
     <>
-      {/* Backdrop */}
       <div
         role="presentation"
         style={{ ...dimBackdrop(0.28), zIndex: 299 }}
@@ -83,7 +101,6 @@ export function WaitModeResultModal({
         }}
       />
 
-      {/* Panel */}
       <div
         style={{
           position: "fixed",
@@ -103,14 +120,12 @@ export function WaitModeResultModal({
           gap: 20,
         }}
       >
-        {/* Title */}
         <div>
           <div style={{ ...serifTitle(theme), lineHeight: 1.1 }}>
             {selectionLabel} complete
           </div>
         </div>
 
-        {/* Latest attempt */}
         {latest && (
           <div
             style={{
@@ -123,77 +138,83 @@ export function WaitModeResultModal({
               gap: 12,
             }}
           >
-            {/* Score hero */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: theme.inkSoft,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Score
-              </span>
-              <span
-                style={{
-                  fontSize: 40,
-                  fontWeight: 700,
-                  color: scoreColor(latest.score),
-                  fontVariantNumeric: "tabular-nums",
-                  lineHeight: 1,
-                }}
-              >
-                {latest.score}%
-              </span>
-            </div>
-
-            {/* Detail stats */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 8,
-                borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
-                paddingTop: 10,
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
               }}
             >
-              {(
-                [
-                  ["Wrong notes", String(latest.wrongNotes)],
-                  ["Time", formatTime(latest.elapsedMs)],
-                  ["Expected", formatTime(expectedDurationMs)],
-                ] as [string, string][]
-              ).map(([label, value]) => (
-                <div
-                  key={label}
-                  style={{ display: "flex", flexDirection: "column", gap: 3 }}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: theme.inkSoft,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                  }}
                 >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: theme.inkSoft,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: theme.ink,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {value}
-                  </span>
-                </div>
-              ))}
+                  Score
+                </span>
+                <span
+                  style={{
+                    fontSize: 40,
+                    fontWeight: 700,
+                    color: scoreColor(latest.score),
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                  }}
+                >
+                  {latest.score}%
+                </span>
+              </div>
+              {latest.headerRight && (
+                <span style={{ fontSize: 12, color: theme.inkSoft }}>
+                  {latest.headerRight}
+                </span>
+              )}
             </div>
 
-            {/* Motivational message */}
+            {latest.stats && latest.stats.length > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `repeat(${latest.stats.length}, 1fr)`,
+                  gap: 8,
+                  borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
+                  paddingTop: 10,
+                }}
+              >
+                {latest.stats.map((stat) => (
+                  <div
+                    key={stat.label}
+                    style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: theme.inkSoft,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {stat.label}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 16,
+                        fontWeight: 600,
+                        color: theme.ink,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {stat.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div
               style={{
                 borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
@@ -202,19 +223,12 @@ export function WaitModeResultModal({
                 color: theme.inkSoft,
               }}
             >
-              {latest.score === 100
-                ? "Perfect — every note right on time!"
-                : latest.score >= 80
-                  ? "Great playing — keep it up."
-                  : latest.score >= 50
-                    ? "Good effort — practice makes perfect."
-                    : "Keep practicing — you'll get there!"}
+              {motivationalMessage(latest.score)}
             </div>
           </div>
         )}
 
-        {/* History table */}
-        {prior.length > 0 && (
+        {history.rows.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div
               style={{
@@ -224,7 +238,7 @@ export function WaitModeResultModal({
                 textTransform: "uppercase",
               }}
             >
-              Previous attempts
+              {history.label}
             </div>
             <div
               style={{
@@ -233,17 +247,16 @@ export function WaitModeResultModal({
                 overflow: "hidden",
               }}
             >
-              {/* Header */}
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 72px 52px",
+                  gridTemplateColumns: history.gridTemplate,
                   padding: "7px 12px",
                   background: hexA(theme.ink, 0.04),
                   borderBottom: `0.5px solid ${theme.border}`,
                 }}
               >
-                {(["When", "Wrong", "Score"] as string[]).map((h) => (
+                {history.columns.map((h) => (
                   <span
                     key={h}
                     style={{
@@ -257,40 +270,37 @@ export function WaitModeResultModal({
                   </span>
                 ))}
               </div>
-              {prior.map((a, i) => (
+              {history.rows.map((row, i) => (
                 <div
-                  key={a.timestamp}
+                  key={row.key}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 72px 52px",
+                    gridTemplateColumns: history.gridTemplate,
                     padding: "7px 12px",
                     borderBottom:
-                      i < prior.length - 1
+                      i < history.rows.length - 1
                         ? `0.5px solid ${theme.border}`
                         : undefined,
                     alignItems: "center",
+                    background: row.isLatest ? hexA(accent, 0.06) : undefined,
                   }}
                 >
-                  <span style={{ fontSize: 12, color: theme.inkSoft }}>
-                    {formatDate(a.timestamp)}
-                  </span>
                   <span
                     style={{
                       fontSize: 12,
-                      color: theme.ink,
-                      fontVariantNumeric: "tabular-nums",
+                      color: row.isLatest ? theme.ink : theme.inkSoft,
+                      fontWeight: row.isLatest ? 500 : 400,
                     }}
                   >
-                    {a.wrongNotes}
+                    {row.isLatest ? "Now" : row.when}
                   </span>
-                  <ScoreChip score={a.score ?? 0} />
+                  {row.cells}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Close button */}
         <button
           type="button"
           onClick={onClose}

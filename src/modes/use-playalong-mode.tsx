@@ -6,7 +6,12 @@ import {
   useState,
 } from "preact/hooks";
 import type { PlaybackNote } from "../../lib/midi/midi-to-musicxml";
-import { PlayalongResultModal } from "../components/PlayalongResultModal";
+import {
+  formatDate,
+  ResultModal,
+  type ResultRow,
+  ScoreChip,
+} from "../components/ResultModal";
 import {
   type PlayalongAttempt,
   loadPlayalongAttemptHistory,
@@ -483,25 +488,54 @@ export function usePlayalongMode(
       <WaitingForNoteOverlay />
     ) : null;
 
-  const modal = resultModal ? (
-    <PlayalongResultModal
-      theme={settings.theme}
-      accent={settings.accent}
-      selectionLabel={resultModal.selectionLabel}
-      history={resultModal.history}
-      onClose={() => {
-        setResultModal(null);
-        // Keep phase="complete" so green/red note colors remain for review.
-        // Seek to start so the sheet is positioned at the beginning.
-        const ctrl = controlRef.current;
-        const mx = ctrl.musicxml;
-        const range = ctrl.measureRange;
-        const startBeat = range && mx ? (range.from - 1) * mx.timeSigNum : 0;
-        ctrl.player.seek(startBeat);
-        ctrl.setCursor(startBeat, "jump");
-      }}
-    />
-  ) : null;
+  const modal = resultModal
+    ? (() => {
+        const history = resultModal.history;
+        const latest = history[history.length - 1];
+        const currentBpm = latest?.bpm;
+        const rows: ResultRow[] = history
+          .filter((a) => a.bpm === currentBpm)
+          .slice()
+          .reverse()
+          .slice(0, 10)
+          .map((a) => ({
+            key: a.timestamp,
+            isLatest: a.timestamp === latest?.timestamp,
+            when: formatDate(a.timestamp),
+            cells: [<ScoreChip key="score" score={a.score} />],
+          }));
+        return (
+          <ResultModal
+            theme={settings.theme}
+            accent={settings.accent}
+            selectionLabel={resultModal.selectionLabel}
+            latest={
+              latest
+                ? { score: latest.score, headerRight: `${latest.bpm} BPM` }
+                : null
+            }
+            history={{
+              label: currentBpm ? `Attempts at ${currentBpm} BPM` : "Attempts",
+              gridTemplate: "1fr 64px",
+              columns: ["When", "Score"],
+              rows,
+            }}
+            onClose={() => {
+              setResultModal(null);
+              // Keep phase="complete" so green/red note colors remain for review.
+              // Seek to start so the sheet is positioned at the beginning.
+              const ctrl = controlRef.current;
+              const mx = ctrl.musicxml;
+              const range = ctrl.measureRange;
+              const startBeat =
+                range && mx ? (range.from - 1) * mx.timeSigNum : 0;
+              ctrl.player.seek(startBeat);
+              ctrl.setCursor(startBeat, "jump");
+            }}
+          />
+        );
+      })()
+    : null;
 
   return {
     noteColors,

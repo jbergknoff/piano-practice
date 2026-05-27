@@ -5,7 +5,12 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { WaitModeResultModal } from "../components/WaitModeResultModal";
+import {
+  formatDate,
+  ResultModal,
+  type ResultRow,
+  ScoreChip,
+} from "../components/ResultModal";
 import type { WaitModeDebugEvent } from "../debug-log";
 import {
   type WaitModeAttempt,
@@ -28,6 +33,13 @@ export interface WaitModeSettings {
   bpm: number;
   accent: string;
   theme: ThemeTokens;
+}
+
+function formatTime(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 /** Returns the first wait-point index inside the range and the exclusive end index. */
@@ -446,16 +458,66 @@ export function useWaitMode(
     ctrl.setCursor(beat, "jump");
   }, []);
 
-  const modal = completionModal ? (
-    <WaitModeResultModal
-      theme={settings.theme}
-      accent={settings.accent}
-      selectionLabel={completionModal.selectionLabel}
-      history={completionModal.history}
-      expectedDurationMs={completionModal.expectedDurationMs}
-      onClose={() => setCompletionModal(null)}
-    />
-  ) : null;
+  const modal = completionModal
+    ? (() => {
+        const history = completionModal.history;
+        const latest = history[history.length - 1];
+        const rows: ResultRow[] = history
+          .slice()
+          .reverse()
+          .slice(0, 10)
+          .map((a) => ({
+            key: a.timestamp,
+            isLatest: a.timestamp === latest?.timestamp,
+            when: formatDate(a.timestamp),
+            cells: [
+              <span
+                key="wrong"
+                style={{
+                  fontSize: 12,
+                  color: settings.theme.ink,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {a.wrongNotes}
+              </span>,
+              <ScoreChip key="score" score={a.score ?? 0} />,
+            ],
+          }));
+        return (
+          <ResultModal
+            theme={settings.theme}
+            accent={settings.accent}
+            selectionLabel={completionModal.selectionLabel}
+            latest={
+              latest
+                ? {
+                    score: latest.score,
+                    stats: [
+                      {
+                        label: "Wrong notes",
+                        value: String(latest.wrongNotes),
+                      },
+                      { label: "Time", value: formatTime(latest.elapsedMs) },
+                      {
+                        label: "Expected",
+                        value: formatTime(completionModal.expectedDurationMs),
+                      },
+                    ],
+                  }
+                : null
+            }
+            history={{
+              label: "Attempts",
+              gridTemplate: "1fr 72px 52px",
+              columns: ["When", "Wrong", "Score"],
+              rows,
+            }}
+            onClose={() => setCompletionModal(null)}
+          />
+        );
+      })()
+    : null;
 
   return {
     noteColors,
