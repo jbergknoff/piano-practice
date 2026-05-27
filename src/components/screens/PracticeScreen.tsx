@@ -962,6 +962,7 @@ export function PracticeScreen({
           setRangesDrawerOpen(false);
           customRanges.openEdit(range);
         }}
+        repeatSections={musicxml?.repeatSections ?? []}
       />
       <SettingsDrawer
         open={drawerOpen}

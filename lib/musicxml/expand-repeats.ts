@@ -229,6 +229,125 @@ function serializeDom(doc: Document): string {
   return root.outerHTML ?? "";
 }
 
+// ── Repeat-section extraction ───────────────────────────────────────────────
+
+export interface RepeatSection {
+  /** First measure of the section (1-indexed, in the **expanded** score). */
+  from: number;
+  /** Last measure of the section (1-indexed, in the **expanded** score). */
+  to: number;
+  /** Human-readable label, e.g. "Section A". */
+  label: string;
+}
+
+/**
+ * Extract practice-ready sections from a MusicXML string based on repeat
+ * barlines.  Each section corresponds to one repeat group (from `|:` to `:|`).
+ *
+ * The returned measure ranges use the **expanded** measure numbering (matching
+ * the score produced by `expandRepeatsMusicXml`) so they can be used directly
+ * as a `measureRange` preset in the player.
+ *
+ * Returns an empty array when the score has no repeat markers, or when the
+ * XML cannot be parsed.
+ */
+export function extractRepeatSections(xml: string): RepeatSection[] {
+  let doc: Document;
+  try {
+    doc = new DOMParser().parseFromString(xml, "text/xml");
+  } catch {
+    return [];
+  }
+  if (doc.querySelector("parsererror")) {
+    return [];
+  }
+
+  const partEls = Array.from(doc.querySelectorAll("score-partwise > part"));
+  if (partEls.length === 0) {
+    return [];
+  }
+
+  const firstMeasures = Array.from(partEls[0].querySelectorAll("measure"));
+  if (firstMeasures.length === 0) {
+    return [];
+  }
+
+  const infos = extractRepeatInfos(firstMeasures);
+
+  // No backward-repeat barlines → no sections.
+  if (!infos.some((m) => m.hasBackwardRepeat)) {
+    return [];
+  }
+
+  // The expanded index array maps each position in the expanded score to an
+  // original measure index.  We use it to convert original section boundaries
+  // into expanded measure numbers.
+  const expandedIndices = computeExpansion(infos);
+
+  // ── Pass 1: identify section spans in the original measure array ───────────
+  // Each backward-repeat marker closes a section whose start is either:
+  //   • the most recent explicit forward-repeat marker, or
+  //   • just after the previous backward-repeat (implicit start).
+  const rawSections: Array<{ origFrom: number; origTo: number }> = [];
+  let forwardStart: number | null = null;
+  let lastBackwardIdx = -1;
+
+  for (let i = 0; i < infos.length; i++) {
+    if (infos[i].hasForwardRepeat) {
+      forwardStart = i;
+    }
+    if (infos[i].hasBackwardRepeat) {
+      const sectionStart =
+        forwardStart !== null ? forwardStart : lastBackwardIdx + 1;
+      rawSections.push({ origFrom: sectionStart, origTo: i });
+      forwardStart = null;
+      lastBackwardIdx = i;
+    }
+  }
+
+  if (rawSections.length === 0) {
+    return [];
+  }
+
+  // ── Pass 2: map each original section to its first occurrence in the ───────
+  // expanded score (the first play-through of the section body).
+  const LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const result: RepeatSection[] = [];
+
+  for (let s = 0; s < rawSections.length; s++) {
+    const { origFrom, origTo } = rawSections[s];
+    const len = origTo - origFrom + 1;
+
+    // Find the leftmost position in expandedIndices where the consecutive run
+    // origFrom, origFrom+1, …, origTo appears.
+    let expandedStart = -1;
+    outer: for (let i = 0; i <= expandedIndices.length - len; i++) {
+      for (let k = 0; k < len; k++) {
+        if (expandedIndices[i + k] !== origFrom + k) {
+          continue outer;
+        }
+      }
+      expandedStart = i;
+      break;
+    }
+
+    if (expandedStart === -1) {
+      // Should not happen for well-formed MusicXML.
+      continue;
+    }
+
+    result.push({
+      from: expandedStart + 1, // convert to 1-indexed
+      to: expandedStart + len, // convert to 1-indexed
+      label: `Section ${LABELS[s] ?? String(s + 1)}`,
+    });
+  }
+
+  return result;
+}
+
+// ── MusicXML string round-trip ──────────────────────────────────────────────
+
 /**
  * Given a MusicXML string, return a new MusicXML string with all repeat
  * sections expanded into a flat linear measure sequence.  If the score
