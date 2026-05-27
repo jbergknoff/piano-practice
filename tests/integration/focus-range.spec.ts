@@ -44,13 +44,13 @@ import {
 //
 //   At t = 0.1 s:  beat = (0.1 + 1.95) × 2 = 4.1  → p0-m3-n1-v0 (second note of m3)
 //
-// Loop fires when elapsedBeat ≥ endBeat (7 with correct formula):
+// Stop fires when elapsedBeat ≥ endBeat (7 with correct formula):
 //   (t + 1.45) × 2 ≥ 7  →  t ≥ 2.05
 //
-// After the loop, startSchedule(3) is called at fakeNow ≈ 2.2:
-//   new startAudioTime = 2.2 + 0.05 − 1.5 = 0.75
-//   elapsedBeat_new(t) = (t − 0.75) × 2
-//   At t = 2.35:  beat = (2.35 − 0.75) × 2 = 3.2  → p0-m3-n0-v0
+// After the stop, the cursor resets to focusRange.startBeat = 3 (the range start).
+// The player is now stopped, so advancing the fake clock further does NOT advance
+// the cursor — it remains at beat 3.  This distinguishes a stop from a loop:
+// a looping player would move the cursor forward after the fake-clock advance.
 
 test.beforeEach(async ({ page }) => {
   await blockExternalFonts(page);
@@ -59,7 +59,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("listen mode loops back to range start when end of focus range is reached (pickup measure)", async ({
+test("listen mode stops and resets cursor to range start when end of focus range is reached (pickup measure)", async ({
   page,
 }) => {
   await loadFile(page, "pickup-measure-melody.musicxml");
@@ -78,17 +78,19 @@ test("listen mode loops back to range start when end of focus range is reached (
   await advanceAudioTime(page, 0.1);
   await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 
-  // Advance 2.1 s more (total 2.2 s): the loop trigger at t ≥ 2.05 s is crossed.
-  // The rAF tick that runs after this advance sees elapsedBeat ≥ 7 (the real
-  // end of m4) and calls startSchedule(3), restarting from the range start.
+  // Advance 2.1 s more (total 2.2 s): the stop trigger at t ≥ 2.05 s is crossed.
+  // The rAF tick sees elapsedBeat ≥ 7 (the real end of m4), stops the player,
+  // and resets the cursor to focusRange.startBeat = 3.
   await advanceAudioTime(page, 2.1);
 
-  // Advance 0.15 s more (total 2.35 s): with the new startAudioTime ≈ 0.75,
-  // elapsedBeat = (2.35 − 0.75) × 2 = 3.2 — back at the start of m3.
-  await advanceAudioTime(page, 0.15);
+  // Cursor is now at beat 3 (range start).  The first note of m3 must be
+  // highlighted, confirming the reset used the correct formula (beat 3, not 4).
+  await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 
-  // The first note of m3 must be highlighted again, proving the loop returned
-  // playback to beat 3 (the actual start of m3) rather than beat 4.
+  // Advance 0.5 s more (= 1 beat at 120 BPM).  If the player had looped it
+  // would now be at beat 4 and p0-m3-n1-v0 would be highlighted instead.
+  // Because it stopped, the cursor stays at beat 3 and p0-m3-n0-v0 remains.
+  await advanceAudioTime(page, 0.5);
   await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 });
 

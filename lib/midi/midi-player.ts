@@ -406,12 +406,16 @@ export class MidiPlayer {
 
       const beat = this.elapsedBeat();
 
-      // Focus range: loop back to the range start.
+      // Focus range: stop at the range end and reset the cursor to the range
+      // start (like a natural end-of-piece, but resuming from the range start
+      // rather than beat 0).
       if (this.focusRange && beat >= this.focusRange.endBeat) {
-        this.cancelAll();
         this.stopTick();
-        this.startSchedule(this.focusRange.startBeat);
+        this.cancelAll();
+        this._state = "stopped";
+        this.resumeBeat = this.focusRange.startBeat;
         this.onPositionUpdate?.(this.focusRange.startBeat);
+        this.onEnd?.(this.focusRange.startBeat);
         return;
       }
 
