@@ -9,23 +9,48 @@ import {
   waitForMockBluetoothConnected,
 } from "./helpers";
 
-// c-major-melody.mid: 2 measures, 4/4 at 120 bpm.
-// "First half" preset  → measureRange { from: 1, to: 1 } → beats 0–4
-// "Second half" preset → measureRange { from: 2, to: 2 } → beats 4–8
+// pickup-measure-melody.musicxml: 4 measures, 2/4 at 120 BPM.
 //
-// Fake AudioContext clock starts at 0.  MidiPlayer derives:
-//   startAudioTime = fakeNow_at_play + LOOKAHEAD − startBeat * secsPerBeat
-//                  = 0 + 0.05 − 4 * 0.5 = −1.95   (for "Second half")
-//   elapsedBeat(t) = (t − startAudioTime) * (bpm/60)
-//                  = (t + 1.95) * 2                 (for "Second half")
+// Crucially, measure 1 is a one-beat pickup (anacrusis) instead of the
+// normal two beats. This makes every subsequent measure boundary arrive one
+// beat earlier than the naive formula `(measureNumber − 1) × timeSigNum`
+// would predict:
 //
-// Loop fires when elapsedBeat ≥ endBeat (8):
-//   (t + 1.95) * 2 ≥ 8  →  t ≥ 2.05
+//   measureStartBeats (correct, from actual durations):
+//     m1: beat 0  m2: beat 1  m3: beat 3  m4: beat 5   totalBeats: 7
 //
-// After the loop, startSchedule(4) is called at fakeNow ≈ 2.2:
-//   new startAudioTime = 2.2 + 0.05 − 2.0 = 0.25
-//   elapsedBeat_new(t) = (t − 0.25) * 2
-//   needs t ≥ 0.25 + 2.05 = 2.3 to reach beat ≥ 4.1.
+//   Old broken formula  (measureNumber − 1) × 2:
+//     m1:     0         m2:     2         m3:     4         m4:     6
+//
+// The "Second half" preset for a 4-measure piece selects mm. 3–4,
+// so all three tests below exercise the case where the broken formula
+// would have placed the cursor one full beat into m3 rather than at its start.
+//
+// ─── Fake-clock arithmetic ────────────────────────────────────────────────────
+//
+// At 120 BPM, one quarter beat = 0.5 s.  MidiPlayer derives:
+//   startAudioTime = fakeNow_at_play + LOOKAHEAD − startBeat × secsPerBeat
+//   elapsedBeat(t) = (t − startAudioTime) × (bpm / 60)
+//
+// Correct formula — startBeat = 3:
+//   startAudioTime = 0 + 0.05 − 3 × 0.5 = −1.45
+//   elapsedBeat(t) = (t + 1.45) × 2
+//
+//   At t = 0.1 s:  beat = (0.1 + 1.45) × 2 = 3.1  → p0-m3-n0-v0 (first note of m3)
+//
+// Broken formula — startBeat = 4:
+//   startAudioTime = 0 + 0.05 − 4 × 0.5 = −1.95
+//   elapsedBeat(t) = (t + 1.95) × 2
+//
+//   At t = 0.1 s:  beat = (0.1 + 1.95) × 2 = 4.1  → p0-m3-n1-v0 (second note of m3)
+//
+// Loop fires when elapsedBeat ≥ endBeat (7 with correct formula):
+//   (t + 1.45) × 2 ≥ 7  →  t ≥ 2.05
+//
+// After the loop, startSchedule(3) is called at fakeNow ≈ 2.2:
+//   new startAudioTime = 2.2 + 0.05 − 1.5 = 0.75
+//   elapsedBeat_new(t) = (t − 0.75) × 2
+//   At t = 2.35:  beat = (2.35 − 0.75) × 2 = 3.2  → p0-m3-n0-v0
 
 test.beforeEach(async ({ page }) => {
   await blockExternalFonts(page);
@@ -34,76 +59,78 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("listen mode loops back to range start when end of focus range is reached", async ({
+test("listen mode loops back to range start when end of focus range is reached (pickup measure)", async ({
   page,
 }) => {
-  await loadFile(page, "c-major-melody.mid");
+  await loadFile(page, "pickup-measure-melody.musicxml");
   await waitForMockBluetoothConnected(page);
 
-  // Select the second half (measure 2, beats 4–8).
+  // Select mm. 3–4 (beats 3–7 with the correct formula).
   await page.getByTitle("Select range").click();
   await page.getByRole("button", { name: "Second half" }).click();
 
-  // Start playback from beat 4 (the range start).
+  // Start playback from beat 3 (the range start).
   await page.getByTitle("Play").click();
 
-  // Advance 0.1s → beat ≈ 4.1; confirm measure-2 playback is under way before
-  // the loop fires.
+  // Advance 0.1 s → beat ≈ 3.1.  The first note of m3 must be highlighted,
+  // confirming that playback started from beat 3 (correct formula) rather than
+  // beat 4 (broken formula, which would put us at m3-n1-v0 instead).
   await advanceAudioTime(page, 0.1);
-  await waitForHighlightedNoteIds(page, ["p0-m2-n0-v0"]);
+  await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 
-  // Advance 2.1s more (total 2.2s): the loop trigger at t ≥ 2.05s is crossed.
-  // The rAF tick that runs after this advance sees elapsedBeat ≥ 8 and calls
-  // startSchedule(4), restarting from the range start.
+  // Advance 2.1 s more (total 2.2 s): the loop trigger at t ≥ 2.05 s is crossed.
+  // The rAF tick that runs after this advance sees elapsedBeat ≥ 7 (the real
+  // end of m4) and calls startSchedule(3), restarting from the range start.
   await advanceAudioTime(page, 2.1);
 
-  // Advance 0.15s more (total 2.35s): with the new startAudioTime ≈ 0.25,
-  // elapsedBeat = (2.35 − 0.25) × 2 = 4.2 — back inside measure 2 after the loop.
+  // Advance 0.15 s more (total 2.35 s): with the new startAudioTime ≈ 0.75,
+  // elapsedBeat = (2.35 − 0.75) × 2 = 3.2 — back at the start of m3.
   await advanceAudioTime(page, 0.15);
 
-  // The first note of measure 2 must be highlighted again, proving the loop
-  // returned playback to the range start instead of stopping.
-  await waitForHighlightedNoteIds(page, ["p0-m2-n0-v0"]);
+  // The first note of m3 must be highlighted again, proving the loop returned
+  // playback to beat 3 (the actual start of m3) rather than beat 4.
+  await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 });
 
-test("selecting a focus range in wait mode moves the cursor to the first wait point in the new range", async ({
+test("selecting a focus range in wait mode moves the cursor to the first wait point in the new range (pickup measure)", async ({
   page,
 }) => {
-  await loadFile(page, "c-major-melody.mid");
+  await loadFile(page, "pickup-measure-melody.musicxml");
   await waitForMockBluetoothConnected(page);
 
-  // Switch to wait mode.  The first wait point (beat 0) of the whole piece is
+  // Switch to wait mode.  The first wait point (beat 0, m1 pickup) is
   // highlighted on activation.
   await page.getByRole("button", { name: "Wait" }).click();
   await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]);
 
-  // Select the second half.  useWaitMode's measureRange effect should seek the
-  // cursor to the first wait point that falls inside the new range (beat 4,
-  // p0-m2-n0-v0) and update the highlight accordingly.
+  // Select mm. 3–4.  useWaitMode's measureRange effect should seek the cursor
+  // to the first wait point whose beat falls at or after beat 3 — that is
+  // p0-m3-n0-v0 at beat 3.  With the broken formula the seek target would
+  // have been beat 4, landing at p0-m3-n1-v0 instead.
   await page.getByTitle("Select range").click();
   await page.getByRole("button", { name: "Second half" }).click();
 
-  await waitForHighlightedNoteIds(page, ["p0-m2-n0-v0"]);
+  await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 });
 
-test("selecting a focus range in listen mode moves the cursor to the range start", async ({
+test("selecting a focus range in listen mode moves the cursor to the range start (pickup measure)", async ({
   page,
 }) => {
-  await loadFile(page, "c-major-melody.mid");
+  await loadFile(page, "pickup-measure-melody.musicxml");
   await waitForMockBluetoothConnected(page);
 
-  // Select the second half from the drawer.  PracticeScreen's measureRange
-  // effect calls setCursor(4, "jump"), which should reposition the cursor at
-  // the start of measure 2 (beat 4).  Confirm that by starting playback and
-  // immediately checking that the measure-2 note is highlighted (rather than
-  // a measure-1 note, which would indicate the cursor was still at beat 0).
+  // Select mm. 3–4.  PracticeScreen's measureRange effect calls
+  // setCursor(3, "jump"), which should place the cursor at the actual start
+  // of m3 (beat 3).  Confirm by starting playback and immediately checking
+  // that p0-m3-n0-v0 is highlighted — with the broken formula playback would
+  // have started from beat 4 and the first note of m3 would already be past.
   await page.getByTitle("Select range").click();
   await page.getByRole("button", { name: "Second half" }).click();
 
   await page.getByTitle("Play").click();
 
-  // 0.1s advance puts beat at ≈ 4.1 — only correct if playback started from
-  // beat 4 (range start), not from beat 0 (piece start).
+  // 0.1 s advance puts beat at ≈ 3.1 — the first note of m3 — only correct
+  // if playback started from beat 3 (range start) and not from beat 4.
   await advanceAudioTime(page, 0.1);
-  await waitForHighlightedNoteIds(page, ["p0-m2-n0-v0"]);
+  await waitForHighlightedNoteIds(page, ["p0-m3-n0-v0"]);
 });

@@ -138,14 +138,15 @@ export function usePlayalongMode(
       return [];
     }
     const range = control.measureRange;
-    const startBeat = range ? (range.from - 1) * musicxml.timeSigNum : 0;
+    const measureStartBeats = control.measureStartBeats;
+    const startBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
     const endBeat = range
-      ? range.to * musicxml.timeSigNum
+      ? (measureStartBeats[range.to] ?? musicxml.totalBeats)
       : musicxml.totalBeats;
     return musicxml.notes.filter(
       (n) => !n.tieStop && n.startBeat >= startBeat && n.startBeat < endBeat,
     );
-  }, [control.musicxml, control.measureRange]);
+  }, [control.musicxml, control.measureRange, control.measureStartBeats]);
 
   const selectionNotesRef = useRef(selectionNotes);
   selectionNotesRef.current = selectionNotes;
@@ -210,9 +211,8 @@ export function usePlayalongMode(
     setHitNoteIds(empty);
     extraNoteCountRef.current = 0;
 
-    const mx = ctrl.musicxml;
     const range = ctrl.measureRange;
-    const startBeat = range && mx ? (range.from - 1) * mx.timeSigNum : 0;
+    const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
     ctrl.player.seek(startBeat);
     ctrl.setCursor(startBeat, "jump");
   }
@@ -277,7 +277,7 @@ export function usePlayalongMode(
     }
 
     const range = ctrl.measureRange;
-    const startBeat = range ? (range.from - 1) * mx.timeSigNum : 0;
+    const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
     player.seek(startBeat);
     ctrl.setCursor(startBeat, "jump");
 
@@ -439,9 +439,10 @@ export function usePlayalongMode(
 
     if (phase === "playing" || phase === "complete") {
       const range = control.measureRange;
-      const startBeat = range ? (range.from - 1) * musicxml.timeSigNum : 0;
+      const measureStartBeats = control.measureStartBeats;
+      const startBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
       const endBeat = range
-        ? range.to * musicxml.timeSigNum
+        ? (measureStartBeats[range.to] ?? musicxml.totalBeats)
         : musicxml.totalBeats;
       // In complete phase, treat all selection notes as past.
       const effectiveBeat =
@@ -473,6 +474,7 @@ export function usePlayalongMode(
   }, [
     control.musicxml,
     control.measureRange,
+    control.measureStartBeats,
     control.currentBeat,
     phase,
     hitNoteIds,
@@ -527,8 +529,9 @@ export function usePlayalongMode(
               const ctrl = controlRef.current;
               const mx = ctrl.musicxml;
               const range = ctrl.measureRange;
-              const startBeat =
-                range && mx ? (range.from - 1) * mx.timeSigNum : 0;
+              const startBeat = range
+                ? (ctrl.measureStartBeats[range.from - 1] ?? 0)
+                : 0;
               ctrl.player.seek(startBeat);
               ctrl.setCursor(startBeat, "jump");
             }}

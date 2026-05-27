@@ -135,6 +135,12 @@ export interface ModeControl {
   currentBeatRef: { current: number };
   musicxml: ScoreConversion | null;
   measureRange: { from: number; to: number } | null;
+  /**
+   * Quarter-note beat at which each measure begins (index 0 = measure 1),
+   * cached from `musicxml.measureStartBeats` on file load. Use this — not
+   * `(measureNumber - 1) * timeSigNum` — to convert measure numbers to beats.
+   */
+  measureStartBeats: number[];
   fileHash: string | null;
   appendToDebugLog: (event: DebugBeatEvent) => void;
 }

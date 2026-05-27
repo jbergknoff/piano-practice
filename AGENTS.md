@@ -8,7 +8,7 @@
 
 ### Repository layout
 
-Framework-agnostic, unit-testable domain logic lives under top-level `lib/` (no Preact imports); Preact/app code lives under `src/`. Tests are colocated next to their subject, except shared MIDI/MusicXML fixtures, which live in top-level `test-fixtures/` (referenced by tests via repo-root-relative paths, since `bun test` runs from the repo root).
+Framework-agnostic, unit-testable domain logic lives under top-level `lib/` (no Preact imports); Preact/app code lives under `src/`. Tests are colocated next to their subject, except shared MIDI/MusicXML fixtures, which live in `tests/fixtures/` (referenced by unit tests via repo-root-relative paths, since `bun test` runs from the repo root; referenced by integration tests via the `FIXTURES` helper in `tests/integration/helpers.ts`).
 
 - `lib/midi/` — `midi-to-musicxml.ts`, `midi-player.ts`, `ble-midi.ts`
 - `lib/musicxml/` — `sheet-music-types.ts`, `musicxml-parser.ts`, `sheet-music-layout.ts`, `musicxml-playback.ts` (derives playback notes from MusicXML), `mxl.ts` (unzips `.mxl` containers)
@@ -102,6 +102,7 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 - When non-null, `MidiPlayer.focusRange` **loops** playback within that range: once `beat >= endBeat`, `startTick` calls `startSchedule(startBeat)` to restart from the range start (rather than stopping). `useWaitMode` also constrains wait points to that range.
 - Changing the range while in listen/playalong mode: `PracticeScreen.measureRange` effect calls `player.seek(startBeat)` and `setCursor(startBeat, "jump")`, snapping the cursor to the new range start. In wait mode that effect skips the cursor move (wait mode owns the cursor); `useWaitMode`'s own `measureRange` effect handles it instead by calling `setCursor` and `player.seek` to the first wait point in the new range.
 - Dragging the overlay handles auto-scrolls the sheet when the pointer approaches the container edge (`SheetMusicDisplay.onHandlePointerMove`).
+- **Beat conversion**: measure number → beat offset is done via `ScoreConversion.measureStartBeats` (a `number[]` cached once on file load by `computeMeasureStartBeats`), NOT by `(measureNumber - 1) * timeSigNum`. The old formula silently breaks on any pickup measure. `measureStartBeats` is exposed directly on `ModeControl` so every mode hook can look up `ctrl.measureStartBeats[range.from - 1]` without navigating through `musicxml`.
 
 ### PracticeScreen control areas
 

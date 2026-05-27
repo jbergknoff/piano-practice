@@ -7,11 +7,11 @@ import { bluetoothMockInitScript } from "./mocks/bluetooth";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Absolute path to the shared test-fixtures directory. */
-export const FIXTURES = path.join(__dirname, "../../test-fixtures");
+/** Absolute path to the shared test fixtures directory. */
+export const FIXTURES = path.join(__dirname, "../fixtures");
 
 /**
- * Upload a file from test-fixtures/ through the landing screen's hidden file
+ * Upload a file from tests/fixtures/ through the landing screen's hidden file
  * input, then wait for the sheet music <svg> to appear.
  */
 export async function loadFile(page: Page, filename: string): Promise<void> {

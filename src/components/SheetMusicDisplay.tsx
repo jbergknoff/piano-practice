@@ -11,6 +11,7 @@ import {
   isRest,
   parseScore,
 } from "../../lib/musicxml/musicxml-parser";
+import { computeMeasureStartBeats } from "../../lib/musicxml/musicxml-playback";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
@@ -203,31 +204,7 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
-/**
- * Compute the beat offset (in quarter-note beats from the start of the piece)
- * at which each measure begins. This correctly handles pickup measures and any
- * other irregular measure lengths, unlike the naive `floor(beat / beatsPerMeasure)`
- * formula.
- *
- * Uses `measure.divisions` (normalized by the parser) and each event's `duration`
- * field (the rhythmic advance to the next onset) to accumulate the running offset.
- */
-export function computeMeasureStartBeats(score: ParsedScore): number[] {
-  const startBeats: number[] = [];
-  let beatCursor = 0;
-  const part = score.parts[0];
-  if (!part) {
-    return startBeats;
-  }
-  for (const measure of part.measures) {
-    startBeats.push(beatCursor);
-    const divisions = measure.divisions || 4;
-    for (const event of measure.events) {
-      beatCursor += event.duration / divisions;
-    }
-  }
-  return startBeats;
-}
+// ── Cursor position helper ────────────────────────────────────────────────────
 
 export function computeCursorX(
   beat: number,

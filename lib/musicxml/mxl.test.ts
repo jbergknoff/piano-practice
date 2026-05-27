@@ -7,7 +7,7 @@ import { musicXmlToConversion } from "./musicxml-playback";
 describe("extractMusicXmlFromMxl", () => {
   test("extracts the root score from an .mxl container", async () => {
     const bytes = new Uint8Array(
-      readFileSync("test-fixtures/c-major-melody.mxl"),
+      readFileSync("tests/fixtures/c-major-melody.mxl"),
     );
     const xml = await extractMusicXmlFromMxl(bytes);
 
@@ -15,7 +15,7 @@ describe("extractMusicXmlFromMxl", () => {
     // match the standalone .musicxml fixture they were zipped from.
     expect(xml).toContain("<score-partwise");
     const expected = readFileSync(
-      "test-fixtures/c-major-melody.expected.musicxml",
+      "tests/fixtures/c-major-melody.expected.musicxml",
       "utf8",
     );
     expect(xml).toBe(expected);
