@@ -1,4 +1,8 @@
-import { expandRepeatsMusicXml } from "./expand-repeats";
+import {
+  type RepeatSection,
+  expandRepeatsMusicXml,
+  extractRepeatSections,
+} from "./expand-repeats";
 import { isRest, parseScore } from "./musicxml-parser";
 import type { Pitch } from "./sheet-music-types";
 
@@ -24,12 +28,18 @@ export interface PlaybackNote {
   isGrace?: boolean;
 }
 
+export type { RepeatSection } from "./expand-repeats";
+
 export interface ScoreConversion {
   musicxml: string;
   notes: PlaybackNote[];
   timeSigNum: number;
   timeSigDen: number;
   totalBeats: number;
+  /** Repeat-bounded sections extracted from the original score, in expanded
+   *  measure coordinates.  Empty for scores with no repeat markers (including
+   *  all MIDI-sourced scores). */
+  repeatSections: RepeatSection[];
 }
 
 const STEP_SEMITONE: Record<string, number> = {
@@ -145,5 +155,6 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
     timeSigNum: timeSig.beats,
     timeSigDen: timeSig.beatType,
     totalBeats,
+    repeatSections: extractRepeatSections(xml),
   };
 }

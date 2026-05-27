@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { computeExpansion, expandRepeatsMusicXml } from "./expand-repeats";
+import {
+  computeExpansion,
+  expandRepeatsMusicXml,
+  extractRepeatSections,
+} from "./expand-repeats";
 import { parseScore } from "./musicxml-parser";
 
 // ---------------------------------------------------------------------------
@@ -433,5 +437,174 @@ describe("expandRepeatsMusicXml", () => {
   test("invalid XML is returned unchanged", () => {
     const bad = "not xml at all <<>>";
     expect(expandRepeatsMusicXml(bad)).toBe(bad);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractRepeatSections tests
+// ---------------------------------------------------------------------------
+
+/** Minimal 5-measure score with explicit repeat on measures 2–4. */
+const SIMPLE_REPEAT_XML = `<?xml version="1.0"?>
+<score-partwise>
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <barline location="left"><repeat direction="forward"/></barline>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="4">
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="5">
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+describe("extractRepeatSections", () => {
+  test("no repeats → empty array", () => {
+    const xml = `<?xml version="1.0"?>
+<score-partwise>
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    expect(extractRepeatSections(xml)).toEqual([]);
+  });
+
+  test("invalid XML → empty array", () => {
+    expect(extractRepeatSections("not xml <<>>")).toEqual([]);
+  });
+
+  test("single repeat section maps to first occurrence in expanded score", () => {
+    // Original: m1 |: m2 m3 m4 :| m5
+    // Expanded: m1 m2 m3 m4 m2 m3 m4 m5  (8 expanded measures)
+    // Section A should be expanded mm 2–4 (first play-through of the repeat)
+    const sections = extractRepeatSections(SIMPLE_REPEAT_XML);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({ from: 2, to: 4, label: "Section A" });
+  });
+
+  test("implicit repeat from beginning", () => {
+    // Original: m1 m2 :| m3  (no forward marker; implicit start at beginning)
+    // Expanded: m1 m2 m1 m2 m3  (5 expanded measures)
+    // Section A = expanded mm 1–2
+    const xml = `<?xml version="1.0"?>
+<score-partwise>
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const sections = extractRepeatSections(xml);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]).toMatchObject({ from: 1, to: 2, label: "Section A" });
+  });
+
+  test("two explicit repeat sections labeled A and B", () => {
+    // |: m1 m2 :| |: m3 m4 :|
+    // Expanded: m1 m2 m1 m2 m3 m4 m3 m4  (8 measures)
+    // Section A = expanded mm 1–2, Section B = expanded mm 5–6
+    const xml = `<?xml version="1.0"?>
+<score-partwise>
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <barline location="left"><repeat direction="forward"/></barline>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <barline location="left"><repeat direction="forward"/></barline>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="4">
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+  </part>
+</score-partwise>`;
+    const sections = extractRepeatSections(xml);
+    expect(sections).toHaveLength(2);
+    expect(sections[0]).toMatchObject({ from: 1, to: 2, label: "Section A" });
+    expect(sections[1]).toMatchObject({ from: 5, to: 6, label: "Section B" });
+  });
+
+  test("volta brackets: section body maps to first pass in expanded score", () => {
+    // |: m1 [1. m2] :| [2. m3] m4
+    // Expanded: m1 m2 m1 m3 m4  (5 measures)
+    // Section A (body = m1..m2) → expanded mm 1–2
+    const xml = `<?xml version="1.0"?>
+<score-partwise>
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <barline location="left"><repeat direction="forward"/></barline>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <barline location="left"><ending number="1" type="start"/></barline>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+      <barline location="right"><ending number="1" type="stop"/></barline>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <barline location="left"><ending number="2" type="start"/></barline>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+      <barline location="right"><ending number="2" type="stop"/></barline>
+    </measure>
+    <measure number="4">
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const sections = extractRepeatSections(xml);
+    expect(sections).toHaveLength(1);
+    // Body (original m1..m2) appears first in expanded at positions 0..1 → mm 1–2
+    expect(sections[0]).toMatchObject({ from: 1, to: 2, label: "Section A" });
   });
 });
