@@ -571,6 +571,7 @@ function PresetButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       style={{
         display: "flex",
         flexDirection: "column",
