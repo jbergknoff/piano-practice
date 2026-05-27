@@ -46,15 +46,17 @@ test("clicking a section preset selects it as the active range", async ({
   await expect(page.getByText("Sections", { exact: true })).toBeVisible();
 
   // Section B should now be active.
-  await expect(
-    page.getByRole("button", { name: "Section B" }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Section B" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 
   // Whole piece and Section A must not be active.
   await expect(
     page.getByRole("button", { name: "Whole piece" }),
   ).toHaveAttribute("aria-pressed", "false");
-  await expect(
-    page.getByRole("button", { name: "Section A" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Section A" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
 });
