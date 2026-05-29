@@ -32,9 +32,8 @@ export function useListenMode(
 
   const handleReset = useCallback(() => {
     const ctrl = controlRef.current;
-    const mx = ctrl.musicxml;
     const range = ctrl.measureRange;
-    const startBeat = range ? (range.from - 1) * (mx?.timeSigNum ?? 4) : 0;
+    const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
     ctrl.player.pause();
     ctrl.player.seek(startBeat);
     ctrl.setIsPlaying(false);

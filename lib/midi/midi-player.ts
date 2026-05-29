@@ -35,7 +35,7 @@ export class MidiPlayer {
 
   onPositionUpdate?: (beat: number) => void;
   onEnd?: (beat: number) => void;
-  /** When set, the player restarts from startBeat once beat reaches endBeat. */
+  /** When set, the player loops back to startBeat once beat reaches endBeat. */
   focusRange: { startBeat: number; endBeat: number } | null = null;
   /** When true, skip Web Audio synthesis (phone speaker) for scheduled notes. */
   skipWebAudio = false;
@@ -406,10 +406,12 @@ export class MidiPlayer {
 
       const beat = this.elapsedBeat();
 
-      // Focus range: stop and return cursor to range start.
+      // Focus range: stop at the range end and reset the cursor to the range
+      // start (like a natural end-of-piece, but resuming from the range start
+      // rather than beat 0).
       if (this.focusRange && beat >= this.focusRange.endBeat) {
-        this.cancelAll();
         this.stopTick();
+        this.cancelAll();
         this._state = "stopped";
         this.resumeBeat = this.focusRange.startBeat;
         this.onPositionUpdate?.(this.focusRange.startBeat);
@@ -420,7 +422,14 @@ export class MidiPlayer {
       const nowMs = performance.now();
       if (nowMs - this.lastPositionEmit >= POSITION_UPDATE_INTERVAL) {
         this.lastPositionEmit = nowMs;
-        this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
+        // Clamp to resumeBeat so the cursor never goes before the play-start
+        // position. The LOOKAHEAD offset means elapsedBeat() is slightly below
+        // the start beat for the first ~50 ms; without this clamp that dip
+        // would briefly highlight notes from the measure before the seek target
+        // and place the cursor visually to the left of the focus range edge.
+        this.onPositionUpdate?.(
+          Math.max(this.resumeBeat, Math.min(beat, this.totalBeats)),
+        );
       }
 
       if (beat >= this.totalBeats) {

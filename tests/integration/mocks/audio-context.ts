@@ -2,9 +2,17 @@
  * Page init script that replaces window.AudioContext with a fake whose
  * `currentTime` is driven by an internal clock — not by real wall-clock time.
  * MidiPlayer derives the cursor beat from `audioCtx.currentTime`, so this lets
- * tests advance the cursor by an exact number of beats:
+ * tests advance the cursor by an exact number of beats without waiting for real
+ * time to pass:
  *
  *   await page.evaluate((s) => window.__advanceAudioTime(s), 1.5);
+ *
+ * MidiPlayer's POSITION_UPDATE_INTERVAL throttle uses performance.now(), which
+ * is left as the real wall-clock timer. That throttle fires within ~50 ms of
+ * real time — well inside the 2 000 ms waitForHighlightedNoteIds timeout — so
+ * tests remain reliable without mocking it. Mocking performance.now() would
+ * prevent Chromium from firing rAF callbacks (it uses the same clock to
+ * schedule frames), which freezes the UI.
  *
  * All other AudioNode surfaces MidiPlayer touches (Oscillator, Gain,
  * BiquadFilter, AudioParam, destination) are stubbed with no-op nodes so the

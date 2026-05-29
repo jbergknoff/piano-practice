@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <!--
+      Measure 1 is a one-beat pickup (anacrusis): only one quarter note
+      instead of the two that 2/4 would normally contain. This makes every
+      subsequent measure boundary arrive one beat earlier than the naive
+      formula `(measureNumber - 1) * timeSigNum` would predict.
+
+      measureStartBeats (computed from actual durations):
+        m1: beat 0  (pickup, 1 beat)
+        m2: beat 1  (first full measure)
+        m3: beat 3
+        m4: beat 5
+
+      Old (broken) formula would give:
+        m3: (3−1)×2 = 4   ← off by 1 beat
+        m4: (4−1)×2 = 6   ← off by 1 beat
+    -->
+    <measure number="1" implicit="yes">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <sound tempo="120"/>
+      <!-- One quarter note — the anacrusis. Note ID: p0-m1-n0-v0 at beat 0. -->
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    </measure>
+    <!-- Full measure: two quarter notes. IDs: p0-m2-n0-v0 (beat 1), p0-m2-n1-v0 (beat 2). -->
+    <measure number="2">
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    </measure>
+    <!-- Full measure: two quarter notes. IDs: p0-m3-n0-v0 (beat 3), p0-m3-n1-v0 (beat 4). -->
+    <measure number="3">
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>
+    </measure>
+    <!-- Full measure: two quarter notes. IDs: p0-m4-n0-v0 (beat 5), p0-m4-n1-v0 (beat 6). -->
+    <measure number="4">
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>

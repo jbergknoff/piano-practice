@@ -4,7 +4,7 @@ import {
   extractRepeatSections,
 } from "./expand-repeats";
 import { isRest, parseScore } from "./musicxml-parser";
-import type { Pitch } from "./sheet-music-types";
+import type { ParsedScore, Pitch } from "./sheet-music-types";
 
 // Standard MusicXML carries no per-note dynamics, so playback uses a single
 // default velocity for every note.
@@ -40,6 +40,39 @@ export interface ScoreConversion {
    *  measure coordinates.  Empty for scores with no repeat markers (including
    *  all MIDI-sourced scores). */
   repeatSections: RepeatSection[];
+  /**
+   * Quarter-note beat at which each measure begins (index 0 = measure 1).
+   * Computed from the parsed score's actual event durations, so pickup
+   * measures and time-signature changes are handled correctly. Use this — not
+   * `(measureNumber - 1) * timeSigNum` — whenever you need to convert a
+   * 1-indexed measure number to a beat offset.
+   */
+  measureStartBeats: number[];
+}
+
+/**
+ * Compute the quarter-note beat at which each measure starts, walking the
+ * first part's event durations. Index 0 corresponds to measure 1.
+ *
+ * This correctly handles pickup (anacrusis) measures and any other situation
+ * where measures are not all the same length, unlike the naive formula
+ * `(measureNumber - 1) * timeSigNum`.
+ */
+export function computeMeasureStartBeats(score: ParsedScore): number[] {
+  const startBeats: number[] = [];
+  const part = score.parts[0];
+  if (!part) {
+    return startBeats;
+  }
+  let beatCursor = 0;
+  for (const measure of part.measures) {
+    startBeats.push(beatCursor);
+    const divisions = measure.divisions || 4;
+    for (const event of measure.events) {
+      beatCursor += event.duration / divisions;
+    }
+  }
+  return startBeats;
 }
 
 const STEP_SEMITONE: Record<string, number> = {
@@ -147,7 +180,20 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
   });
 
   const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
-  const totalBeats = (score.numMeasures * timeSig.beats * 4) / timeSig.beatType;
+  // The formula-based estimate overcounts for pickup (anacrusis) measures,
+  // because it assumes every measure is full. Derive the actual total from
+  // the notes themselves when available; fall back to the formula for empty
+  // scores (no notes). A loop is used instead of Math.max(...spread) to
+  // avoid stack overflows on very large scores.
+  const formulaTotalBeats =
+    (score.numMeasures * timeSig.beats * 4) / timeSig.beatType;
+  let totalBeats = formulaTotalBeats;
+  for (const note of notes) {
+    const end = note.startBeat + note.durationBeats;
+    if (end > totalBeats) {
+      totalBeats = end;
+    }
+  }
 
   return {
     musicxml: expandedXml,
@@ -156,5 +202,6 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
     timeSigDen: timeSig.beatType,
     totalBeats,
     repeatSections: extractRepeatSections(xml),
+    measureStartBeats: computeMeasureStartBeats(score),
   };
 }

@@ -35,7 +35,7 @@ import type {
 
 // Full pipeline: MIDI file → MusicXML string → ParsedScore
 function parseMidiFixture(filename: string, trackIndices: number[]) {
-  const midiData = parseMidi(readFileSync(`test-fixtures/${filename}`));
+  const midiData = parseMidi(readFileSync(`tests/fixtures/${filename}`));
   const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
   return parseScore(musicxml);
 }
@@ -313,7 +313,7 @@ describe("parseScore (mozart-k265-var1 via MIDI pipeline)", () => {
 
 describe("parseScore (underwater-theme via MIDI pipeline)", () => {
   const midiData = parseMidi(
-    readFileSync("test-fixtures/underwater-theme.mid"),
+    readFileSync("tests/fixtures/underwater-theme.mid"),
   );
   const trackIndices = getMidiTracks(midiData).map((t) => t.index);
   const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);

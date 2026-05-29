@@ -46,13 +46,14 @@ function formatTime(ms: number): string {
 function rangeBounds(
   points: WaitPoint[],
   range: { from: number; to: number } | null,
-  timeSigNum: number,
+  measureStartBeats: number[],
+  totalBeats: number,
 ): { first: number; end: number } {
   if (!range) {
     return { first: 0, end: points.length };
   }
-  const startBeat = (range.from - 1) * timeSigNum;
-  const endBeat = range.to * timeSigNum;
+  const startBeat = measureStartBeats[range.from - 1] ?? 0;
+  const endBeat = measureStartBeats[range.to] ?? totalBeats;
 
   let first = points.findIndex((p) => p.beat >= startBeat);
   if (first === -1) {
@@ -143,11 +144,15 @@ export function useWaitMode(
     if (!activeRef.current) {
       return;
     }
-    const tSig = controlRef.current.musicxml?.timeSigNum ?? 4;
+    const ctrl = controlRef.current;
+    const measureStartBeats = ctrl.measureStartBeats;
+    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
+    const points = waitPointsRef.current;
     const { first } = rangeBounds(
-      waitPointsRef.current,
+      points,
       control.measureRange,
-      tSig,
+      measureStartBeats,
+      totalBeats,
     );
     setPointIndex(first);
     pointIndexRef.current = first;
@@ -155,6 +160,18 @@ export function useWaitMode(
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
+
+    // Move the cursor and player to the new range start so the user can see
+    // what they are about to play.
+    let targetBeat: number;
+    if (points.length > 0 && first < points.length) {
+      targetBeat = points[first].beat;
+    } else {
+      const range = control.measureRange;
+      targetBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
+    }
+    ctrl.setCursor(targetBeat, "jump");
+    ctrl.player.seek(targetBeat);
   }, [control.measureRange]);
 
   const noteColors = useMemo<Record<string, string>>(() => {
@@ -180,7 +197,9 @@ export function useWaitMode(
       return;
     }
     const ctrl = controlRef.current;
-    const tSig = ctrl.musicxml?.timeSigNum ?? 4;
+    const tSig = ctrl.musicxml?.timeSigNum ?? 4; // used only for approximate debug-log measure numbers
+    const measureStartBeats = ctrl.measureStartBeats;
+    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const sensitivityMs = settingsRef.current.noteSensitivityMilliseconds;
 
     const held = heldNotesRef.current;
@@ -196,7 +215,12 @@ export function useWaitMode(
       held.delete(noteNumber);
       const points = waitPointsRef.current;
       const idx = pointIndexRef.current;
-      const { end } = rangeBounds(points, ctrl.measureRange, tSig);
+      const { end } = rangeBounds(
+        points,
+        ctrl.measureRange,
+        measureStartBeats,
+        totalBeats,
+      );
       const wp = idx < end ? points[idx] : null;
       const offBeat = wp?.beat ?? -1;
       ctrl.appendToDebugLog({
@@ -217,7 +241,12 @@ export function useWaitMode(
 
     const points = waitPointsRef.current;
     const idx = pointIndexRef.current;
-    const { first, end } = rangeBounds(points, ctrl.measureRange, tSig);
+    const { first, end } = rangeBounds(
+      points,
+      ctrl.measureRange,
+      measureStartBeats,
+      totalBeats,
+    );
 
     if (idx >= end) {
       return;
@@ -312,8 +341,10 @@ export function useWaitMode(
     }
     const range = ctrl.measureRange;
     const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
+    const measureStartBeats = ctrl.measureStartBeats;
     const selectionBeats = range
-      ? (range.to - range.from + 1) * mx.timeSigNum
+      ? (measureStartBeats[range.to] ?? mx.totalBeats) -
+        (measureStartBeats[range.from - 1] ?? 0)
       : mx.totalBeats;
     const bpm = settingsRef.current.bpm;
     const expectedDurationMs = bpm > 0 ? (selectionBeats / bpm) * 60_000 : 0;
@@ -357,8 +388,9 @@ export function useWaitMode(
     const ctrl = controlRef.current;
     const points = waitPointsRef.current;
     const range = ctrl.measureRange;
-    const tSig = ctrl.musicxml?.timeSigNum ?? 4;
-    const { first } = rangeBounds(points, range, tSig);
+    const measureStartBeats = ctrl.measureStartBeats;
+    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
+    const { first } = rangeBounds(points, range, measureStartBeats, totalBeats);
 
     // Pick start point: range start if a range is active, else nearest wait
     // point at or before the current cursor.
@@ -384,7 +416,7 @@ export function useWaitMode(
       points.length > 0
         ? points[startIdx].beat
         : range
-          ? (range.from - 1) * tSig
+          ? (measureStartBeats[range.from - 1] ?? 0)
           : 0;
     ctrl.player.seek(startBeat);
     ctrl.setCursor(startBeat, "jump");
@@ -419,11 +451,13 @@ export function useWaitMode(
 
   const handleReset = useCallback(() => {
     const ctrl = controlRef.current;
-    const tSig = ctrl.musicxml?.timeSigNum ?? 4;
+    const measureStartBeats = ctrl.measureStartBeats;
+    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const { first } = rangeBounds(
       waitPointsRef.current,
       ctrl.measureRange,
-      tSig,
+      measureStartBeats,
+      totalBeats,
     );
     setPointIndex(first);
     pointIndexRef.current = first;
@@ -441,9 +475,15 @@ export function useWaitMode(
 
   const handleSeek = useCallback((beat: number) => {
     const ctrl = controlRef.current;
-    const tSig = ctrl.musicxml?.timeSigNum ?? 4;
+    const measureStartBeats = ctrl.measureStartBeats;
+    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const points = waitPointsRef.current;
-    const { first, end } = rangeBounds(points, ctrl.measureRange, tSig);
+    const { first, end } = rangeBounds(
+      points,
+      ctrl.measureRange,
+      measureStartBeats,
+      totalBeats,
+    );
     let idx = first;
     for (let i = first; i < end; i++) {
       if (points[i].beat > beat) {

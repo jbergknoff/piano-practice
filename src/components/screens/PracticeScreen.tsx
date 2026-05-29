@@ -180,9 +180,10 @@ export function PracticeScreen({
       );
       const range = measureRangeRef.current;
       if (range) {
+        const measureStartBeats = musicxml.measureStartBeats;
         player.focusRange = {
-          startBeat: (range.from - 1) * musicxml.timeSigNum,
-          endBeat: range.to * musicxml.timeSigNum,
+          startBeat: measureStartBeats[range.from - 1] ?? 0,
+          endBeat: measureStartBeats[range.to] ?? musicxml.totalBeats,
         };
       }
       // Apply initialBeat BEFORE assigning onPositionUpdate so the seek
@@ -222,8 +223,9 @@ export function PracticeScreen({
       return;
     }
     if (measureRange) {
-      const startBeat = (measureRange.from - 1) * musicxml.timeSigNum;
-      const endBeat = measureRange.to * musicxml.timeSigNum;
+      const measureStartBeats = musicxml.measureStartBeats;
+      const startBeat = measureStartBeats[measureRange.from - 1] ?? 0;
+      const endBeat = measureStartBeats[measureRange.to] ?? musicxml.totalBeats;
       if (player) {
         player.focusRange = { startBeat, endBeat };
         player.seek(startBeat);
@@ -275,6 +277,7 @@ export function PracticeScreen({
     currentBeatRef,
     musicxml,
     measureRange,
+    measureStartBeats: musicxml?.measureStartBeats ?? [],
     fileHash,
     appendToDebugLog,
   };
@@ -371,9 +374,10 @@ export function PracticeScreen({
     // Snap to range start before switching modes so the new mode activates
     // at a predictable position. Each mode's own activate() handles any
     // additional setup (e.g. wait mode picking its first wait point).
-    const startBeat = measureRange
-      ? (measureRange.from - 1) * (musicxml?.timeSigNum ?? 4)
-      : 0;
+    const startBeat =
+      measureRange && musicxml
+        ? (musicxml.measureStartBeats[measureRange.from - 1] ?? 0)
+        : 0;
     playerRef.current?.pause();
     setIsPlaying(false);
     playerRef.current?.seek(startBeat);

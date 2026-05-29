@@ -48,7 +48,7 @@ const FIXTURES = [
 describe("musicXmlToConversion – playback/render ID contract", () => {
   for (const fixture of FIXTURES) {
     test(`${fixture}: every derived playback note matches a rendered note`, () => {
-      const midiData = parseMidi(readFileSync(`test-fixtures/${fixture}`));
+      const midiData = parseMidi(readFileSync(`tests/fixtures/${fixture}`));
       const trackIndices = getMidiTracks(midiData).map((t) => t.index);
       const { musicxml, notes } = midiToMusicXmlWithTracks(
         midiData,

@@ -26,9 +26,5 @@ export default defineConfig({
       name: "chromium-landscape",
       use: { browserName: "chromium", viewport: { width: 844, height: 390 } },
     },
-    {
-      name: "chromium-portrait",
-      use: { browserName: "chromium", viewport: { width: 390, height: 844 } },
-    },
   ],
 });

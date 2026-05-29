@@ -10,11 +10,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { render } from "preact";
 import { parseScore } from "../../lib/musicxml/musicxml-parser";
 import { resolveLayout } from "../../lib/musicxml/sheet-music-layout";
-import {
-  SheetMusicDisplay,
-  computeCursorX,
-  computeMeasureStartBeats,
-} from "./SheetMusicDisplay";
+import { computeMeasureStartBeats } from "../../lib/musicxml/musicxml-playback";
+import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
 
 // SMuFL glyphs we assert on (must match the G map in SheetMusicDisplay.tsx).
 const SHARP = "";
@@ -383,12 +380,12 @@ describe("SheetMusicDisplay geometry", () => {
 // ── SVG snapshots ─────────────────────────────────────────────────────────────
 //
 // Each case below is rendered to a self-contained, viewable SVG (Bravura subset
-// embedded, cream background) committed under test-fixtures/svg/. The committed
+// embedded, cream background) committed under tests/fixtures/svg/. The committed
 // file IS the expected output: open it in a browser to see the notation, and the
 // test fails if the renderer drifts from it. Regenerate after an intended change
 // with:  UPDATE_SVG=1 bun test src/components/SheetMusicDisplay.test.tsx
 
-const SVG_DIR = "test-fixtures/svg";
+const SVG_DIR = "tests/fixtures/svg";
 // Bravura subset (clefs, noteheads, accidentals, rests, flags) embedded so the
 // committed SVGs render real glyphs standalone. The default layout uses a
 // 10px staff space → 40px glyphs.
