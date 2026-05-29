@@ -128,12 +128,25 @@ export function App() {
   useWakeLock(musicxml !== null);
 
   // Force listen mode when no piano is connected — wait and playalong
-  // require MIDI input.
+  // require MIDI input. This guard covers runtime disconnects; the initial
+  // load case is handled by clampModeToBluetoothStatus() at history restore.
   useEffect(() => {
     if (bluetooth.status !== "connected") {
       setMode((m) => (m === "wait" || m === "playalong" ? "listen" : m));
     }
   }, [bluetooth.status]);
+
+  // Returns the mode from history, falling back to "listen" when the saved
+  // mode requires a piano connection and none is currently connected.
+  function clampModeToBluetoothStatus(
+    savedMode: "wait" | "playalong" | "listen",
+  ): "wait" | "playalong" | "listen" {
+    const requiresBluetooth = savedMode === "wait" || savedMode === "playalong";
+    if (requiresBluetooth && bluetooth.status !== "connected") {
+      return "listen";
+    }
+    return savedMode;
+  }
 
   // ── File loading + history restore ───────────────────────────────────────
   useEffect(() => {
@@ -192,7 +205,7 @@ export function App() {
       if (history) {
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setMode(history.mode);
+        setMode(clampModeToBluetoothStatus(history.mode));
         setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
         if (history.playalongTimingBeats !== undefined) {
           setPlayalongTimingBeats(history.playalongTimingBeats);
@@ -235,7 +248,7 @@ export function App() {
         );
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setMode(history.mode);
+        setMode(clampModeToBluetoothStatus(history.mode));
         setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
         if (history.playalongTimingBeats !== undefined) {
           setPlayalongTimingBeats(history.playalongTimingBeats);
