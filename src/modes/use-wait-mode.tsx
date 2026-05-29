@@ -79,6 +79,8 @@ export function useWaitMode(
   } | null>(null);
 
   const activeRef = useRef(false);
+  const completionModalRef = useRef(completionModal);
+  completionModalRef.current = completionModal;
   const pointIndexRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
@@ -194,6 +196,9 @@ export function useWaitMode(
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
     if (!activeRef.current || waitPointsRef.current.length === 0) {
+      return;
+    }
+    if (completionModalRef.current !== null) {
       return;
     }
     const ctrl = controlRef.current;
