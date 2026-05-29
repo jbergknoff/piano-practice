@@ -44,7 +44,14 @@ import {
 //
 //   At t = 0.1 s:  beat = (0.1 + 1.95) × 2 = 4.1  → p0-m3-n1-v0 (second note of m3)
 //
-// Stop fires when elapsedBeat ≥ endBeat (7 with correct formula):
+// Stop fires when elapsedBeat ≥ endBeat.
+//
+// endBeat = measureStartBeats[range.to] ?? totalBeats.  range.to = 4 and
+// measureStartBeats has only 4 entries (indices 0–3), so the fallback
+// totalBeats is used.  totalBeats is derived from the actual note content
+// (end of the last note), not the naive formula; for this pickup fixture the
+// last note ends at beat 7 (beat 6 + 1 beat duration), so totalBeats = 7.
+//
 //   (t + 1.45) × 2 ≥ 7  →  t ≥ 2.05
 //
 // After the stop, the cursor resets to focusRange.startBeat = 3 (the range start).

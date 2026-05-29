@@ -180,7 +180,16 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
   });
 
   const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
-  const totalBeats = (score.numMeasures * timeSig.beats * 4) / timeSig.beatType;
+  // The formula-based estimate overcounts for pickup (anacrusis) measures,
+  // because it assumes every measure is full. Derive the actual total from
+  // the notes themselves when available; fall back to the formula for empty
+  // scores (no notes).
+  const formulaTotalBeats =
+    (score.numMeasures * timeSig.beats * 4) / timeSig.beatType;
+  const totalBeats =
+    notes.length > 0
+      ? Math.max(...notes.map((n) => n.startBeat + n.durationBeats))
+      : formulaTotalBeats;
 
   return {
     musicxml: expandedXml,
