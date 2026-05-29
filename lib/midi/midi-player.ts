@@ -422,7 +422,14 @@ export class MidiPlayer {
       const nowMs = performance.now();
       if (nowMs - this.lastPositionEmit >= POSITION_UPDATE_INTERVAL) {
         this.lastPositionEmit = nowMs;
-        this.onPositionUpdate?.(Math.min(beat, this.totalBeats));
+        // Clamp to resumeBeat so the cursor never goes before the play-start
+        // position. The LOOKAHEAD offset means elapsedBeat() is slightly below
+        // the start beat for the first ~50 ms; without this clamp that dip
+        // would briefly highlight notes from the measure before the seek target
+        // and place the cursor visually to the left of the focus range edge.
+        this.onPositionUpdate?.(
+          Math.max(this.resumeBeat, Math.min(beat, this.totalBeats)),
+        );
       }
 
       if (beat >= this.totalBeats) {
