@@ -1,7 +1,8 @@
 import { useState } from "preact/hooks";
 import type { DebugBeatEvent } from "../debug-log";
 import type { ThemeTokens } from "../theme";
-import { FONT_MONO, FONT_SANS, hexA } from "../theme";
+import { FONT_MONO, FONT_SANS, hexA, miniButtonStyle } from "../theme";
+import { TrashIcon } from "./icons";
 
 const NOTE_NAMES = [
   "C",
@@ -63,11 +64,14 @@ export function DebugLogTab({
   theme,
   accent,
   getDebugLog,
+  clearDebugLog,
 }: {
   theme: ThemeTokens;
   accent: string;
   getDebugLog: () => DebugBeatEvent[];
+  clearDebugLog: () => void;
 }) {
+  const [refreshKey, setRefreshKey] = useState(0);
   const log = formatDebugLog(getDebugLog());
   const [copied, setCopied] = useState(false);
 
@@ -79,6 +83,11 @@ export function DebugLogTab({
     } catch {
       // ignore clipboard errors
     }
+  }
+
+  function handleClear() {
+    clearDebugLog();
+    setRefreshKey((key) => key + 1);
   }
 
   return (
@@ -115,9 +124,18 @@ export function DebugLogTab({
         >
           {copied ? "Copied!" : "Copy"}
         </button>
+        <button
+          type="button"
+          aria-label="Clear log"
+          onClick={handleClear}
+          style={miniButtonStyle(theme)}
+        >
+          <TrashIcon size={14} />
+        </button>
       </div>
 
       <pre
+        key={refreshKey}
         style={{
           margin: 0,
           padding: "10px 12px",

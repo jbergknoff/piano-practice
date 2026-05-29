@@ -108,6 +108,9 @@ export function App() {
     debugBufferRef.current.append(event);
   }, []);
   const getDebugLog = useCallback(() => debugBufferRef.current.read(), []);
+  const clearDebugLog = useCallback(() => {
+    debugBufferRef.current = newDebugBuffer();
+  }, []);
 
   // ── BLE MIDI ─────────────────────────────────────────────────────────────
   // PracticeScreen writes the active mode's onNoteEvent into this ref; the
@@ -416,6 +419,7 @@ export function App() {
       onPlayalongCountInChange={setPlayalongCountIn}
       appendToDebugLog={appendToDebugLog}
       getDebugLog={getDebugLog}
+      clearDebugLog={clearDebugLog}
     />
   );
 }

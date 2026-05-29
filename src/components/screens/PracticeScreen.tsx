@@ -23,12 +23,12 @@ import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
 import type { ThemeTokens } from "../../theme";
 import {
-  cornerBtnStyle,
+  cornerButtonStyle,
   dimBackdrop,
   FONT_SANS,
   glassPanel,
   hexA,
-  miniBtnStyle,
+  miniButtonStyle,
   serifTitle,
 } from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
@@ -89,6 +89,7 @@ interface PracticeScreenProps {
   onPlayalongCountInChange: (enabled: boolean) => void;
   appendToDebugLog: (event: DebugBeatEvent) => void;
   getDebugLog: () => DebugBeatEvent[];
+  clearDebugLog: () => void;
 }
 
 export function PracticeScreen({
@@ -125,6 +126,7 @@ export function PracticeScreen({
   onPlayalongCountInChange,
   appendToDebugLog,
   getDebugLog,
+  clearDebugLog,
 }: PracticeScreenProps) {
   // Live cursor state owned here so mode hooks (and the player) can drive it.
   const [currentBeat, setCurrentBeat] = useState(initialBeat);
@@ -531,7 +533,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onGoToLanding}
-            style={cornerBtnStyle(theme)}
+            style={cornerButtonStyle(theme)}
             title="Back"
           >
             <ChevronLeftIcon />
@@ -571,7 +573,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={() => setRangesDrawerOpen(true)}
-              style={cornerBtnStyle(theme)}
+              style={cornerButtonStyle(theme)}
               title="Select range"
             >
               <SectionsIcon />
@@ -581,7 +583,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handleReset}
-              style={cornerBtnStyle(theme)}
+              style={cornerButtonStyle(theme)}
               title={
                 measureRange
                   ? "Return to start of selection. Click to reset."
@@ -595,7 +597,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handlePlayPause}
-              style={cornerBtnStyle(theme)}
+              style={cornerButtonStyle(theme)}
               title={showStopIcon ? "Stop" : isPlaying ? "Pause" : "Play"}
             >
               {showStopIcon ? (
@@ -642,7 +644,7 @@ export function PracticeScreen({
                     type="button"
                     onClick={() => onBpmChange(targetBpm)}
                     style={{
-                      ...miniBtnStyle(theme),
+                      ...miniButtonStyle(theme),
                       padding: "0 10px",
                       minWidth: 44,
                       background: isActive ? accent : undefined,
@@ -695,7 +697,7 @@ export function PracticeScreen({
                   disabled={disabled}
                   onClick={() => handleModeChange(m)}
                   style={{
-                    ...miniBtnStyle(theme),
+                    ...miniButtonStyle(theme),
                     padding: "0 14px",
                     minWidth: 60,
                     height: 30,
@@ -738,7 +740,7 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <HelpBadge theme={theme} accent={accent} getDebugLog={getDebugLog} />
+        <HelpBadge theme={theme} accent={accent} getDebugLog={getDebugLog} clearDebugLog={clearDebugLog} />
         <ConnectionBadge
           theme={theme}
           accent={accent}
@@ -748,7 +750,7 @@ export function PracticeScreen({
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          style={cornerBtnStyle(theme)}
+          style={cornerButtonStyle(theme)}
           title="Settings"
         >
           <GearIcon />

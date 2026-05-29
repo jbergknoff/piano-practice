@@ -54,7 +54,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/components/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
-| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerBtnStyle`, `miniBtnStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
+| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
 ### Mode system
@@ -179,6 +179,15 @@ if (!value) {
 // wrong
 if (!value) return;
 ```
+
+### Button styles
+
+Always reach for the shared helpers in `src/theme.ts` before writing ad-hoc button styles:
+
+- **`cornerButtonStyle(theme)`** — 38×38 frosted-glass square with `radius.lg`. Used for the main nav/transport buttons (back, reset, play/pause, gear, help badge).
+- **`miniButtonStyle(theme)`** — 22×22, transparent background, no border, `radius.sm`. Used for small icon-only buttons inside panels or inline with other content (e.g. the trash icon in the debug log tab).
+
+Don't write one-off `width`/`height`/`borderRadius`/`background` combinations for buttons — if neither helper fits, consider whether `theme.ts` needs a new named helper rather than adding another ad-hoc style.
 
 ## Dependencies
 
