@@ -108,6 +108,34 @@ export function saveAttempt(
   }
 }
 
+export function deleteAttempt(
+  hash: string,
+  selectionKey: string,
+  timestamp: number,
+): WaitModeAttempt[] {
+  try {
+    const history = loadAttemptHistory(hash);
+    const list = (history[selectionKey] ?? []).filter(
+      (a) => a.timestamp !== timestamp,
+    );
+    history[selectionKey] = list;
+    localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+export function clearAttempts(hash: string, selectionKey: string): void {
+  try {
+    const history = loadAttemptHistory(hash);
+    history[selectionKey] = [];
+    localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
+  } catch {
+    // ignore (private mode, quota exceeded, etc.)
+  }
+}
+
 export function loadPlayalongAttemptHistory(
   hash: string,
 ): PlayalongAttemptHistory {
@@ -135,6 +163,46 @@ export function savePlayalongAttempt(
       list.splice(0, list.length - MAX_ATTEMPTS_PER_SELECTION);
     }
     history[selectionKey] = list;
+    localStorage.setItem(
+      PLAYALONG_ATTEMPTS_PREFIX + hash,
+      JSON.stringify(history),
+    );
+  } catch {
+    // ignore (private mode, quota exceeded, etc.)
+  }
+}
+
+export function deletePlayalongAttempt(
+  hash: string,
+  selectionKey: string,
+  timestamp: number,
+): PlayalongAttempt[] {
+  try {
+    const history = loadPlayalongAttemptHistory(hash);
+    const list = (history[selectionKey] ?? []).filter(
+      (a) => a.timestamp !== timestamp,
+    );
+    history[selectionKey] = list;
+    localStorage.setItem(
+      PLAYALONG_ATTEMPTS_PREFIX + hash,
+      JSON.stringify(history),
+    );
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+export function clearPlayalongAttempts(
+  hash: string,
+  selectionKey: string,
+  bpm: number,
+): void {
+  try {
+    const history = loadPlayalongAttemptHistory(hash);
+    history[selectionKey] = (history[selectionKey] ?? []).filter(
+      (a) => a.bpm !== bpm,
+    );
     localStorage.setItem(
       PLAYALONG_ATTEMPTS_PREFIX + hash,
       JSON.stringify(history),

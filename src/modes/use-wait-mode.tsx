@@ -14,6 +14,8 @@ import {
 import type { WaitModeDebugEvent } from "../debug-log";
 import {
   type WaitModeAttempt,
+  clearAttempts,
+  deleteAttempt,
   loadAttemptHistory,
   saveAttempt,
 } from "../hooks/use-file-history";
@@ -76,6 +78,8 @@ export function useWaitMode(
     history: WaitModeAttempt[];
     selectionLabel: string;
     expectedDurationMs: number;
+    hash: string;
+    selectionKey: string;
   } | null>(null);
 
   const activeRef = useRef(false);
@@ -383,6 +387,8 @@ export function useWaitMode(
       history: allAttempts,
       selectionLabel,
       expectedDurationMs,
+      hash,
+      selectionKey,
     });
   }
 
@@ -559,6 +565,25 @@ export function useWaitMode(
               rows,
             }}
             onClose={() => setCompletionModal(null)}
+            onDeleteRow={(key) => {
+              const updatedHistory = deleteAttempt(
+                completionModal.hash,
+                completionModal.selectionKey,
+                key as number,
+              );
+              if (updatedHistory.length === 0) {
+                setCompletionModal(null);
+              } else {
+                setCompletionModal({
+                  ...completionModal,
+                  history: updatedHistory,
+                });
+              }
+            }}
+            onClearRows={() => {
+              clearAttempts(completionModal.hash, completionModal.selectionKey);
+              setCompletionModal(null);
+            }}
           />
         );
       })()
