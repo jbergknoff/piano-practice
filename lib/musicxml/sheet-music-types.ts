@@ -24,6 +24,8 @@ export interface ParsedNote {
   isChordMember: boolean;
   accidental: AccidentalKind;
   staccato: boolean;
+  /** True when this note carries a `<trill-mark>` ornament. */
+  trill?: boolean;
   /** Present when this note is a grace note (appoggiatura or acciaccatura). */
   grace?: { slash: boolean };
   /**
@@ -70,6 +72,8 @@ export interface ChordGroup {
    * per-note `durationBeats` so highlight timing reflects the true note length.
    */
   playbackDuration?: number;
+  /** True when any note in the chord carries a trill-mark ornament. */
+  trill?: boolean;
 }
 
 export type MeasureEvent = ChordGroup | ParsedRest;

@@ -379,6 +379,7 @@ function buildStaffEvents(
       dot: representative.dot,
       noteIndex: -1,
       gracesBefore: graces.get(onset),
+      trill: notes.some((n) => n.trill) || undefined,
     });
   }
 
@@ -562,6 +563,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
 
   const staccato =
     el.querySelector("notations > articulations > staccato") !== null;
+  const trill = el.querySelector("notations > ornaments > trill-mark") !== null;
 
   // Non-standard element emitted by the MIDI-to-MusicXML converter when the
   // actual note duration differs from the display duration (space to next onset).
@@ -583,6 +585,7 @@ function parseRawNote(el: Element): ParsedNote | ParsedRest {
     // running accidental state (and the key signature) are known.
     accidental: "none",
     staccato,
+    trill: trill || undefined,
     playbackDuration,
   };
   if (isGrace) {
@@ -705,6 +708,7 @@ function groupEvents(items: Array<ParsedNote | ParsedRest>): MeasureEvent[] {
       gracesBefore:
         pendingGraceGroups.length > 0 ? [...pendingGraceGroups] : undefined,
       playbackDuration: group[0].playbackDuration,
+      trill: group.some((n) => n.trill) || undefined,
     };
     pendingGraceGroups.length = 0;
     events.push(chord);
