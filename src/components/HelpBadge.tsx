@@ -19,15 +19,18 @@ const IS_MOBILE_BRAVE =
 type Tab = "about" | "bluetooth" | "debugging";
 
 const emptyLog = (): DebugBeatEvent[] => [];
+const noopClear = () => {};
 
 export function HelpBadge({
   theme,
   accent,
   getDebugLog = emptyLog,
+  clearDebugLog = noopClear,
 }: {
   theme: ThemeTokens;
   accent: string;
   getDebugLog?: () => DebugBeatEvent[];
+  clearDebugLog?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("about");
@@ -176,6 +179,7 @@ export function HelpBadge({
                   theme={theme}
                   accent={accent}
                   getDebugLog={getDebugLog}
+                  clearDebugLog={clearDebugLog}
                 />
               )}
             </div>

@@ -14,6 +14,8 @@ import {
 } from "../components/ResultModal";
 import {
   type PlayalongAttempt,
+  clearPlayalongAttempts,
+  deletePlayalongAttempt,
   loadPlayalongAttemptHistory,
   savePlayalongAttempt,
 } from "../hooks/use-file-history";
@@ -68,6 +70,8 @@ export function usePlayalongMode(
   const [resultModal, setResultModal] = useState<{
     history: PlayalongAttempt[];
     selectionLabel: string;
+    hash: string;
+    selectionKey: string;
   } | null>(null);
 
   const activeRef = useRef(false);
@@ -188,7 +192,12 @@ export function usePlayalongMode(
         ? `Measure ${range.from}`
         : `Measures ${range.from}–${range.to}`
       : "Full piece";
-    setResultModal({ history: allAttempts, selectionLabel });
+    setResultModal({
+      history: allAttempts,
+      selectionLabel,
+      hash,
+      selectionKey,
+    });
   }
 
   function stopPlayalong() {
@@ -535,6 +544,33 @@ export function usePlayalongMode(
               ctrl.player.seek(startBeat);
               ctrl.setCursor(startBeat, "jump");
             }}
+            onDeleteRow={(key) => {
+              const updatedHistory = deletePlayalongAttempt(
+                resultModal.hash,
+                resultModal.selectionKey,
+                key as number,
+              );
+              const remainingAtCurrentBpm = updatedHistory.filter(
+                (a) => a.bpm === currentBpm,
+              );
+              if (remainingAtCurrentBpm.length === 0) {
+                setResultModal(null);
+              } else {
+                setResultModal({ ...resultModal, history: updatedHistory });
+              }
+            }}
+            onClearRows={
+              currentBpm !== undefined
+                ? () => {
+                    clearPlayalongAttempts(
+                      resultModal.hash,
+                      resultModal.selectionKey,
+                      currentBpm,
+                    );
+                    setResultModal(null);
+                  }
+                : undefined
+            }
           />
         );
       })()

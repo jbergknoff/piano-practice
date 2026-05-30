@@ -164,7 +164,7 @@ export function ConnectionBadge({
 
   const backdropStyle = { ...dimBackdrop(), zIndex: 299 };
 
-  const closeBtnStyle = {
+  const closeButtonStyle = {
     background: "transparent",
     border: "none",
     color: theme.inkSoft,
@@ -241,7 +241,7 @@ export function ConnectionBadge({
               <button
                 type="button"
                 onClick={() => setShowUnsupportedModal(false)}
-                style={closeBtnStyle}
+                style={closeButtonStyle}
               >
                 ✕
               </button>
@@ -279,7 +279,7 @@ export function ConnectionBadge({
               <button
                 type="button"
                 onClick={() => setShowStatusModal(false)}
-                style={closeBtnStyle}
+                style={closeButtonStyle}
               >
                 ✕
               </button>

@@ -163,7 +163,7 @@ export function serifTitle(
   };
 }
 
-export function cornerBtnStyle(theme: ThemeTokens): JSX.CSSProperties {
+export function cornerButtonStyle(theme: ThemeTokens): JSX.CSSProperties {
   return {
     width: 38,
     height: 38,
@@ -180,7 +180,7 @@ export function cornerBtnStyle(theme: ThemeTokens): JSX.CSSProperties {
   };
 }
 
-export function miniBtnStyle(theme: ThemeTokens): JSX.CSSProperties {
+export function miniButtonStyle(theme: ThemeTokens): JSX.CSSProperties {
   return {
     width: 22,
     height: 22,

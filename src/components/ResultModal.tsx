@@ -1,6 +1,14 @@
 import type { ComponentChildren } from "preact";
 import type { ThemeTokens } from "../theme";
-import { dimBackdrop, FONT_SANS, glassPanel, hexA, serifTitle } from "../theme";
+import {
+  dimBackdrop,
+  FONT_SANS,
+  glassPanel,
+  hexA,
+  miniButtonStyle,
+  serifTitle,
+} from "../theme";
+import { TrashIcon } from "./icons";
 
 export function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
@@ -78,6 +86,8 @@ interface ResultModalProps {
     rows: ResultRow[];
   };
   onClose: () => void;
+  onDeleteRow?: (key: string | number) => void;
+  onClearRows?: () => void;
 }
 
 export function ResultModal({
@@ -87,7 +97,12 @@ export function ResultModal({
   latest,
   history,
   onClose,
+  onDeleteRow,
+  onClearRows,
 }: ResultModalProps) {
+  const effectiveGridTemplate = onDeleteRow
+    ? `${history.gridTemplate} 32px`
+    : history.gridTemplate;
   return (
     <>
       <div
@@ -232,13 +247,32 @@ export function ResultModal({
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div
               style={{
-                fontSize: 10,
-                color: theme.inkSoft,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
               }}
             >
-              {history.label}
+              <div
+                style={{
+                  fontSize: 10,
+                  color: theme.inkSoft,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {history.label}
+              </div>
+              {onClearRows && (
+                <button
+                  type="button"
+                  aria-label="Clear all"
+                  title="Clear all"
+                  onClick={onClearRows}
+                  style={miniButtonStyle(theme)}
+                >
+                  <TrashIcon size={13} />
+                </button>
+              )}
             </div>
             <div
               style={{
@@ -250,7 +284,7 @@ export function ResultModal({
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: history.gridTemplate,
+                  gridTemplateColumns: effectiveGridTemplate,
                   padding: "7px 12px",
                   background: hexA(theme.ink, 0.04),
                   borderBottom: `0.5px solid ${theme.border}`,
@@ -269,13 +303,14 @@ export function ResultModal({
                     {h}
                   </span>
                 ))}
+                {onDeleteRow && <span />}
               </div>
               {history.rows.map((row, i) => (
                 <div
                   key={row.key}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: history.gridTemplate,
+                    gridTemplateColumns: effectiveGridTemplate,
                     padding: "7px 12px",
                     borderBottom:
                       i < history.rows.length - 1
@@ -295,6 +330,16 @@ export function ResultModal({
                     {row.isLatest ? "Now" : row.when}
                   </span>
                   {row.cells}
+                  {onDeleteRow && (
+                    <button
+                      type="button"
+                      aria-label="Delete"
+                      onClick={() => onDeleteRow(row.key)}
+                      style={miniButtonStyle(theme)}
+                    >
+                      <TrashIcon size={12} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
