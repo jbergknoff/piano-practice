@@ -299,7 +299,7 @@ export function useWaitMode(
       return;
     }
 
-    if (msSinceAdvance < 100) {
+    if (msSinceAdvance < 50) {
       ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });
       return;
     }
