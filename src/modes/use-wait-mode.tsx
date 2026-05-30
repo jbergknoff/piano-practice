@@ -24,9 +24,17 @@ import type { ModeControl, ModeHandle } from "./mode-control";
 
 export type { DebugBeatEvent } from "../debug-log";
 
+// After advancing past a trilled wait point the user may continue executing the
+// trill (pressing the ornamental neighbour note) for this many milliseconds. Any
+// note that is ±2 semitones from any note in the trilled chord is treated as a
+// trill-neighbour and silently ignored rather than counted as a wrong note.
+const TRILL_NEIGHBOR_TOLERANCE_MS = 500;
+
 interface WaitPoint {
   beat: number;
   noteNumbers: Set<number>;
+  /** True when the chord at this wait point carries a trill-mark ornament. */
+  trill?: boolean;
 }
 
 export interface WaitModeSettings {
@@ -88,6 +96,12 @@ export function useWaitMode(
   const pointIndexRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
+  // When the most recently advanced wait point carried a trill-mark ornament,
+  // these track which MIDI note numbers were in that chord. Any note within
+  // ±2 semitones of those numbers is treated as a trill-neighbour (silently
+  // ignored) for TRILL_NEIGHBOR_TOLERANCE_MS after the advance.
+  const lastTrillNoteNumbersRef = useRef<Set<number>>(new Set());
+  const lastWasTrillRef = useRef(false);
   const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrongNoteCountRef = useRef(0);
   const attemptStartTimeRef = useRef<number | null>(null);
@@ -105,21 +119,30 @@ export function useWaitMode(
     if (!musicxml) {
       return [];
     }
-    const beatMap = new Map<number, Set<number>>();
+    const beatMap = new Map<
+      number,
+      { noteNumbers: Set<number>; trill?: boolean }
+    >();
     for (const note of musicxml.notes) {
       if (note.tieStop) {
         continue;
       }
       const existing = beatMap.get(note.startBeat);
       if (existing) {
-        existing.add(note.noteNumber);
+        existing.noteNumbers.add(note.noteNumber);
+        if (note.trill) {
+          existing.trill = true;
+        }
       } else {
-        beatMap.set(note.startBeat, new Set([note.noteNumber]));
+        beatMap.set(note.startBeat, {
+          noteNumbers: new Set([note.noteNumber]),
+          trill: note.trill || undefined,
+        });
       }
     }
     return Array.from(beatMap.entries())
       .sort(([a], [b]) => a - b)
-      .map(([beat, noteNumbers]) => ({ beat, noteNumbers }));
+      .map(([beat, { noteNumbers, trill }]) => ({ beat, noteNumbers, trill }));
   }, [control.musicxml]);
 
   const waitPointsRef = useRef(waitPoints);
@@ -137,6 +160,8 @@ export function useWaitMode(
     setCompletionModal(null);
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    lastTrillNoteNumbersRef.current.clear();
+    lastWasTrillRef.current = false;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
     if (wrongNoteTimerRef.current !== null) {
@@ -164,6 +189,8 @@ export function useWaitMode(
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    lastTrillNoteNumbersRef.current.clear();
+    lastWasTrillRef.current = false;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
 
@@ -285,6 +312,25 @@ export function useWaitMode(
       return;
     }
 
+    // When the most recently advanced wait point had a trill ornament, the user
+    // may still be executing the trill (pressing the ornamental neighbour note)
+    // after the advance fires. Tolerate notes within ±2 semitones of any note in
+    // that chord for TRILL_NEIGHBOR_TOLERANCE_MS so they are not counted as wrong.
+    if (
+      !expected.has(noteNumber) &&
+      lastWasTrillRef.current &&
+      msSinceAdvance < TRILL_NEIGHBOR_TOLERANCE_MS
+    ) {
+      const trillNotes = lastTrillNoteNumbersRef.current;
+      const isTrillNeighbor = [...trillNotes].some(
+        (n) => Math.abs(n - noteNumber) <= 2,
+      );
+      if (isTrillNeighbor) {
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "trill-neighbor" });
+        return;
+      }
+    }
+
     if (!expected.has(noteNumber)) {
       wrongNoteCountRef.current += 1;
       // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
@@ -314,6 +360,11 @@ export function useWaitMode(
 
     if (chordComplete) {
       lastAdvanceTimeRef.current = now;
+      // Remember whether this wait point had a trill so subsequent neighbour
+      // notes (pressed while executing the ornament) can be tolerated.
+      lastWasTrillRef.current = wp.trill === true;
+      lastTrillNoteNumbersRef.current =
+        wp.trill === true ? new Set(wp.noteNumbers) : new Set();
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
         // Attempt complete — compute score, persist, show modal.
@@ -444,6 +495,8 @@ export function useWaitMode(
     pointIndexRef.current = startIdx;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    lastTrillNoteNumbersRef.current.clear();
+    lastWasTrillRef.current = false;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
 
@@ -482,6 +535,8 @@ export function useWaitMode(
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
+    lastTrillNoteNumbersRef.current.clear();
+    lastWasTrillRef.current = false;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
     const points = waitPointsRef.current;

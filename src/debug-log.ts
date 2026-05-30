@@ -28,6 +28,7 @@ export interface WaitModeDebugEvent extends DebugEventBase {
     | "advance" // all expected notes held → advanced to next point
     | "wrong" // note not in expected chord (outside grace period)
     | "grace" // wrong note silently ignored within grace period
+    | "trill-neighbor" // neighbour note of previous trilled chord, silently ignored
     | "incomplete" // correct note pressed but not all expected notes held yet
     | "debounce" // within 100 ms anti-race window after last advance
     | "off"; // note-off event (no matching logic runs)
@@ -38,6 +39,7 @@ export interface PlayalongDebugEvent extends DebugEventBase {
   outcome:
     | "matched" // note matched a score note within the timing window
     | "extra" // note did not match any score note (wrong or mistimed)
+    | "trill-neighbor" // neighbour of a trilled score note, tolerated
     | "off" // note-off event
     | "inactive"; // playalong not in playing phase
 }

@@ -419,10 +419,31 @@ export function usePlayalongMode(
       }
     }
 
+    // When a chord has a trill ornament the user alternates between the written
+    // note and its ornamental neighbour (typically ±1–2 semitones). Those
+    // neighbour notes are not in the score, so they would normally count as
+    // extras. Instead, tolerate them for the full duration of the trilled note
+    // (from its startBeat until its startBeat + durationBeats).
+    let trillNeighbor = false;
+    if (!matched) {
+      for (const note of notes) {
+        if (
+          note.trill &&
+          Math.abs(note.noteNumber - noteNumber) >= 1 &&
+          Math.abs(note.noteNumber - noteNumber) <= 2 &&
+          beat >= note.startBeat - tol &&
+          beat <= note.startBeat + note.durationBeats + tol
+        ) {
+          trillNeighbor = true;
+          break;
+        }
+      }
+    }
+
     if (matched) {
       hitNoteIdsRef.current = newHits;
       setHitNoteIds(newHits);
-    } else {
+    } else if (!trillNeighbor) {
       extraNoteCountRef.current += 1;
     }
 
@@ -434,7 +455,7 @@ export function usePlayalongMode(
       measure,
       beat,
       held: [...held],
-      outcome: matched ? "matched" : "extra",
+      outcome: matched ? "matched" : trillNeighbor ? "trill-neighbor" : "extra",
     });
   }, []);
 

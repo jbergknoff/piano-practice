@@ -26,6 +26,8 @@ export interface PlaybackNote {
   voiceIndex: number; // note index within chord (0 = lowest pitch)
   /** True when this note is a grace note (appoggiatura or acciaccatura). */
   isGrace?: boolean;
+  /** True when the chord carrying this note has a trill-mark ornament. */
+  trill?: boolean;
 }
 
 export type { RepeatSection } from "./expand-repeats";
@@ -172,6 +174,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
             measureNumber: measure.number,
             noteIndex: event.noteIndex,
             voiceIndex,
+            trill: event.trill || undefined,
           });
         });
         beatCursor += displayBeats;
