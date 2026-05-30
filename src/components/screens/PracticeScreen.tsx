@@ -740,7 +740,12 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <HelpBadge theme={theme} accent={accent} getDebugLog={getDebugLog} clearDebugLog={clearDebugLog} />
+        <HelpBadge
+          theme={theme}
+          accent={accent}
+          getDebugLog={getDebugLog}
+          clearDebugLog={clearDebugLog}
+        />
         <ConnectionBadge
           theme={theme}
           accent={accent}

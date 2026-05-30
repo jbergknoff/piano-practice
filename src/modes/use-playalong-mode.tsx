@@ -192,7 +192,12 @@ export function usePlayalongMode(
         ? `Measure ${range.from}`
         : `Measures ${range.from}–${range.to}`
       : "Full piece";
-    setResultModal({ history: allAttempts, selectionLabel, hash, selectionKey });
+    setResultModal({
+      history: allAttempts,
+      selectionLabel,
+      hash,
+      selectionKey,
+    });
   }
 
   function stopPlayalong() {
