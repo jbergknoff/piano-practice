@@ -299,12 +299,20 @@ export function useWaitMode(
       return;
     }
 
-    if (msSinceAdvance < 50) {
+    // Check chord completion before debounce: if every expected note is already
+    // held (e.g. a grace note pre-filled one of them), the chord is
+    // unambiguously complete and should advance immediately even within the
+    // debounce window. Only debounce when the chord is still incomplete, to
+    // prevent a leftover key from the previous chord from accidentally
+    // triggering a premature advance.
+    const chordComplete = [...expected].every((n) => held.has(n));
+
+    if (!chordComplete && msSinceAdvance < 50) {
       ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });
       return;
     }
 
-    if ([...expected].every((n) => held.has(n))) {
+    if (chordComplete) {
       lastAdvanceTimeRef.current = now;
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
