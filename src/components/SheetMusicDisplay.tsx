@@ -1526,9 +1526,18 @@ function TimeSig({
 
 // Grace notes are rendered at 50% of full notehead size (font-size = 2 ×
 // staffSpace vs. 4 × staffSpace for regular notes). They always use filled
-// (black) noteheads, always stem up, and always show an eighth-note flag.
+// (black) noteheads, always stem up, and show a flag or beam matching their
+// notated type (eighth = 1 beam, 16th = 2 beams).
 // Acciaccatura (slash=true) additionally draws a diagonal slash through the stem.
 const GRACE_FONT_FACTOR = 2.0; // × staffSpace
+
+// Number of beam bars (or flag hooks) for a given grace note type.
+function graceNoteBeamCount(type: NoteType): number {
+  if (type === "16th") {
+    return 2;
+  }
+  return 1;
+}
 
 function GraceNoteGroupEl({
   graceGroup,
@@ -1634,7 +1643,7 @@ function GraceNoteGroupEl({
                 font-size={fontSize}
                 font-family={BRAVURA}
               >
-                {G.flag8thUp}
+                {notes[0]?.type === "16th" ? G.flag16thUp : G.flag8thUp}
               </text>
             )}
             {/* Acciaccatura slash */}
@@ -1757,6 +1766,32 @@ const ChordGroupEl = memo(function ChordGroupEl({
     graceStemTipOverride = Math.min(...tipYs);
   }
 
+  // Grace beams: one bar per hook (1 for eighth, 2 for 16th). Stems go up, so
+  // each successive bar steps downward from the primary (higher Y = lower on screen).
+  // Scaled to the smaller grace note size.
+  const graceBeamThickness = staffSpace * 0.5 * graceScale;
+  const graceBeamBarOffset =
+    graceBeamThickness + staffSpace * 0.25 * graceScale;
+  const graceBeamBarCount =
+    isGraceBeamed && gracesBefore
+      ? Math.max(
+          ...gracesBefore.map((gg) =>
+            graceNoteBeamCount(gg.notes[0]?.type ?? "eighth"),
+          ),
+        )
+      : 0;
+  // Pre-compute the Y coordinate of each beam bar so the JSX can key on the
+  // actual value rather than an array index.
+  const graceBeamYs: number[] =
+    graceStemTipOverride !== undefined
+      ? Array.from(
+          { length: graceBeamBarCount },
+          (_, barIndex) =>
+            // biome-ignore lint/style/noNonNullAssertion: narrowed by the !== undefined guard above
+            graceStemTipOverride! + barIndex * graceBeamBarOffset,
+        )
+      : [];
+
   // A staccato chord gets a single dot on the outer notehead away from the
   // stem (below the lowest note for stem-up, above the highest for stem-down),
   // not one dot per note. noteGeom is sorted low→high.
@@ -1797,17 +1832,21 @@ const ChordGroupEl = memo(function ChordGroupEl({
           stemTipOverride={graceStemTipOverride}
         />
       ))}
-      {/* Beam bar connecting multiple grace note groups */}
-      {isGraceBeamed && graceStemTipOverride !== undefined && (
+      {/* Beam bars connecting multiple grace note groups.
+          Grace note stems go upward, so successive bars step downward
+          (increasing Y) from the primary beam at the stem tip.
+          The count matches the grace note type: 1 for eighth, 2 for 16th. */}
+      {graceBeamYs.map((barY) => (
         <line
+          key={barY}
           x1={graceXs[0] + graceNrx}
           x2={graceXs[N - 1] + graceNrx}
-          y1={graceStemTipOverride}
-          y2={graceStemTipOverride}
+          y1={barY}
+          y2={barY}
           stroke={inkColor}
-          stroke-width={staffSpace * 0.5 * graceScale}
+          stroke-width={graceBeamThickness}
         />
-      )}
+      ))}
       {!hasNoStem && (
         <line
           x1={stemX}
