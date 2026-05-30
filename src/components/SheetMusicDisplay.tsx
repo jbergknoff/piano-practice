@@ -74,7 +74,7 @@ const G = {
   flag8thDown: "\uE241",
   flag16thUp: "\uE242",
   flag16thDown: "\uE243",
-  ornamentTrill: "\uE566",
+  ornamentTrill: "\uE560",
 } as const;
 
 // SMuFL time-signature digits are U+E080 (0) \u2026 U+E089 (9). Mapping each decimal
@@ -1911,12 +1911,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
         <circle cx={staccatoDot.x} cy={staccatoDot.y} r={1.6} fill={inkColor} />
       )}
       {group.trill && (
-        <text
-          x={x}
-          y={topY - staffSpace * 0.5}
-          text-anchor="middle"
-          fill={inkColor}
-        >
+        <text x={x} y={topY - staffSpace} text-anchor="middle" fill={inkColor}>
           {G.ornamentTrill}
         </text>
       )}

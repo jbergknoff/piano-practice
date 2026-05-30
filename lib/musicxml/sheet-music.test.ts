@@ -1258,3 +1258,53 @@ describe("resolveLayout", () => {
     expect(layout.measureXs[1]).toBe(318);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Trill-mark parsing
+// ---------------------------------------------------------------------------
+
+describe("trill-mark parsing", () => {
+  function makeMusicXml(noteContent: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise>
+  <part-list><score-part id="P1"><part-name/></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      ${noteContent}
+    </measure>
+  </part>
+</score-partwise>`;
+  }
+
+  const trillNoteXml = `
+    <note>
+      <pitch><step>C</step><octave>5</octave></pitch>
+      <duration>4</duration><voice>1</voice><type>quarter</type>
+      <notations><ornaments><trill-mark placement="above"/></ornaments></notations>
+    </note>
+    <note>
+      <pitch><step>E</step><octave>5</octave></pitch>
+      <duration>4</duration><voice>1</voice><type>quarter</type>
+    </note>`;
+
+  const score = parseScore(makeMusicXml(trillNoteXml));
+  const events = score.parts[0]?.measures[0]?.events ?? [];
+
+  test("a note with <trill-mark> produces a chord with trill: true", () => {
+    const first = events[0] as ChordGroup;
+    expect(first.trill).toBe(true);
+  });
+
+  test("a note without <trill-mark> produces a chord with trill undefined", () => {
+    const second = events[1] as ChordGroup;
+    expect(second.trill).toBeUndefined();
+  });
+});
