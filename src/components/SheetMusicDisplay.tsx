@@ -118,7 +118,7 @@ function computeBeamGroups(
   // Beam thickness matches BeamLines; stems extend to the beam center so the
   // flat stem cap is fully hidden inside the beam rather than peeking through
   // the outer edge.
-  const beamThickness = staffSpace * 0.5;
+  const beamThickness = staffSpace * 0.6;
 
   return groupBeamableEvents(events, beatDivisions).map((indices) => {
     const chords = indices.map((i) => events[i] as ChordGroup);
@@ -145,12 +145,7 @@ function computeBeamGroups(
         stemDir === "up"
           ? eventXs[indices[j]] + nrx
           : eventXs[indices[j]] - nrx,
-      // Extend each stem to the beam center (beamY ± beamThickness/2) so the
-      // flat stem cap is fully inside the beam and not visible above/below it.
-      stemTipY:
-        stemDir === "up"
-          ? beamY + beamThickness / 2
-          : beamY - beamThickness / 2,
+      stemTipY: beamY,
     }));
 
     return {
@@ -1754,7 +1749,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
     (_, gi) => x - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE,
   );
   // Grace note beams are always stem-up; thickness scaled to grace size.
-  const graceBeamThickness = staffSpace * 0.5 * graceScale;
+  const graceBeamThickness = staffSpace * 0.6 * graceScale;
   // When beaming multiple grace groups all stems extend to the same Y.
   let graceStemTipOverride: number | undefined;
   if (isGraceBeamed && gracesBefore) {
@@ -1765,9 +1760,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
         noteY(topNote.pitch, clef, staffBottomY, staffSpace) - graceStemLength
       );
     });
-    // Set to the beam center (outer edge + half thickness) so stems extend
-    // into the beam and the flat cap is fully covered by it.
-    graceStemTipOverride = Math.min(...tipYs) + graceBeamThickness / 2;
+    graceStemTipOverride = Math.min(...tipYs);
   }
 
   // A staccato chord gets a single dot on the outer notehead away from the
@@ -1980,7 +1973,7 @@ function BeamLines({
   staffSpace: number;
   inkColor: string;
 }) {
-  const beamThickness = staffSpace * 0.5;
+  const beamThickness = staffSpace * 0.6;
   // Gap between primary and secondary beam: beam thickness + small clearance
   const beamOffset = beamThickness + staffSpace * 0.25;
 
@@ -1990,19 +1983,9 @@ function BeamLines({
         const { eventIndices, stems, beamY, stemDir, types } = group;
         const x1 = stems[0].stemX;
         const x2 = stems[stems.length - 1].stemX;
-        // Position the beam so its outer (far-from-notehead) edge sits at
-        // beamY rather than its center. The SVG stroke is centered on the
-        // line's y coordinate, so shifting by half the thickness aligns the
-        // outer edge with beamY and makes the full beam thickness visible.
-        const primaryBeamCenterY =
-          stemDir === "up"
-            ? beamY + beamThickness / 2
-            : beamY - beamThickness / 2;
-        // Secondary beam sits closer to the noteheads, offset by the same gap.
+        const primaryBeamCenterY = beamY;
         const secondaryBeamCenterY =
-          stemDir === "up"
-            ? primaryBeamCenterY + beamOffset
-            : primaryBeamCenterY - beamOffset;
+          stemDir === "up" ? beamY + beamOffset : beamY - beamOffset;
         const secSegments = secondaryBeamSegments(types, stems);
         // Use first event index as stable key — unique within a measure.
         const groupKey = eventIndices[0];

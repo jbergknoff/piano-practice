@@ -24,7 +24,7 @@ const NOTEHEADS = [NOTEHEAD_WHOLE, NOTEHEAD_HALF, NOTEHEAD_BLACK];
 // Stroke widths that uniquely identify each kind of <line> (see the renderer).
 const STEM_WIDTH = "1.2";
 const LEDGER_WIDTH = "1";
-const BEAM_WIDTH = "5"; // staffSpace (10) * 0.5
+const BEAM_WIDTH = "6"; // staffSpace (10) * 0.6
 
 // Mount the component and return its root <svg> plus a few query helpers.
 function renderSheetMusic(
