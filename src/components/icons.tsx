@@ -25,63 +25,6 @@ export function StopIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function FocusIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 5H6v14h3" />
-      <path d="M15 5h3v14h-3" />
-    </svg>
-  );
-}
-
-export function PianoIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="2" y="5" width="20" height="16" rx="2" />
-      <line x1="9" y1="21" x2="9" y2="5" />
-      <line x1="15" y1="21" x2="15" y2="5" />
-      <rect
-        x="5.5"
-        y="5"
-        width="5"
-        height="9"
-        rx="1"
-        fill="currentColor"
-        stroke="none"
-      />
-      <rect
-        x="13.5"
-        y="5"
-        width="5"
-        height="9"
-        rx="1"
-        fill="currentColor"
-        stroke="none"
-      />
-    </svg>
-  );
-}
-
 export function ResetIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -120,26 +63,6 @@ export function GearIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function MicIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect x="9" y="3" width="6" height="12" rx="3" fill="currentColor" />
-      <path
-        d="M5 11a7 7 0 0014 0M12 18v3"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-      />
-    </svg>
-  );
-}
-
 export function BluetoothIcon({ size = 12 }: { size?: number }) {
   return (
     <svg
@@ -156,23 +79,6 @@ export function BluetoothIcon({ size = 12 }: { size?: number }) {
         stroke-linecap="round"
         stroke-linejoin="round"
       />
-    </svg>
-  );
-}
-
-export function MinusIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5" y="11" width="14" height="2" rx="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-export function PlusIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5" y="11" width="14" height="2" rx="1" fill="currentColor" />
-      <rect x="11" y="5" width="2" height="14" rx="1" fill="currentColor" />
     </svg>
   );
 }
