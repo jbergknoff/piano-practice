@@ -6,8 +6,6 @@ export interface FileHistory {
   mode: "wait" | "playalong" | "listen";
   selectedTrackIndices: number[];
   currentBeat: number;
-  noteSensitivityMilliseconds: number;
-  playalongTimingBeats?: number;
 }
 
 export async function hashFileBytes(bytes: Uint8Array): Promise<string> {

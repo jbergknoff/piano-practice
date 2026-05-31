@@ -23,6 +23,7 @@ import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
 import type { ThemeTokens } from "../../theme";
 import {
+  chipToggleButtonStyle,
   cornerButtonStyle,
   dimBackdrop,
   FONT_SANS,
@@ -79,10 +80,6 @@ interface PracticeScreenProps {
   onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
   onGoToLanding: () => void;
-  noteSensitivityMilliseconds: number;
-  onSensitivityChange: (ms: number) => void;
-  playalongTimingBeats: number;
-  onPlayalongTimingChange: (beats: number) => void;
   playalongPlayMusic: boolean;
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
   playalongMetronome: boolean;
@@ -116,10 +113,6 @@ export function PracticeScreen({
   onModeChange,
   onTrackToggle,
   onGoToLanding,
-  noteSensitivityMilliseconds,
-  onSensitivityChange,
-  playalongTimingBeats,
-  onPlayalongTimingChange,
   playalongPlayMusic,
   onPlayalongPlayMusicChange,
   playalongMetronome,
@@ -285,6 +278,10 @@ export function PracticeScreen({
     fileHash,
     appendToDebugLog,
   };
+
+  // These values are intentionally not user-facing; adjust here to tune behaviour.
+  const noteSensitivityMilliseconds = 150;
+  const playalongTimingBeats = 0.4;
 
   const wait = useWaitMode(control, {
     noteSensitivityMilliseconds,
@@ -612,116 +609,103 @@ export function PracticeScreen({
               )}
             </button>
           )}
-          {mode !== "wait" && !playalongActive && (() => {
-            const presetPercentages = [50, 75, 100] as const;
-            const presetBpms = presetPercentages.map((pct) =>
-              Math.round((baseBpm * pct) / 100),
-            );
-            const isCustomBpm = !presetBpms.includes(bpm);
-            return (
-              <div
-                style={{
-                  height: 38,
-                  padding: "0 8px",
-                  ...glassPanel(theme),
-                  borderRadius: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-                  boxSizing: "border-box",
-                }}
-              >
-                {/* BPM label — shows the custom value alongside the unit
-                    label when no preset is active. */}
-                <span
+          {mode !== "wait" &&
+            !playalongActive &&
+            (() => {
+              const presetPercentages = [50, 75, 100] as const;
+              const presetBpms = presetPercentages.map((pct) =>
+                Math.round((baseBpm * pct) / 100),
+              );
+              const isCustomBpm = !presetBpms.includes(bpm);
+              return (
+                <div
                   style={{
-                    fontSize: 10,
-                    color: theme.inkSoft,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    padding: "0 0 0 2px",
-                    userSelect: "none",
+                    height: 38,
+                    padding: "0 8px",
+                    ...glassPanel(theme),
+                    borderRadius: 12,
                     display: "flex",
                     alignItems: "center",
-                    gap: 3,
+                    gap: 4,
+                    boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+                    boxSizing: "border-box",
                   }}
                 >
-                  BPM
-                  {isCustomBpm && (
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 13,
-                        color: theme.ink,
-                      }}
-                    >
-                      {bpm}
-                    </span>
-                  )}
-                </span>
-                {/* Pencil — always visible; opens the free-input modal */}
-                <button
-                  type="button"
-                  onClick={() => setBpmInputModalOpen(true)}
-                  title="Set a custom tempo"
-                  style={{
-                    ...miniButtonStyle(theme),
-                    width: 20,
-                    height: 20,
-                    flexShrink: 0,
-                    marginRight: 2,
-                  }}
-                >
-                  <PencilIcon size={11} />
-                </button>
-                {/* Reset — only when a non-default tempo is active */}
-                {bpm !== baseBpm && (
+                  {/* BPM label — shows the custom value alongside the unit
+                    label when no preset is active. */}
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: theme.inkSoft,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      padding: "0 0 0 2px",
+                      userSelect: "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 3,
+                    }}
+                  >
+                    BPM
+                    {isCustomBpm && (
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 13,
+                          color: theme.ink,
+                        }}
+                      >
+                        {bpm}
+                      </span>
+                    )}
+                  </span>
+                  {/* Pencil — always visible; opens the free-input modal */}
                   <button
                     type="button"
-                    onClick={() => onBpmChange(baseBpm)}
-                    title="Reset to default tempo"
+                    onClick={() => setBpmInputModalOpen(true)}
+                    title="Set a custom tempo"
                     style={{
                       ...miniButtonStyle(theme),
-                      width: 20,
-                      height: 20,
                       flexShrink: 0,
                       marginRight: 2,
                     }}
                   >
-                    <ResetIcon size={11} />
+                    <PencilIcon size={11} />
                   </button>
-                )}
-                {/* Preset percentage buttons — hidden when a custom tempo is active */}
-                {!isCustomBpm && presetBpms.map((targetBpm, index) => {
-                  const isActive = bpm === targetBpm;
-                  return (
+                  {/* Reset — only when a non-default tempo is active */}
+                  {bpm !== baseBpm && (
                     <button
-                      key={presetPercentages[index]}
                       type="button"
-                      onClick={() => onBpmChange(targetBpm)}
+                      onClick={() => onBpmChange(baseBpm)}
+                      title="Reset to default tempo"
                       style={{
                         ...miniButtonStyle(theme),
-                        padding: "0 10px",
-                        minWidth: 44,
-                        background: isActive ? accent : undefined,
-                        border: isActive ? "none" : undefined,
-                        color: isActive ? "#FFF7E5" : theme.ink,
-                        fontWeight: isActive ? 600 : 400,
-                        fontSize: 13,
-                        boxShadow: isActive
-                          ? `0 2px 8px ${hexA(accent, 0.35)}`
-                          : undefined,
+                        flexShrink: 0,
+                        marginRight: 2,
                       }}
-                      aria-pressed={isActive}
                     >
-                      {targetBpm}
+                      <ResetIcon size={11} />
                     </button>
-                  );
-                })}
-              </div>
-            );
-          })()}
+                  )}
+                  {/* Preset percentage buttons — hidden when a custom tempo is active */}
+                  {!isCustomBpm &&
+                    presetBpms.map((targetBpm, index) => {
+                      const isActive = bpm === targetBpm;
+                      return (
+                        <button
+                          key={presetPercentages[index]}
+                          type="button"
+                          onClick={() => onBpmChange(targetBpm)}
+                          style={chipToggleButtonStyle(theme, accent, isActive)}
+                          aria-pressed={isActive}
+                        >
+                          {targetBpm}
+                        </button>
+                      );
+                    })}
+                </div>
+              );
+            })()}
         </div>
 
         {/* Mode selector group */}
@@ -1041,10 +1025,6 @@ export function PracticeScreen({
         tracks={tracks}
         selectedTracks={selectedTracks}
         onTrackToggle={onTrackToggle}
-        noteSensitivityMilliseconds={noteSensitivityMilliseconds}
-        onSensitivityChange={onSensitivityChange}
-        playalongTimingBeats={playalongTimingBeats}
-        onPlayalongTimingChange={onPlayalongTimingChange}
         playalongPlayMusic={playalongPlayMusic}
         onPlayalongPlayMusicChange={onPlayalongPlayMusicChange}
         playalongMetronome={playalongMetronome}

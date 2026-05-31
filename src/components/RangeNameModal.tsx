@@ -1,7 +1,13 @@
 import { useEffect, useRef } from "preact/hooks";
 import type { RangeEditorState } from "../hooks/use-custom-ranges";
 import type { ThemeTokens } from "../theme";
-import { dimBackdrop, FONT_SANS, glassPanel, serifTitle } from "../theme";
+import {
+  dimBackdrop,
+  FONT_SANS,
+  glassPanel,
+  modalActionButtonStyle,
+  serifTitle,
+} from "../theme";
 
 interface RangeNameModalProps {
   editor: RangeEditorState;
@@ -130,17 +136,7 @@ export function RangeNameModal({
             <button
               type="button"
               onClick={onCancel}
-              style={{
-                background: "transparent",
-                border: `0.5px solid ${theme.border}`,
-                color: theme.ink,
-                cursor: "pointer",
-                fontSize: 13,
-                padding: "8px 16px",
-                borderRadius: 10,
-                outline: "none",
-                fontFamily: FONT_SANS,
-              }}
+              style={modalActionButtonStyle(theme, "ghost")}
             >
               Cancel
             </button>
@@ -148,19 +144,7 @@ export function RangeNameModal({
               type="button"
               onClick={onSave}
               disabled={!canSave}
-              style={{
-                background: accent,
-                border: "none",
-                color: "#FFF7E5",
-                cursor: canSave ? "pointer" : "not-allowed",
-                opacity: canSave ? 1 : 0.4,
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "8px 16px",
-                borderRadius: 10,
-                outline: "none",
-                fontFamily: FONT_SANS,
-              }}
+              style={modalActionButtonStyle(theme, "accent", accent, canSave)}
             >
               Save
             </button>

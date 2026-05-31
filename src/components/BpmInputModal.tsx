@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
-import { dimBackdrop, FONT_SANS, glassPanel, serifTitle } from "../theme";
+import {
+  dimBackdrop,
+  FONT_SANS,
+  glassPanel,
+  modalActionButtonStyle,
+  serifTitle,
+} from "../theme";
 
 interface BpmInputModalProps {
   currentBpm: number;
@@ -116,17 +122,7 @@ export function BpmInputModal({
           <button
             type="button"
             onClick={onCancel}
-            style={{
-              background: "transparent",
-              border: `0.5px solid ${theme.border}`,
-              color: theme.ink,
-              cursor: "pointer",
-              fontSize: 13,
-              padding: "8px 16px",
-              borderRadius: 10,
-              outline: "none",
-              fontFamily: FONT_SANS,
-            }}
+            style={modalActionButtonStyle(theme, "ghost")}
           >
             Cancel
           </button>
@@ -134,19 +130,7 @@ export function BpmInputModal({
             type="button"
             onClick={handleConfirm}
             disabled={!isValid}
-            style={{
-              background: accent,
-              border: "none",
-              color: "#FFF7E5",
-              cursor: isValid ? "pointer" : "not-allowed",
-              opacity: isValid ? 1 : 0.4,
-              fontSize: 13,
-              fontWeight: 600,
-              padding: "8px 16px",
-              borderRadius: 10,
-              outline: "none",
-              fontFamily: FONT_SANS,
-            }}
+            style={modalActionButtonStyle(theme, "accent", accent, isValid)}
           >
             OK
           </button>

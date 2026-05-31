@@ -11,32 +11,12 @@ interface SettingsDrawerProps {
   tracks: TrackInfo[];
   selectedTracks: number[];
   onTrackToggle: (idx: number) => void;
-  noteSensitivityMilliseconds: number;
-  onSensitivityChange: (ms: number) => void;
-  playalongTimingBeats: number;
-  onPlayalongTimingChange: (beats: number) => void;
   playalongPlayMusic: boolean;
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
   playalongMetronome: boolean;
   onPlayalongMetronomeChange: (enabled: boolean) => void;
   playalongCountIn: boolean;
   onPlayalongCountInChange: (enabled: boolean) => void;
-}
-
-function sensitivityLabel(ms: number): string {
-  if (ms === 0) {
-    return "Strict";
-  }
-  if (ms <= 100) {
-    return "Low";
-  }
-  if (ms <= 250) {
-    return "Normal";
-  }
-  if (ms <= 400) {
-    return "High";
-  }
-  return "Lenient";
 }
 
 export function SettingsDrawer({
@@ -47,10 +27,6 @@ export function SettingsDrawer({
   tracks,
   selectedTracks,
   onTrackToggle,
-  noteSensitivityMilliseconds,
-  onSensitivityChange,
-  playalongTimingBeats,
-  onPlayalongTimingChange,
   playalongPlayMusic,
   onPlayalongPlayMusicChange,
   playalongMetronome,
@@ -158,72 +134,6 @@ export function SettingsDrawer({
             </div>
           </DrawerRow>
         )}
-
-        {/* Note sensitivity slider */}
-        <DrawerRow
-          theme={theme}
-          label="Note sensitivity"
-          hint={sensitivityLabel(noteSensitivityMilliseconds)}
-          onReset={() => onSensitivityChange(150)}
-        >
-          <input
-            type="range"
-            min={0}
-            max={500}
-            step={25}
-            value={noteSensitivityMilliseconds}
-            onInput={(e) =>
-              onSensitivityChange(Number((e.target as HTMLInputElement).value))
-            }
-            style={{ width: "100%", accentColor: accent }}
-          />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: 10,
-              color: theme.inkSoft,
-              marginTop: -2,
-            }}
-          >
-            <span>Strict</span>
-            <span>Lenient</span>
-          </div>
-        </DrawerRow>
-
-        {/* Playalong timing window */}
-        <DrawerRow
-          theme={theme}
-          label="Playalong timing window"
-          hint={`±${playalongTimingBeats.toFixed(2)} beats`}
-          onReset={() => onPlayalongTimingChange(0.4)}
-        >
-          <input
-            type="range"
-            min={0.1}
-            max={1.0}
-            step={0.05}
-            value={playalongTimingBeats}
-            onInput={(e) =>
-              onPlayalongTimingChange(
-                Number((e.target as HTMLInputElement).value),
-              )
-            }
-            style={{ width: "100%", accentColor: accent }}
-          />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: 10,
-              color: theme.inkSoft,
-              marginTop: -2,
-            }}
-          >
-            <span>Tight</span>
-            <span>Loose</span>
-          </div>
-        </DrawerRow>
 
         {/* Playalong: play music aloud (Web Audio) */}
         <DrawerRow

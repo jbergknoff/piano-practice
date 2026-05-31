@@ -54,7 +54,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/components/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
-| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
+| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
 ### Mode system
@@ -186,8 +186,14 @@ Always reach for the shared helpers in `src/theme.ts` before writing ad-hoc butt
 
 - **`cornerButtonStyle(theme)`** — 38×38 frosted-glass square with `radius.lg`. Used for the main nav/transport buttons (back, reset, play/pause, gear, help badge).
 - **`miniButtonStyle(theme)`** — 22×22, transparent background, no border, `radius.sm`. Used for small icon-only buttons inside panels or inline with other content (e.g. the trash icon in the debug log tab).
+- **`modalActionButtonStyle(theme, variant, accent?, enabled?)`** — text-label action buttons at the foot of modals. `"ghost"` for secondary (Cancel); `"accent"` for primary (OK/Save), passing the accent colour and an enabled flag.
+- **`chipToggleButtonStyle(theme, accent, isActive)`** — variable-width toggle pill for use inside chip containers (e.g. BPM preset buttons). Sizes by padding rather than fixed width; carries active-state highlight styling.
 
-Don't write one-off `width`/`height`/`borderRadius`/`background` combinations for buttons — if neither helper fits, consider whether `theme.ts` needs a new named helper rather than adding another ad-hoc style.
+Two rules that must hold:
+
+1. **Never write ad-hoc button styles.** If none of the helpers above fit, add a new named helper to `theme.ts` rather than writing inline `width`/`height`/`borderRadius`/`background`/`fontSize`/`padding`/`fontFamily` combinations directly on a `<button>`. Writing one-off combinations is what causes the next author to copy-paste them instead of reaching for a helper.
+
+2. **Never override a helper's own structural properties at the call site.** Spreading a helper and then immediately overriding its `width`, `height`, `borderRadius`, or `background` defeats the purpose. If the dimensions need to differ, either the helper is the wrong choice (pick a different one or add a new one) or the container should accommodate the standard size.
 
 ## Dependencies
 
