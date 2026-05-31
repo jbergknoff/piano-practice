@@ -1,6 +1,11 @@
 import type { TrackInfo } from "../../lib/midi/midi-to-musicxml";
-import type { ThemeTokens } from "../theme";
-import { serifTitle } from "../theme";
+import {
+  type ThemeTokens,
+  chipToggleButtonStyle,
+  glassPanel,
+  radius,
+  serifTitle,
+} from "../theme";
 import { ResetIcon } from "./icons";
 
 interface SettingsDrawerProps {
@@ -10,7 +15,7 @@ interface SettingsDrawerProps {
   accent: string;
   tracks: TrackInfo[];
   selectedTracks: number[];
-  onTrackToggle: (idx: number) => void;
+  onTrackToggle: (index: number) => void;
   playalongPlayMusic: boolean;
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
   playalongMetronome: boolean;
@@ -109,9 +114,9 @@ export function SettingsDrawer({
         {tracks.length > 1 && (
           <DrawerRow theme={theme} label="Tracks" hint="">
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {tracks.map((t) => (
+              {tracks.map((track) => (
                 <label
-                  key={t.index}
+                  key={track.index}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -122,12 +127,12 @@ export function SettingsDrawer({
                 >
                   <input
                     type="checkbox"
-                    checked={selectedTracks.includes(t.index)}
-                    onChange={() => onTrackToggle(t.index)}
+                    checked={selectedTracks.includes(track.index)}
+                    onChange={() => onTrackToggle(track.index)}
                     style={{ accentColor: accent }}
                   />
                   <span style={{ color: theme.ink }}>
-                    {t.name} ({t.noteCount} notes)
+                    {track.name} ({track.noteCount} notes)
                   </span>
                 </label>
               ))}
@@ -135,90 +140,112 @@ export function SettingsDrawer({
           </DrawerRow>
         )}
 
-        {/* Playalong: play music aloud (Web Audio) */}
-        <DrawerRow
-          theme={theme}
-          label="Playalong mode: play music aloud"
-          hint=""
-        >
-          <label
+        {/* Playalong Mode section */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <span
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              cursor: "pointer",
-              fontSize: 12,
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: theme.inkSoft,
             }}
           >
-            <input
-              type="checkbox"
-              checked={playalongPlayMusic}
-              onChange={(e) =>
-                onPlayalongPlayMusicChange(
-                  (e.target as HTMLInputElement).checked,
-                )
-              }
-              style={{ accentColor: accent }}
-            />
-            <span style={{ color: theme.inkSoft }}>
-              Play the song through the device speaker
-            </span>
-          </label>
-        </DrawerRow>
+            Playalong Mode
+          </span>
 
-        {/* Playalong: metronome via piano */}
-        <DrawerRow theme={theme} label="Playalong mode: metronome" hint="">
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              cursor: "pointer",
-              fontSize: 12,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={playalongMetronome}
-              onChange={(e) =>
-                onPlayalongMetronomeChange(
-                  (e.target as HTMLInputElement).checked,
-                )
-              }
-              style={{ accentColor: accent }}
-            />
-            <span style={{ color: theme.inkSoft }}>
-              Send hi-hat ticks through the piano on each beat
-            </span>
-          </label>
-        </DrawerRow>
+          <ToggleRow
+            theme={theme}
+            accent={accent}
+            label="Play music aloud"
+            options={[
+              { label: "On", value: true },
+              { label: "Off", value: false },
+            ]}
+            value={playalongPlayMusic}
+            onChange={onPlayalongPlayMusicChange}
+          />
 
-        {/* Playalong: count-in */}
-        <DrawerRow theme={theme} label="Playalong mode: count-in" hint="">
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              cursor: "pointer",
-              fontSize: 12,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={playalongCountIn}
-              onChange={(e) =>
-                onPlayalongCountInChange((e.target as HTMLInputElement).checked)
-              }
-              style={{ accentColor: accent }}
-            />
-            <span style={{ color: theme.inkSoft }}>
-              Count in before playback; when off, start on your first note
-            </span>
-          </label>
-        </DrawerRow>
+          <ToggleRow
+            theme={theme}
+            accent={accent}
+            label="Metronome"
+            options={[
+              { label: "On", value: true },
+              { label: "Off", value: false },
+            ]}
+            value={playalongMetronome}
+            onChange={onPlayalongMetronomeChange}
+          />
+
+          <ToggleRow
+            theme={theme}
+            accent={accent}
+            label="Start on"
+            options={[
+              { label: "Count-in", value: true },
+              { label: "First played note", value: false },
+            ]}
+            value={playalongCountIn}
+            onChange={onPlayalongCountInChange}
+          />
+        </div>
       </div>
     </>
+  );
+}
+
+function ToggleRow({
+  theme,
+  accent,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  theme: ThemeTokens;
+  accent: string;
+  label: string;
+  options: Array<{ label: string; value: boolean }>;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 500, color: theme.ink }}>
+        {label}
+      </span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          padding: "3px 4px",
+          ...glassPanel(theme),
+          borderRadius: radius.md,
+          flexShrink: 0,
+        }}
+      >
+        {options.map((option) => (
+          <button
+            key={String(option.value)}
+            type="button"
+            onClick={() => onChange(option.value)}
+            style={chipToggleButtonStyle(theme, accent, value === option.value)}
+            aria-pressed={value === option.value}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
