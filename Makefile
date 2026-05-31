@@ -64,7 +64,13 @@ update-screenshots: build node_modules tests/integration/results tests/integrati
 
 test: unit-test integration-test
 
+up:
+	docker compose up -d
+
 down:
 	docker compose down
+
+hot-reload: build
+	$(bun) build src/main.tsx --outdir dist --define 'GIT_COMMIT="$(shell git rev-parse --short HEAD)"' --watch
 
 pr-ready: format lint typecheck build test
