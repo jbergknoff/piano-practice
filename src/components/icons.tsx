@@ -1,4 +1,4 @@
-import { FONT_MONO } from "../theme";
+import { FONT_BRAVURA, FONT_MONO } from "../theme";
 
 export function PlayIcon({ size = 18 }: { size?: number }) {
   return (
@@ -158,33 +158,16 @@ export function OpenFileIcon({ size = 18 }: { size?: number }) {
         stroke-width="1.7"
         stroke-linejoin="round"
       />
-      {/* Note head */}
-      <ellipse
-        cx="10"
-        cy="16.5"
-        rx="2.2"
-        ry="1.6"
+      {/* Eighth note — notehead + stem + flag as a single SMuFL glyph (U+E1D6) */}
+      <text
+        x={10}
+        y={19}
+        font-family={FONT_BRAVURA}
+        font-size={9}
         fill="currentColor"
-        transform="rotate(-20 10 16.5)"
-      />
-      {/* Stem */}
-      <line
-        x1="12"
-        y1="15.8"
-        x2="12"
-        y2="10"
-        stroke="currentColor"
-        stroke-width="1.7"
-        stroke-linecap="round"
-      />
-      {/* Flag */}
-      <path
-        d="M12 10 C15 10.5 15.5 13 13 14.5"
-        stroke="currentColor"
-        stroke-width="1.7"
-        stroke-linecap="round"
-        fill="none"
-      />
+      >
+        {""}
+      </text>
     </svg>
   );
 }

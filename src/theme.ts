@@ -72,6 +72,7 @@ export const ACCENT_COLORS = [
 export const FONT_SANS = "'Geist', ui-sans-serif, system-ui, sans-serif";
 export const FONT_SERIF = "'Instrument Serif', serif"; // loaded italic-only
 export const FONT_MONO = "'Geist Mono', ui-monospace, monospace";
+export const FONT_BRAVURA = "Bravura, serif";
 
 // ── Design scales ─────────────────────────────────────────────────────────────
 // Shared vocabulary for spacing, radii, type sizes, and weights. Prefer these
