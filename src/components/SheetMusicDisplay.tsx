@@ -46,11 +46,11 @@ import type {
   ParsedScore,
   ResolvedLayout,
 } from "../../lib/musicxml/sheet-music-types";
-import { FONT_SANS } from "../theme";
+import { FONT_BRAVURA, FONT_SANS } from "../theme";
 
 // ── Bravura / SMuFL glyph constants ──────────────────────────────────────────
 
-const BRAVURA = "Bravura, serif";
+const BRAVURA = FONT_BRAVURA;
 
 // SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
 // meaningful when rendered with a SMuFL font such as Bravura.  Each glyph is
