@@ -672,8 +672,8 @@ export function PracticeScreen({
                   >
                     <PencilIcon size={11} />
                   </button>
-                  {/* Reset — only when a non-default tempo is active */}
-                  {bpm !== baseBpm && (
+                  {/* Reset — only when a custom (non-preset) tempo is active */}
+                  {isCustomBpm && (
                     <button
                       type="button"
                       onClick={() => onBpmChange(baseBpm)}

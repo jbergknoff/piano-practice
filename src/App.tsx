@@ -51,6 +51,12 @@ export function App() {
   const [midiData, setMidiData] = useState<MidiData | null>(null);
   // MusicXML loaded directly from a .musicxml/.xml file (no MIDI source).
   const [loadedXml, setLoadedXml] = useState<string | null>(null);
+  // True from first render until the auto-restore attempt completes (success
+  // or failure). Initialized by reading localStorage synchronously so the
+  // landing screen is never painted when a recent file is about to load.
+  const [isRestoringRecentFile, setIsRestoringRecentFile] = useState(
+    () => loadRecentFile() !== null,
+  );
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -213,6 +219,8 @@ export function App() {
       }
     } catch (err) {
       setFileError(String(err));
+    } finally {
+      setIsRestoringRecentFile(false);
     }
   }
 
@@ -253,6 +261,8 @@ export function App() {
       }
     } catch (err) {
       setFileError(String(err));
+    } finally {
+      setIsRestoringRecentFile(false);
     }
   }
 
@@ -362,6 +372,11 @@ export function App() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   if (midiData === null && loadedXml === null) {
+    // Suppress the landing screen until the auto-restore attempt settles so
+    // there is no flash of landing page when a recent file is about to load.
+    if (isRestoringRecentFile) {
+      return null;
+    }
     return (
       <LandingScreen
         theme={theme}
