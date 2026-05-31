@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          docker compose pull --quiet # Avoid the noisy logs when running `pr-ready`.
-          make pr-ready
+      - name: Pull Docker images
+        run: docker compose pull --quiet
+      - name: Build and test
+        run: make pr-ready
       - run: git diff --exit-code
       - run: make down
       - name: Print Playwright failure details
