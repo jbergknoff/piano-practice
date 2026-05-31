@@ -29,10 +29,9 @@ const C5 = 72;
  */
 async function disableCountIn(page: import("@playwright/test").Page) {
   await page.getByTitle("Settings").click();
-  const countInRow = page.getByText("Count in before playback", {
-    exact: false,
-  });
-  await countInRow.click();
+  // The "Start on" setting uses chip toggles; click "First played note" to
+  // disable count-in (the default is "Count-in").
+  await page.getByRole("button", { name: "First played note" }).click();
   // Close the Settings drawer via its ✕ button.
   await page.getByRole("button", { name: "Close settings" }).click();
   // Drawer slide-out is a 320ms CSS transition; wait until pointer events

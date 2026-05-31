@@ -67,9 +67,6 @@ export function App() {
     to: number;
   } | null>(null);
   const [mode, setMode] = useState<"wait" | "playalong" | "listen">("listen");
-  const [noteSensitivityMilliseconds, setNoteSensitivityMilliseconds] =
-    useState(150);
-  const [playalongTimingBeats, setPlayalongTimingBeats] = useState(0.4);
   const [playalongPlayMusic, setPlayalongPlayMusic] = useState(true);
   const [playalongMetronome, setPlayalongMetronome] = useState(false);
   const [playalongCountIn, setPlayalongCountIn] = useState(true);
@@ -209,10 +206,6 @@ export function App() {
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
         setMode(clampModeToBluetoothStatus(history.mode));
-        setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
-        if (history.playalongTimingBeats !== undefined) {
-          setPlayalongTimingBeats(history.playalongTimingBeats);
-        }
         setInitialBeat(history.currentBeat);
       } else {
         setBpm(tempo);
@@ -252,10 +245,6 @@ export function App() {
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
         setMode(clampModeToBluetoothStatus(history.mode));
-        setNoteSensitivityMilliseconds(history.noteSensitivityMilliseconds);
-        if (history.playalongTimingBeats !== undefined) {
-          setPlayalongTimingBeats(history.playalongTimingBeats);
-        }
         setInitialBeat(history.currentBeat);
       } else {
         setSelectedTracks(trackList.map((t) => t.index));
@@ -310,8 +299,6 @@ export function App() {
       mode,
       selectedTrackIndices: selectedTracks,
       currentBeat: currentBeatRef.current,
-      noteSensitivityMilliseconds,
-      playalongTimingBeats,
     };
     snapshotRef.current = { hash: fileHash, history };
     const timer = setTimeout(() => saveFileHistory(fileHash, history), 500);
@@ -325,8 +312,6 @@ export function App() {
     measureRange,
     mode,
     selectedTracks,
-    noteSensitivityMilliseconds,
-    playalongTimingBeats,
   ]);
 
   // Persist the latest cursor position when the page is closed or backgrounded.
@@ -407,10 +392,6 @@ export function App() {
       onModeChange={setMode}
       onTrackToggle={onTrackToggle}
       onGoToLanding={handleGoToLanding}
-      noteSensitivityMilliseconds={noteSensitivityMilliseconds}
-      onSensitivityChange={setNoteSensitivityMilliseconds}
-      playalongTimingBeats={playalongTimingBeats}
-      onPlayalongTimingChange={setPlayalongTimingBeats}
       playalongPlayMusic={playalongPlayMusic}
       onPlayalongPlayMusicChange={setPlayalongPlayMusic}
       playalongMetronome={playalongMetronome}

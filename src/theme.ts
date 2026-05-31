@@ -195,3 +195,72 @@ export function miniButtonStyle(theme: ThemeTokens): JSX.CSSProperties {
     outline: "none",
   };
 }
+
+/**
+ * Cancel / OK style buttons used at the foot of modals. Pass `"ghost"` for the
+ * secondary (Cancel) button and `"accent"` for the primary (OK/Save) button.
+ * The `enabled` flag drives cursor and opacity on the accent variant; it has no
+ * effect on ghost buttons, which are always interactive.
+ */
+export function modalActionButtonStyle(
+  theme: ThemeTokens,
+  variant: "ghost" | "accent",
+  accent = "",
+  enabled = true,
+): JSX.CSSProperties {
+  if (variant === "ghost") {
+    return {
+      background: "transparent",
+      border: `0.5px solid ${theme.border}`,
+      color: theme.ink,
+      cursor: "pointer",
+      fontSize: 13,
+      padding: "8px 16px",
+      borderRadius: 10,
+      outline: "none",
+      fontFamily: FONT_SANS,
+    };
+  }
+  return {
+    background: accent,
+    border: "none",
+    color: "#FFF7E5",
+    cursor: enabled ? "pointer" : "not-allowed",
+    opacity: enabled ? 1 : 0.4,
+    fontSize: 13,
+    fontWeight: 600,
+    padding: "8px 16px",
+    borderRadius: 10,
+    outline: "none",
+    fontFamily: FONT_SANS,
+  };
+}
+
+/**
+ * Variable-width toggle button for use inside chip/pill containers (e.g. the
+ * BPM chip). Unlike `miniButtonStyle` (fixed 22×22 icon button), this variant
+ * sizes itself by padding and carries active-state highlight styling.
+ */
+export function chipToggleButtonStyle(
+  theme: ThemeTokens,
+  accent: string,
+  isActive: boolean,
+): JSX.CSSProperties {
+  return {
+    height: 22,
+    padding: "0 10px",
+    minWidth: 44,
+    background: isActive ? accent : "transparent",
+    border: "none",
+    color: isActive ? "#FFF7E5" : theme.ink,
+    fontWeight: isActive ? 600 : 400,
+    fontSize: 13,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.sm,
+    outline: "none",
+    boxShadow: isActive ? `0 2px 8px ${hexA(accent, 0.35)}` : undefined,
+  };
+}
