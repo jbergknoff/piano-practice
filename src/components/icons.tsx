@@ -160,13 +160,13 @@ export function OpenFileIcon({ size = 18 }: { size?: number }) {
       />
       {/* Eighth note — notehead + stem + flag as a single SMuFL glyph (U+E1D6) */}
       <text
-        x={9}
-        y={19}
+        x={6}
+        y={16}
         font-family={FONT_BRAVURA}
-        font-size={13}
+        font-size={11}
         fill="currentColor"
       >
-        {""}
+        {"♫"}
       </text>
     </svg>
   );
