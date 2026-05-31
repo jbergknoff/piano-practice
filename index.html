@@ -6,15 +6,68 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>Piano Practice</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="preload" href="dist/bravura.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/geist-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/geist-500.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/geist-600.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/geist-700.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/geist-mono-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/geist-mono-500.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="dist/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @font-face {
         font-family: 'Bravura';
         src: url('dist/bravura.woff2') format('woff2');
         font-display: block;
+      }
+      @font-face {
+        font-family: 'Geist';
+        src: url('dist/geist-400.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Geist';
+        src: url('dist/geist-500.woff2') format('woff2');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Geist';
+        src: url('dist/geist-600.woff2') format('woff2');
+        font-weight: 600;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Geist';
+        src: url('dist/geist-700.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Geist Mono';
+        src: url('dist/geist-mono-400.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Geist Mono';
+        src: url('dist/geist-mono-500.woff2') format('woff2');
+        font-weight: 500;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Instrument Serif';
+        src: url('dist/instrument-serif-italic.woff2') format('woff2');
+        font-weight: 400;
+        font-style: italic;
+        font-display: swap;
       }
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body {

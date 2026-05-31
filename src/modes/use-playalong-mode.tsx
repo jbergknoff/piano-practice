@@ -470,9 +470,9 @@ export function usePlayalongMode(
         }
         const id = noteKey(note);
         if (hitNoteIds.has(id)) {
-          colors[id] = "#2e7d32"; // green: correctly played
+          colors[id] = "#43a047"; // green: correctly played
         } else if (note.startBeat < effectiveBeat - settings.timingBeats) {
-          colors[id] = "#c62828"; // red: missed
+          colors[id] = "#e53935"; // red: missed
         }
       }
       return colors;

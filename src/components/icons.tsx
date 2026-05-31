@@ -254,7 +254,7 @@ export function TrashIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export function UploadIcon({ size = 20 }: { size?: number }) {
+export function OpenFileIcon({ size = 18 }: { size?: number }) {
   return (
     <svg
       width={size}
@@ -263,19 +263,41 @@ export function UploadIcon({ size = 20 }: { size?: number }) {
       fill="none"
       aria-hidden="true"
     >
+      {/* Folder outline */}
       <path
-        d="M12 16V4M12 4l-5 5M12 4l5 5"
+        d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.5l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z"
         stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
+        stroke-width="1.7"
         stroke-linejoin="round"
       />
-      <path
-        d="M4 18v2a1 1 0 001 1h14a1 1 0 001-1v-2"
+      {/* Note head */}
+      <ellipse
+        cx="10"
+        cy="16.5"
+        rx="2.2"
+        ry="1.6"
+        fill="currentColor"
+        transform="rotate(-20 10 16.5)"
+      />
+      {/* Stem */}
+      <line
+        x1="12"
+        y1="15.8"
+        x2="12"
+        y2="10"
         stroke="currentColor"
-        stroke-width="1.8"
+        stroke-width="1.7"
         stroke-linecap="round"
+      />
+      {/* Flag */}
+      <path
+        d="M12 10 C15 10.5 15.5 13 13 14.5"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+        fill="none"
       />
     </svg>
   );
 }
+

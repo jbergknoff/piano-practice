@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
   advanceAudioTime,
-  blockExternalFonts,
   getHighlightedNoteIds,
   installMocks,
   loadFile,
@@ -13,7 +12,6 @@ import {
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
-  await blockExternalFonts(page);
   await mockCryptoSubtle(page);
   await installMocks(page);
   await page.goto("/");
@@ -53,7 +51,7 @@ test("hit notes are colored green in playalong mode", async ({ page }) => {
   // both starts playback and is matched against the first selection note.
   await sendNoteOn(page, E4);
 
-  // Wait for the green highlight on the first note (#2e7d32 is the
+  // Wait for the green highlight on the first note (#43a047 is the
   // playalong-hit color in use-playalong-mode.tsx).
   await page.waitForFunction(
     () => {
@@ -63,7 +61,7 @@ test("hit notes are colored green in playalong mode", async ({ page }) => {
       }
       // The Notehead text within the group is filled with the assigned color.
       const text = el.querySelector("text");
-      return text?.getAttribute("fill") === "#2e7d32";
+      return text?.getAttribute("fill") === "#43a047";
     },
     null,
     { timeout: 3_000 },
@@ -105,12 +103,12 @@ test("wrong notes do not get highlighted green", async ({ page }) => {
   await page.waitForTimeout(150);
 
   // Read each highlighted note's color directly from the DOM. The only green
-  // (#2e7d32) hit should still be E4 → m1-n0-v0 from the previous correct
+  // (#43a047) hit should still be E4 → m1-n0-v0 from the previous correct
   // press. The wrong note must not have added any new green hits.
   const greenIds = await page.evaluate(() =>
     Array.from(document.querySelectorAll("[data-color-id]"))
       .filter(
-        (el) => el.querySelector("text")?.getAttribute("fill") === "#2e7d32",
+        (el) => el.querySelector("text")?.getAttribute("fill") === "#43a047",
       )
       .map((el) => el.getAttribute("data-color-id") ?? "")
       .sort(),
@@ -171,12 +169,12 @@ test("completing a playthrough shows results modal with score; switching range c
   // (beat tolerance 0.4; cursor is at beat 0 exactly).
   await sendNoteOn(page, E4);
 
-  // p0-m1-n0-v0 (E4) must turn green (#2e7d32) immediately.
+  // p0-m1-n0-v0 (E4) must turn green (#43a047) immediately.
   await page.waitForFunction(
     () => {
       const element = document.querySelector('[data-color-id="p0-m1-n0-v0"]');
       return (
-        element?.querySelector("text")?.getAttribute("fill") === "#2e7d32"
+        element?.querySelector("text")?.getAttribute("fill") === "#43a047"
       );
     },
     null,
@@ -213,8 +211,8 @@ test("completing a playthrough shows results modal with score; switching range c
         '[data-color-id="p0-m1-n1-v0"]',
       );
       return (
-        hitNote?.querySelector("text")?.getAttribute("fill") === "#2e7d32" &&
-        missedNote?.querySelector("text")?.getAttribute("fill") === "#c62828"
+        hitNote?.querySelector("text")?.getAttribute("fill") === "#43a047" &&
+        missedNote?.querySelector("text")?.getAttribute("fill") === "#e53935"
       );
     },
     null,

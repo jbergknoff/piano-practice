@@ -40,8 +40,8 @@ import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
 import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import {
-  ChevronLeftIcon,
   GearIcon,
+  OpenFileIcon,
   PauseIcon,
   PencilIcon,
   PlayIcon,
@@ -79,7 +79,7 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
-  onGoToLanding: () => void;
+  onOpenFile: () => void;
   playalongPlayMusic: boolean;
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
   playalongMetronome: boolean;
@@ -112,7 +112,7 @@ export function PracticeScreen({
   onMeasureRangeChange,
   onModeChange,
   onTrackToggle,
-  onGoToLanding,
+  onOpenFile,
   playalongPlayMusic,
   onPlayalongPlayMusicChange,
   playalongMetronome,
@@ -532,11 +532,11 @@ export function PracticeScreen({
         >
           <button
             type="button"
-            onClick={onGoToLanding}
+            onClick={onOpenFile}
             style={cornerButtonStyle(theme)}
-            title="Back"
+            title="Open file"
           >
-            <ChevronLeftIcon />
+            <OpenFileIcon />
           </button>
           <button
             type="button"

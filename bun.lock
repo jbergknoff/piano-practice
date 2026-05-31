@@ -6,6 +6,9 @@
       "name": "piano-practice",
       "dependencies": {
         "@fontsource/bravura": "^5.2.5",
+        "@fontsource/geist": "^5.2.9",
+        "@fontsource/geist-mono": "^5.2.8",
+        "@fontsource/instrument-serif": "^5.2.8",
         "midi-file": "^1.2.4",
         "preact": "^10.25.4",
       },
@@ -40,6 +43,12 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@1.9.4", "", { "os": "win32", "cpu": "x64" }, "sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA=="],
 
     "@fontsource/bravura": ["@fontsource/bravura@5.2.5", "", {}, "sha512-iPFVa9Z/3nQcJs/6Fc9mKeEIDHZAOWHm6shFWYhdyNlmn5H1U4pnzOuWQATUJGWHziXpoIjtNoST4vHmfLiG/w=="],
+
+    "@fontsource/geist": ["@fontsource/geist@5.2.9", "", {}, "sha512-6QMur8g+3/9Uvfv/5chLJGBc9bYVzWijFrWEl0uZnitxp6wEPqKCJd9/GBlOk4dg/QSe96a3TUKEgmscFpE+4g=="],
+
+    "@fontsource/geist-mono": ["@fontsource/geist-mono@5.2.8", "", {}, "sha512-YqZUb3X42GjRaHkibUNyE8K4Rk9A6I9Ez81YpJYiuJN4ggmTW2ixoQpa9EWCPfXZtIsCQJTyrDoV9OJOZO/UcA=="],
+
+    "@fontsource/instrument-serif": ["@fontsource/instrument-serif@5.2.8", "", {}, "sha512-s+bkz+syj2rO00Rmq9g0P+PwuLig33DR1xDR8pTWmovH1pUjwnncrFk++q9mmOex8fUQ7oW80gPpPDaw7V1MMw=="],
 
     "@playwright/test": ["@playwright/test@1.60.0", "", { "dependencies": { "playwright": "1.60.0" }, "bin": { "playwright": "cli.js" } }, "sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag=="],
 

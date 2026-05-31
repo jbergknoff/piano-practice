@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { blockExternalFonts, loadFile, mockCryptoSubtle } from "./helpers";
+import { loadFile, mockCryptoSubtle } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
-  await blockExternalFonts(page);
   await mockCryptoSubtle(page);
   await page.goto("/");
 });

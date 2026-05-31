@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import {
-  blockExternalFonts,
   getHighlightedNoteIds,
   installMocks,
   loadFile,
@@ -12,7 +11,6 @@ import {
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
-  await blockExternalFonts(page);
   await mockCryptoSubtle(page);
   await installMocks(page);
   await page.goto("/");

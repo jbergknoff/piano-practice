@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { blockExternalFonts } from "./helpers";
+import { waitForFonts } from "./helpers";
+
+const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 test("landing screen shows file upload UI", async ({ page }) => {
-  await blockExternalFonts(page);
   await page.goto("/");
 
   // The hidden file input must exist and accept all supported formats
@@ -12,4 +13,13 @@ test("landing screen shows file upload UI", async ({ page }) => {
   expect(accept).toContain(".mid");
   expect(accept).toContain(".musicxml");
   expect(accept).toContain(".mxl");
+});
+
+test("landing screen visual", async ({ page }) => {
+  await page.goto("/");
+
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("landing-screen.png");
+  }
 });

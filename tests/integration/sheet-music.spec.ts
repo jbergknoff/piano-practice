@@ -1,15 +1,9 @@
 import { expect, test } from "@playwright/test";
-import {
-  blockExternalFonts,
-  loadFile,
-  mockCryptoSubtle,
-  waitForFonts,
-} from "./helpers";
+import { loadFile, mockCryptoSubtle, waitForFonts } from "./helpers";
 
 // Shared setup: must happen before goto() so init scripts and routes
 // are registered before the page begins loading.
 test.beforeEach(async ({ page }) => {
-  await blockExternalFonts(page);
   await mockCryptoSubtle(page);
   await page.goto("/");
 });
