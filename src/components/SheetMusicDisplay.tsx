@@ -115,6 +115,10 @@ function computeBeamGroups(
 ): BeamGroupData[] {
   const stemLength = staffSpace * 3;
   const nrx = staffSpace * 0.55;
+  // Beam thickness matches BeamLines; stems extend to the beam center so the
+  // flat stem cap is fully hidden inside the beam rather than peeking through
+  // the outer edge.
+  const beamThickness = staffSpace * 0.5;
 
   return groupBeamableEvents(events, beatDivisions).map((indices) => {
     const chords = indices.map((i) => events[i] as ChordGroup);
@@ -141,7 +145,12 @@ function computeBeamGroups(
         stemDir === "up"
           ? eventXs[indices[j]] + nrx
           : eventXs[indices[j]] - nrx,
-      stemTipY: beamY,
+      // Extend each stem to the beam center (beamY ± beamThickness/2) so the
+      // flat stem cap is fully inside the beam and not visible above/below it.
+      stemTipY:
+        stemDir === "up"
+          ? beamY + beamThickness / 2
+          : beamY - beamThickness / 2,
     }));
 
     return {
@@ -1744,6 +1753,8 @@ const ChordGroupEl = memo(function ChordGroupEl({
     { length: N },
     (_, gi) => x - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE,
   );
+  // Grace note beams are always stem-up; thickness scaled to grace size.
+  const graceBeamThickness = staffSpace * 0.5 * graceScale;
   // When beaming multiple grace groups all stems extend to the same Y.
   let graceStemTipOverride: number | undefined;
   if (isGraceBeamed && gracesBefore) {
@@ -1754,7 +1765,9 @@ const ChordGroupEl = memo(function ChordGroupEl({
         noteY(topNote.pitch, clef, staffBottomY, staffSpace) - graceStemLength
       );
     });
-    graceStemTipOverride = Math.min(...tipYs);
+    // Set to the beam center (outer edge + half thickness) so stems extend
+    // into the beam and the flat cap is fully covered by it.
+    graceStemTipOverride = Math.min(...tipYs) + graceBeamThickness / 2;
   }
 
   // A staccato chord gets a single dot on the outer notehead away from the
@@ -1805,7 +1818,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
           y1={graceStemTipOverride}
           y2={graceStemTipOverride}
           stroke={inkColor}
-          stroke-width={staffSpace * 0.5 * graceScale}
+          stroke-width={graceBeamThickness}
         />
       )}
       {!hasNoStem && (
@@ -1977,9 +1990,19 @@ function BeamLines({
         const { eventIndices, stems, beamY, stemDir, types } = group;
         const x1 = stems[0].stemX;
         const x2 = stems[stems.length - 1].stemX;
-        // Secondary beam sits closer to the noteheads than the primary beam.
-        const beam2Y =
-          stemDir === "up" ? beamY + beamOffset : beamY - beamOffset;
+        // Position the beam so its outer (far-from-notehead) edge sits at
+        // beamY rather than its center. The SVG stroke is centered on the
+        // line's y coordinate, so shifting by half the thickness aligns the
+        // outer edge with beamY and makes the full beam thickness visible.
+        const primaryBeamCenterY =
+          stemDir === "up"
+            ? beamY + beamThickness / 2
+            : beamY - beamThickness / 2;
+        // Secondary beam sits closer to the noteheads, offset by the same gap.
+        const secondaryBeamCenterY =
+          stemDir === "up"
+            ? primaryBeamCenterY + beamOffset
+            : primaryBeamCenterY - beamOffset;
         const secSegments = secondaryBeamSegments(types, stems);
         // Use first event index as stable key — unique within a measure.
         const groupKey = eventIndices[0];
@@ -1989,8 +2012,8 @@ function BeamLines({
             <line
               x1={x1}
               x2={x2}
-              y1={beamY}
-              y2={beamY}
+              y1={primaryBeamCenterY}
+              y2={primaryBeamCenterY}
               stroke={inkColor}
               stroke-width={beamThickness}
             />
@@ -1999,8 +2022,8 @@ function BeamLines({
                 key={seg.x1}
                 x1={seg.x1}
                 x2={seg.x2}
-                y1={beam2Y}
-                y2={beam2Y}
+                y1={secondaryBeamCenterY}
+                y2={secondaryBeamCenterY}
                 stroke={inkColor}
                 stroke-width={beamThickness}
               />
