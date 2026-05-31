@@ -173,9 +173,7 @@ test("completing a playthrough shows results modal with score; switching range c
   await page.waitForFunction(
     () => {
       const element = document.querySelector('[data-color-id="p0-m1-n0-v0"]');
-      return (
-        element?.querySelector("text")?.getAttribute("fill") === "#43a047"
-      );
+      return element?.querySelector("text")?.getAttribute("fill") === "#43a047";
     },
     null,
     { timeout: 3_000 },

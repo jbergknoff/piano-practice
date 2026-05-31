@@ -188,4 +188,3 @@ export function OpenFileIcon({ size = 18 }: { size?: number }) {
     </svg>
   );
 }
-
