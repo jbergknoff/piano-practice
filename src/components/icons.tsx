@@ -160,10 +160,10 @@ export function OpenFileIcon({ size = 18 }: { size?: number }) {
       />
       {/* Eighth note — notehead + stem + flag as a single SMuFL glyph (U+E1D6) */}
       <text
-        x={10}
+        x={9}
         y={19}
         font-family={FONT_BRAVURA}
-        font-size={9}
+        font-size={13}
         fill="currentColor"
       >
         {""}
