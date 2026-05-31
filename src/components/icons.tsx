@@ -25,81 +25,6 @@ export function StopIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function FocusIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 5H6v14h3" />
-      <path d="M15 5h3v14h-3" />
-    </svg>
-  );
-}
-
-export function ChevronLeftIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-export function PianoIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="2" y="5" width="20" height="16" rx="2" />
-      <line x1="9" y1="21" x2="9" y2="5" />
-      <line x1="15" y1="21" x2="15" y2="5" />
-      <rect
-        x="5.5"
-        y="5"
-        width="5"
-        height="9"
-        rx="1"
-        fill="currentColor"
-        stroke="none"
-      />
-      <rect
-        x="13.5"
-        y="5"
-        width="5"
-        height="9"
-        rx="1"
-        fill="currentColor"
-        stroke="none"
-      />
-    </svg>
-  );
-}
-
 export function ResetIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -138,26 +63,6 @@ export function GearIcon({ size = 16 }: { size?: number }) {
   );
 }
 
-export function MicIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect x="9" y="3" width="6" height="12" rx="3" fill="currentColor" />
-      <path
-        d="M5 11a7 7 0 0014 0M12 18v3"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-      />
-    </svg>
-  );
-}
-
 export function BluetoothIcon({ size = 12 }: { size?: number }) {
   return (
     <svg
@@ -174,23 +79,6 @@ export function BluetoothIcon({ size = 12 }: { size?: number }) {
         stroke-linecap="round"
         stroke-linejoin="round"
       />
-    </svg>
-  );
-}
-
-export function MinusIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5" y="11" width="14" height="2" rx="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-export function PlusIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5" y="11" width="14" height="2" rx="1" fill="currentColor" />
-      <rect x="11" y="5" width="2" height="14" rx="1" fill="currentColor" />
     </svg>
   );
 }
@@ -254,27 +142,13 @@ export function TrashIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export function UploadIcon({ size = 20 }: { size?: number }) {
+export function OpenFileIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width={size} height={size} viewBox="0 0 512 347.28" aria-hidden="true">
+      {/* Folder outline from https://uxwing.com/open-folder-outline-icon/ */}
       <path
-        d="M12 16V4M12 4l-5 5M12 4l5 5"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-      <path
-        d="M4 18v2a1 1 0 001 1h14a1 1 0 001-1v-2"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
+        d="M121.35 118.09l260.64 0 0 -31.3c0.73,-7.76 -4.67,-9.69 -11.24,-9.98 -3.77,-0.18 -7.97,-0.2 -11.76,-0.01l-150.17 0c-36.03,0 -43.17,-19.04 -49.96,-37.13 -3.87,-10.32 -7.56,-20.17 -22.65,-20.17l-104.38 0c-6.76,0 -12.33,5.57 -12.33,12.33l0 253.04 61.44 -139.95c6.5,-14.82 24.13,-26.83 40.41,-26.83zm280.14 0l86.05 0c19.11,0 29.72,16.28 21.83,34.29l0.03 0.01 -73.77 168.06c-6.5,14.83 -24.14,26.83 -40.41,26.83l-366.19 0c-7.65,0 -13.84,-2.56 -18.08,-6.74 -6.2,-5.19 -10.95,-17.13 -10.95,-25.05l0 -283.66c0,-17.52 14.31,-31.83 31.83,-31.83l104.38 0c28.52,0 34.55,16.06 40.86,32.89 4.46,11.89 9.15,24.4 31.75,24.4 51.2,0 102.48,0.33 153.67,0.02 3.05,-0.03 6.18,-0.06 9.1,0.07 16.41,0.76 30.82,5.4 29.88,29.41l0.02 31.3zm85.97 19.05l-366.19 0c-8.66,0 -19,7.42 -22.44,15.25l-73.77 168.06 -0.03 -0.01c-2.05,4.68 -1.46,7.8 4.07,7.8l366.2 0c8.66,0 18.99,-7.43 22.43,-15.26l73.77 -168.06c0.07,0.03 4.09,-7.78 -4.04,-7.78z"
+        fill="currentColor"
       />
     </svg>
   );

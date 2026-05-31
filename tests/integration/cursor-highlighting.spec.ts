@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
   advanceAudioTime,
-  blockExternalFonts,
   getHighlightedNoteIds,
   installMocks,
   loadFile,
@@ -16,7 +15,6 @@ import {
 const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 test.beforeEach(async ({ page }) => {
-  await blockExternalFonts(page);
   await mockCryptoSubtle(page);
   await installMocks(page);
   await page.goto("/");

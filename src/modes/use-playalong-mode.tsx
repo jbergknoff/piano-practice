@@ -115,24 +115,20 @@ export function usePlayalongMode(
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  // Reset when musicxml changes (new file loaded).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml is the trigger
+  // Reset when the measure range changes while in the "complete" phase.
+  // Without this, switching ranges after a completed playthrough applies the old
+  // hit set to the new range's notes, coloring all of them red.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measureRange is the trigger; stopPlayalong reads only from refs
   useEffect(() => {
-    countInCancelRef.current?.();
-    countInCancelRef.current = null;
-    uninstallAudioRoutingRef.current?.();
-    uninstallAudioRoutingRef.current = null;
-    uninstallCallbacksRef.current?.();
-    uninstallCallbacksRef.current = null;
-    stopMetronome();
-    phaseRef.current = "idle";
-    setPhase("idle");
-    hitNoteIdsRef.current = new Set();
-    setHitNoteIds(new Set());
-    extraNoteCountRef.current = 0;
-    heldNotesRef.current = new Set();
-    setCountInBeat(null);
-    setResultModal(null);
+    if (phaseRef.current === "complete") {
+      stopPlayalong();
+    }
+  }, [control.measureRange]);
+
+  // Reset when musicxml changes (new file loaded).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml is the trigger; resetPlayalongState reads only from refs
+  useEffect(() => {
+    resetPlayalongState();
   }, [control.musicxml]);
 
   // Notes in the current selection (not tie-continuations).
@@ -200,7 +196,11 @@ export function usePlayalongMode(
     });
   }
 
-  function stopPlayalong() {
+  // Resets all playalong state to "idle" without touching the player or cursor.
+  // Called by every path that needs to initialize or clear the session:
+  // stopPlayalong (user stop/reset/mode-switch), the musicxml effect (new file),
+  // and indirectly the measureRange effect (range change while complete).
+  function resetPlayalongState() {
     countInCancelRef.current?.();
     countInCancelRef.current = null;
     uninstallAudioRoutingRef.current?.();
@@ -208,18 +208,22 @@ export function usePlayalongMode(
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = null;
     stopMetronome();
-    const ctrl = controlRef.current;
-    ctrl.player.pause();
-    ctrl.setIsPlaying(false);
-    setCountInBeat(null);
-
     phaseRef.current = "idle";
     setPhase("idle");
     const empty = new Set<string>();
     hitNoteIdsRef.current = empty;
     setHitNoteIds(empty);
     extraNoteCountRef.current = 0;
+    heldNotesRef.current = new Set();
+    setCountInBeat(null);
+    setResultModal(null);
+  }
 
+  function stopPlayalong() {
+    resetPlayalongState();
+    const ctrl = controlRef.current;
+    ctrl.player.pause();
+    ctrl.setIsPlaying(false);
     const range = ctrl.measureRange;
     const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
     ctrl.player.seek(startBeat);
@@ -466,9 +470,9 @@ export function usePlayalongMode(
         }
         const id = noteKey(note);
         if (hitNoteIds.has(id)) {
-          colors[id] = "#2e7d32"; // green: correctly played
+          colors[id] = "#43a047"; // green: correctly played
         } else if (note.startBeat < effectiveBeat - settings.timingBeats) {
-          colors[id] = "#c62828"; // red: missed
+          colors[id] = "#e53935"; // red: missed
         }
       }
       return colors;

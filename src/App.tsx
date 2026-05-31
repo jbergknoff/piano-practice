@@ -47,6 +47,7 @@ function isMusicXmlFile(name: string): boolean {
 
 export function App() {
   // ── File / MIDI state ────────────────────────────────────────────────────
+  const openFileInputRef = useRef<HTMLInputElement>(null);
   const [midiData, setMidiData] = useState<MidiData | null>(null);
   // MusicXML loaded directly from a .musicxml/.xml file (no MIDI source).
   const [loadedXml, setLoadedXml] = useState<string | null>(null);
@@ -283,6 +284,10 @@ export function App() {
     setInitialBeat(0);
   }
 
+  function handleOpenFile() {
+    openFileInputRef.current?.click();
+  }
+
   // ── Persistence ──────────────────────────────────────────────────────────
   const snapshotRef = useRef<{ hash: string; history: FileHistory } | null>(
     null,
@@ -370,37 +375,46 @@ export function App() {
   }
 
   return (
-    <PracticeScreen
-      theme={theme}
-      accent={accent}
-      fileName={fileName ?? ""}
-      pieceTitle={pieceTitle}
-      musicxml={musicxml}
-      fileHash={fileHash}
-      bpm={bpm}
-      baseBpm={baseBpm}
-      measureRange={measureRange}
-      bluetooth={bluetooth}
-      noteEventDispatchRef={noteEventDispatchRef}
-      mode={mode}
-      tracks={tracks}
-      selectedTracks={selectedTracks}
-      initialBeat={initialBeat}
-      onCurrentBeatChange={handleCurrentBeatChange}
-      onBpmChange={handleBpmChange}
-      onMeasureRangeChange={setMeasureRange}
-      onModeChange={setMode}
-      onTrackToggle={onTrackToggle}
-      onGoToLanding={handleGoToLanding}
-      playalongPlayMusic={playalongPlayMusic}
-      onPlayalongPlayMusicChange={setPlayalongPlayMusic}
-      playalongMetronome={playalongMetronome}
-      onPlayalongMetronomeChange={setPlayalongMetronome}
-      playalongCountIn={playalongCountIn}
-      onPlayalongCountInChange={setPlayalongCountIn}
-      appendToDebugLog={appendToDebugLog}
-      getDebugLog={getDebugLog}
-      clearDebugLog={clearDebugLog}
-    />
+    <>
+      <input
+        ref={openFileInputRef}
+        type="file"
+        accept=".mid,.midi,audio/midi,.musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml"
+        onChange={handleFileInput}
+        style={{ display: "none" }}
+      />
+      <PracticeScreen
+        theme={theme}
+        accent={accent}
+        fileName={fileName ?? ""}
+        pieceTitle={pieceTitle}
+        musicxml={musicxml}
+        fileHash={fileHash}
+        bpm={bpm}
+        baseBpm={baseBpm}
+        measureRange={measureRange}
+        bluetooth={bluetooth}
+        noteEventDispatchRef={noteEventDispatchRef}
+        mode={mode}
+        tracks={tracks}
+        selectedTracks={selectedTracks}
+        initialBeat={initialBeat}
+        onCurrentBeatChange={handleCurrentBeatChange}
+        onBpmChange={handleBpmChange}
+        onMeasureRangeChange={setMeasureRange}
+        onModeChange={setMode}
+        onTrackToggle={onTrackToggle}
+        onOpenFile={handleOpenFile}
+        playalongPlayMusic={playalongPlayMusic}
+        onPlayalongPlayMusicChange={setPlayalongPlayMusic}
+        playalongMetronome={playalongMetronome}
+        onPlayalongMetronomeChange={setPlayalongMetronome}
+        playalongCountIn={playalongCountIn}
+        onPlayalongCountInChange={setPlayalongCountIn}
+        appendToDebugLog={appendToDebugLog}
+        getDebugLog={getDebugLog}
+        clearDebugLog={clearDebugLog}
+      />
+    </>
   );
 }

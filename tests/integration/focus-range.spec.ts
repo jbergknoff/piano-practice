@@ -1,7 +1,6 @@
 import { test } from "@playwright/test";
 import {
   advanceAudioTime,
-  blockExternalFonts,
   installMocks,
   loadFile,
   mockCryptoSubtle,
@@ -60,7 +59,6 @@ import {
 // a looping player would move the cursor forward after the fake-clock advance.
 
 test.beforeEach(async ({ page }) => {
-  await blockExternalFonts(page);
   await mockCryptoSubtle(page);
   await installMocks(page);
   await page.goto("/");

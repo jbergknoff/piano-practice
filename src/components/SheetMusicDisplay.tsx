@@ -46,11 +46,7 @@ import type {
   ParsedScore,
   ResolvedLayout,
 } from "../../lib/musicxml/sheet-music-types";
-import { FONT_SANS } from "../theme";
-
-// ── Bravura / SMuFL glyph constants ──────────────────────────────────────────
-
-const BRAVURA = "Bravura, serif";
+import { FONT_BRAVURA, FONT_SANS } from "../theme";
 
 // SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
 // meaningful when rendered with a SMuFL font such as Bravura.  Each glyph is
@@ -938,7 +934,7 @@ export function SheetMusicDisplay({
           overflow="visible"
           style={{
             display: "block",
-            fontFamily: BRAVURA,
+            fontFamily: FONT_BRAVURA,
             fontSize: fontSize,
           }}
           role="img"
@@ -1584,7 +1580,7 @@ function GraceNoteGroupEl({
                 fill={inkColor}
                 text-anchor="middle"
                 font-size={fontSize}
-                font-family={BRAVURA}
+                font-family={FONT_BRAVURA}
               >
                 {ACCIDENTAL_GLYPH[note.accidental]}
               </text>
@@ -1597,7 +1593,7 @@ function GraceNoteGroupEl({
               fill={inkColor}
               text-anchor="middle"
               font-size={fontSize}
-              font-family={BRAVURA}
+              font-family={FONT_BRAVURA}
             >
               {G.noteheadBlack}
             </text>
@@ -1632,7 +1628,7 @@ function GraceNoteGroupEl({
                 text-anchor="start"
                 fill={inkColor}
                 font-size={fontSize}
-                font-family={BRAVURA}
+                font-family={FONT_BRAVURA}
               >
                 {G.flag8thUp}
               </text>

@@ -11,6 +11,8 @@ services:
     command: bun scripts/serve.ts
     volumes:
       - ${PWD}:${PWD}
+    ports:
+      - "3456:3456"
     working_dir: ${PWD}
     healthcheck:
       test:

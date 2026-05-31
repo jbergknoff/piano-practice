@@ -4,6 +4,9 @@
   "type": "module",
   "dependencies": {
     "@fontsource/bravura": "^5.2.5",
+    "@fontsource/geist": "^5.2.9",
+    "@fontsource/geist-mono": "^5.2.8",
+    "@fontsource/instrument-serif": "^5.2.8",
     "midi-file": "^1.2.4",
     "preact": "^10.25.4"
   },

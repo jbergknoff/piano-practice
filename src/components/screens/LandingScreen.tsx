@@ -10,7 +10,7 @@ import {
 } from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
 import { HelpBadge } from "../HelpBadge";
-import { UploadIcon } from "../icons";
+import { OpenFileIcon } from "../icons";
 
 interface LandingScreenProps {
   theme: ThemeTokens;
@@ -149,7 +149,7 @@ export function LandingScreen({
               justifyContent: "center",
             }}
           >
-            <UploadIcon size={26} />
+            <OpenFileIcon size={26} />
           </div>
 
           <div style={{ textAlign: "center" }}>
