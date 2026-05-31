@@ -45,25 +45,6 @@ IDs are deterministic from the MusicXML structure. To highlight a note, pass `no
 - **Ties are parsed but not rendered.** Tie information is preserved in the data model (and drives playback duration), but no tie slur is drawn yet.
 - **The Bravura music font is bundled.** All notation — noteheads, accidentals, clefs, rests — is drawn with SMuFL glyphs from Bravura (`@fontsource/bravura`, OFL license), so rendering is consistent across platforms instead of depending on whatever music font the OS provides.
 
-## What Bravura is and is not used for
-
-Bravura is used for every notation element that has a **fixed shape**: noteheads (whole, half, black), accidentals (sharp, flat, natural), clefs, time-signature digits, rests, and flags. These all map to a single `<text>` element with the relevant SMuFL code point.
-
-**Stems and beams are SVG geometry (`<line>` elements), not Bravura glyphs.** This is intentional and matches every professional notation renderer:
-
-- **Stems** have variable length — they must extend from a notehead to a beam or flag tip, and that distance varies per note based on pitch and beaming context. A font glyph cannot be stretched to an arbitrary height without distortion.
-- **Beams** are thick horizontal bars of variable width spanning multiple noteheads. They can be angled (when beam groups span a wide pitch range), which no glyph can represent.
-
-Source confirmation across renderers:
-
-- **VexFlow** — [`src/stem.ts` `Stem.draw()`](https://github.com/vexflow/vexflow/blob/1a9f22388cb94b833ee9608497cb89730d5cfc28/src/stem.ts): renders the stem with `ctx.beginPath()` / `ctx.moveTo()` / `ctx.lineTo()` / `ctx.stroke()`. [`src/beam.ts` `drawBeamLines()`](https://github.com/vexflow/vexflow/blob/1a9f22388cb94b833ee9608497cb89730d5cfc28/src/beam.ts): draws each beam as a filled quadrilateral with `ctx.moveTo()` / `ctx.lineTo()` × 4 / `ctx.fill()`.
-- **OpenSheetMusicDisplay** — [`src/MusicalScore/Graphical/VexFlow/VexFlowMeasure.ts`](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay/blob/52e2ef5d2ae00778f9c6ba83dd8785c25cc35f1d/src/MusicalScore/Graphical/VexFlow/VexFlowMeasure.ts): stores `VF.Beam[]` objects and calls `beam.setContext(ctx).draw()`, delegating entirely to VexFlow's geometric beam rendering.
-- **LilyPond** — [`lily/beam.cc` `Beam::print()`](https://github.com/lilypond/lilypond/blob/178f86076a87f956b4736c21dd1bb235ff8197c7/lily/beam.cc): calls `Lookup::beam(slope, length, thickness, blot)` to produce a filled, optionally-slanted polygon stencil. Stems similarly use `make-line-stencil` (defined in [`scm/stencil.scm`](https://github.com/lilypond/lilypond/blob/178f86076a87f956b4736c21dd1bb235ff8197c7/scm/stencil.scm)) via Scheme callbacks on the Stem grob.
-
-SMuFL does define a `stem` glyph (U+E210) and related shapes, but these are ornamental segments for contemporary extended notation, not substitutes for rendered stems.
-
-**Beam geometry note:** SVG strokes are centered on their coordinates, so a beam `<line>` at `y=beamY` with `stroke-width=T` extends from `beamY - T/2` to `beamY + T/2`. The code positions beams so their *outer* edge (the side furthest from the noteheads) falls exactly at the outermost computed stem-tip Y (`beamY` in `BeamGroupData`), and draws the line at `beamY ± T/2` accordingly. Stems are extended by `T/2` past `beamY` so their flat caps land at the beam center and are fully hidden inside the beam.
-
 ## Cursor and scroll
 
 The playback cursor is an absolutely-positioned `<div>` (a sibling of the staves) moved horizontally with `transform: translateX(cursorX)`. Keeping it out of the SVG means the 60fps position updates during playback never re-render the note tree: an rAF loop reads the live beat and writes the transform directly.
