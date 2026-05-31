@@ -8,6 +8,7 @@ import {
   mockCryptoSubtle,
   sendNoteOff,
   sendNoteOn,
+  waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
 } from "./helpers";
 
@@ -140,4 +141,95 @@ test("count-in overlay is visible after starting playalong with count-in enabled
   await advanceAudioTime(page, 1.0);
   await page.waitForTimeout(100);
   expect(await getHighlightedNoteIds(page)).toEqual([]);
+});
+
+// c-major-melody.mid: 8 quarter notes, 2 measures of 4/4 at 120 BPM.
+//
+// Beat layout (all voices 0, part 0):
+//   m1-n0: E4 (64)  beat 0    m2-n0: G4 (67)  beat 4
+//   m1-n1: C5 (72)  beat 1    m2-n1: C5 (72)  beat 5
+//   m1-n2: E5 (76)  beat 2    m2-n2: D5 (74)  beat 6
+//   m1-n3: B4 (71)  beat 3    m2-n3: F4 (65)  beat 7
+//
+// Timing: 1 beat = 0.5 s. Total piece = 8 beats = 4.0 s.
+// LOOKAHEAD = 0.05 s → onEnd fires when fake time ≥ 4.05 s.
+//
+// Score formula (F1): round((2 × matched) / (expected + matched + extra) × 100)
+// Hitting only E4: matched=1, extra=0, expected=8 → round(200/9) = 22%.
+test("completing a playthrough shows results modal with score; switching range clears all highlights", async ({
+  page,
+}) => {
+  await loadFile(page, "c-major-melody.mid");
+  await waitForMockBluetoothConnected(page);
+  await disableCountIn(page);
+
+  await page.getByRole("button", { name: "Playalong" }).click();
+  // Play starts the session in "waiting-for-note" phase (count-in disabled).
+  await page.getByTitle("Play").click();
+
+  // Pressing E4 both kicks off playback and scores the first note as a hit
+  // (beat tolerance 0.4; cursor is at beat 0 exactly).
+  await sendNoteOn(page, E4);
+
+  // p0-m1-n0-v0 (E4) must turn green (#2e7d32) immediately.
+  await page.waitForFunction(
+    () => {
+      const element = document.querySelector('[data-color-id="p0-m1-n0-v0"]');
+      return (
+        element?.querySelector("text")?.getAttribute("fill") === "#2e7d32"
+      );
+    },
+    null,
+    { timeout: 3_000 },
+  );
+
+  await sendNoteOff(page, E4);
+
+  // Advance the fake AudioContext clock past the end of the piece. The player's
+  // rAF tick sees elapsed beat ≥ 8 (totalBeats) and fires onEnd.
+  await advanceAudioTime(page, 4.5);
+
+  // The results modal must appear with "Full piece complete" as the heading.
+  await expect(page.getByText("Full piece complete")).toBeVisible({
+    timeout: 3_000,
+  });
+  // One of eight notes was hit → F1 score = 22%. The score chip renders in
+  // both the "latest" header and the history row, so scope to the first match.
+  await expect(page.getByText("22%").first()).toBeVisible();
+
+  // Dismiss the modal. The "complete" phase is intentionally kept so the
+  // green/red review colors remain visible for the user.
+  await page.getByRole("button", { name: "Keep practicing" }).click();
+  await expect(page.getByText("Full piece complete")).not.toBeVisible({
+    timeout: 2_000,
+  });
+
+  // Confirm the review colors are still present: the hit note (E4) is green
+  // and the next missed note (C5) is red.
+  await page.waitForFunction(
+    () => {
+      const hitNote = document.querySelector('[data-color-id="p0-m1-n0-v0"]');
+      const missedNote = document.querySelector(
+        '[data-color-id="p0-m1-n1-v0"]',
+      );
+      return (
+        hitNote?.querySelector("text")?.getAttribute("fill") === "#2e7d32" &&
+        missedNote?.querySelector("text")?.getAttribute("fill") === "#c62828"
+      );
+    },
+    null,
+    { timeout: 2_000 },
+  );
+
+  // Switching to "First half" (measure 1) while the phase is still "complete"
+  // must reset the view completely. Before the fix, the stale hit set was
+  // applied to the new range, coloring all its notes red.
+  //
+  // "First half" of a 2-measure piece → { from: 1, to: 1 }, startBeat = 0.
+  // After reset the idle listen-mode highlight guard skips beat 0, so the
+  // expected highlighted set is empty.
+  await page.getByTitle("Select range").click();
+  await page.getByRole("button", { name: "First half" }).click();
+
+  await waitForHighlightedNoteIds(page, []);
 });
