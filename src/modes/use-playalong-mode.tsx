@@ -21,8 +21,8 @@ import {
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
 import { blurFilter } from "../theme";
-import type { ModeControl, ModeHandle } from "./mode-control";
-import { useStableNoteColors } from "./note-colors";
+import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
+import { useStableHighlights } from "./note-colors";
 
 export type PlayalongPhase =
   | "idle"
@@ -63,6 +63,9 @@ export function usePlayalongMode(
 ): PlayalongModeHandle {
   const [phase, setPhase] = useState<PlayalongPhase>("idle");
   const [hitNoteIds, setHitNoteIds] = useState<ReadonlySet<string>>(new Set());
+  const [playerMarkers, setPlayerMarkers] = useState<
+    ReadonlyArray<NoteHighlight>
+  >([]);
   const [countInBeat, setCountInBeat] = useState<{
     beat: number;
     timeSigNum: number;
@@ -79,6 +82,7 @@ export function usePlayalongMode(
   const hitNoteIdsRef = useRef<Set<string>>(new Set());
   const extraNoteCountRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
+  const playerMarkersRef = useRef<NoteHighlight[]>([]);
   const countInCancelRef = useRef<(() => void) | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
   const uninstallAudioRoutingRef = useRef<(() => void) | null>(null);
@@ -215,6 +219,8 @@ export function usePlayalongMode(
     setHitNoteIds(empty);
     extraNoteCountRef.current = 0;
     heldNotesRef.current = new Set();
+    playerMarkersRef.current = [];
+    setPlayerMarkers([]);
     setCountInBeat(null);
     setResultModal(null);
   }
@@ -299,6 +305,8 @@ export function usePlayalongMode(
     hitNoteIdsRef.current = empty;
     setHitNoteIds(empty);
     extraNoteCountRef.current = 0;
+    playerMarkersRef.current = [];
+    setPlayerMarkers([]);
     ctrl.setIsPlaying(true);
 
     if (!settingsRef.current.countIn) {
@@ -430,6 +438,18 @@ export function usePlayalongMode(
       extraNoteCountRef.current += 1;
     }
 
+    const nextMarkers: NoteHighlight[] = [
+      ...playerMarkersRef.current,
+      {
+        kind: "marker",
+        noteNumber,
+        beat,
+        color: matched ? "#43a047" : "#e53935",
+      },
+    ];
+    playerMarkersRef.current = nextMarkers;
+    setPlayerMarkers(nextMarkers);
+
     ctrl.appendToDebugLog({
       mode: "playalong",
       t: now,
@@ -442,13 +462,17 @@ export function usePlayalongMode(
     });
   }, []);
 
-  // Note colors: green for hits, red for missed past notes (after tolerance);
-  // during idle phase, fall back to "highlight currently sounding notes".
-  const computedColors = useMemo<Record<string, string>>(() => {
+  // Score-note highlights: green for hits, red for missed past notes (after
+  // tolerance); during idle phase, fall back to "highlight currently sounding
+  // notes". The player-marker entries are appended below (they live alongside
+  // these in the same noteHighlights stream).
+  const computedHighlights = useMemo<ReadonlyArray<NoteHighlight>>(() => {
     const musicxml = control.musicxml;
     if (!musicxml) {
-      return {};
+      return playerMarkers;
     }
+
+    const scoreHighlights: NoteHighlight[] = [];
 
     if (phase === "playing" || phase === "complete") {
       const range = control.measureRange;
@@ -460,7 +484,6 @@ export function usePlayalongMode(
       // In complete phase, treat all selection notes as past.
       const effectiveBeat =
         phase === "complete" ? Number.POSITIVE_INFINITY : control.currentBeat;
-      const colors: Record<string, string> = {};
       for (const note of musicxml.notes) {
         if (note.tieStop) {
           continue;
@@ -470,20 +493,30 @@ export function usePlayalongMode(
         }
         const id = noteKey(note);
         if (hitNoteIds.has(id)) {
-          colors[id] = "#43a047"; // green: correctly played
+          scoreHighlights.push({ kind: "score", id, color: "#43a047" });
         } else if (note.startBeat < effectiveBeat - settings.timingBeats) {
-          colors[id] = "#e53935"; // red: missed
+          scoreHighlights.push({ kind: "score", id, color: "#e53935" });
         }
       }
-      return colors;
+    } else if (control.currentBeat > 0) {
+      // Idle / counting-in: behave like listen mode — highlight sounding notes.
+      // Skip when the cursor is at the very start so the first note doesn't
+      // pre-highlight before playback begins.
+      for (const note of musicxml.notes) {
+        if (
+          note.startBeat <= control.currentBeat &&
+          control.currentBeat < note.startBeat + note.durationBeats
+        ) {
+          scoreHighlights.push({
+            kind: "score",
+            id: noteKey(note),
+            color: settings.accent,
+          });
+        }
+      }
     }
 
-    // Idle / counting-in: behave like listen mode — highlight sounding notes.
-    return currentlySoundingColors(
-      musicxml.notes,
-      control.currentBeat,
-      settings.accent,
-    );
+    return scoreHighlights.concat(playerMarkers);
   }, [
     control.musicxml,
     control.measureRange,
@@ -491,10 +524,11 @@ export function usePlayalongMode(
     control.currentBeat,
     phase,
     hitNoteIds,
+    playerMarkers,
     settings.timingBeats,
     settings.accent,
   ]);
-  const noteColors = useStableNoteColors(computedColors);
+  const noteHighlights = useStableHighlights(computedHighlights);
 
   const overlay =
     phase === "counting-in" ? (
@@ -581,7 +615,7 @@ export function usePlayalongMode(
     : null;
 
   return {
-    noteColors,
+    noteHighlights,
     activeRef,
     onNoteEvent,
     activate,
@@ -593,28 +627,6 @@ export function usePlayalongMode(
     modal,
     phase,
   };
-}
-
-function currentlySoundingColors(
-  notes: PlaybackNote[],
-  currentBeat: number,
-  accent: string,
-): Record<string, string> {
-  if (currentBeat === 0) {
-    return {};
-  }
-  const colors: Record<string, string> = {};
-  for (const note of notes) {
-    if (
-      note.startBeat <= currentBeat &&
-      currentBeat < note.startBeat + note.durationBeats
-    ) {
-      colors[
-        `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-      ] = accent;
-    }
-  }
-  return colors;
 }
 
 function CountInOverlay({

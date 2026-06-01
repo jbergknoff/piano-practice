@@ -450,7 +450,7 @@ export function PracticeScreen({
       {musicxml ? (
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
-          noteColors={active.noteColors}
+          noteHighlights={active.noteHighlights}
           accentColor={accent}
           inkColor={theme.ink}
           focusRange={measureRange}

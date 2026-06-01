@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from "preact/hooks";
-import type { ModeControl, ModeHandle } from "./mode-control";
-import { useStableNoteColors } from "./note-colors";
+import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
+import { useStableHighlights } from "./note-colors";
 
 export interface ListenModeSettings {
   accent: string;
@@ -56,29 +56,31 @@ export function useListenMode(
 
   const onNoteEvent = useCallback(() => {}, []);
 
-  const computedColors = useMemo<Record<string, string>>(() => {
+  const computedHighlights = useMemo<ReadonlyArray<NoteHighlight>>(() => {
     const musicxml = control.musicxml;
     const currentBeat = control.currentBeat;
     if (!musicxml || currentBeat === 0) {
-      return {};
+      return [];
     }
-    const colors: Record<string, string> = {};
+    const highlights: NoteHighlight[] = [];
     for (const note of musicxml.notes) {
       if (
         note.startBeat <= currentBeat &&
         currentBeat < note.startBeat + note.durationBeats
       ) {
-        colors[
-          `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-        ] = settings.accent;
+        highlights.push({
+          kind: "score",
+          id: `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
+          color: settings.accent,
+        });
       }
     }
-    return colors;
+    return highlights;
   }, [control.musicxml, control.currentBeat, settings.accent]);
-  const noteColors = useStableNoteColors(computedColors);
+  const noteHighlights = useStableHighlights(computedHighlights);
 
   return {
-    noteColors,
+    noteHighlights,
     activeRef,
     onNoteEvent,
     activate,

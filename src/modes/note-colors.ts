@@ -1,15 +1,28 @@
 import { useRef } from "preact/hooks";
+import type { NoteHighlight } from "./mode-control";
 
-function sameColors(
-  a: Record<string, string>,
-  b: Record<string, string>,
-): boolean {
-  const aKeys = Object.keys(a);
-  if (aKeys.length !== Object.keys(b).length) {
+function sameHighlight(a: NoteHighlight, b: NoteHighlight): boolean {
+  if (a.kind !== b.kind || a.color !== b.color) {
     return false;
   }
-  for (const key of aKeys) {
-    if (a[key] !== b[key]) {
+  if (a.kind === "score" && b.kind === "score") {
+    return a.id === b.id;
+  }
+  if (a.kind === "marker" && b.kind === "marker") {
+    return a.noteNumber === b.noteNumber && a.beat === b.beat;
+  }
+  return false;
+}
+
+function sameHighlights(
+  a: ReadonlyArray<NoteHighlight>,
+  b: ReadonlyArray<NoteHighlight>,
+): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (!sameHighlight(a[i], b[i])) {
       return false;
     }
   }
@@ -17,18 +30,18 @@ function sameColors(
 }
 
 /**
- * Preserve the previous note-color map reference when its contents are
- * unchanged. The mode hooks recompute the map whenever currentBeat advances
- * (many times per second), but the active-note set only changes a few times per
- * second. Returning a stable reference lets the memoized NoteColorOverlay skip
- * re-rendering between actual color changes.
+ * Preserve the previous highlight-list reference when its contents are
+ * unchanged. The mode hooks recompute the list whenever currentBeat advances
+ * (many times per second), but the visible set only changes a few times per
+ * second. Returning a stable reference lets the memoized overlay components in
+ * SheetMusicDisplay skip re-rendering between actual changes.
  */
-export function useStableNoteColors(
-  colors: Record<string, string>,
-): Record<string, string> {
-  const ref = useRef(colors);
-  if (ref.current !== colors && !sameColors(ref.current, colors)) {
-    ref.current = colors;
+export function useStableHighlights(
+  highlights: ReadonlyArray<NoteHighlight>,
+): ReadonlyArray<NoteHighlight> {
+  const ref = useRef(highlights);
+  if (ref.current !== highlights && !sameHighlights(ref.current, highlights)) {
+    ref.current = highlights;
   }
   return ref.current;
 }
