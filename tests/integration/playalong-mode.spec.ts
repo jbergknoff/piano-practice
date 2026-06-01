@@ -125,13 +125,13 @@ test("wrong notes do not get highlighted green", async ({ page }) => {
 // Green (#43a047) is "matched within timing tolerance"; red (#e53935) is not.
 async function readPlayerMarkers(page: import("@playwright/test").Page) {
   return await page.evaluate(() =>
-    Array.from(
-      document.querySelectorAll("[data-player-marker]"),
-    ).map((element) => ({
-      pitch: Number(element.getAttribute("data-marker-pitch")),
-      beat: Number(element.getAttribute("data-marker-beat")),
-      color: element.getAttribute("fill") ?? "",
-    })),
+    Array.from(document.querySelectorAll("[data-player-marker]")).map(
+      (element) => ({
+        pitch: Number(element.getAttribute("data-marker-pitch")),
+        beat: Number(element.getAttribute("data-marker-beat")),
+        color: element.getAttribute("fill") ?? "",
+      }),
+    ),
   );
 }
 
