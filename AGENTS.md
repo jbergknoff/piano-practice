@@ -13,9 +13,10 @@ Framework-agnostic, unit-testable domain logic lives under top-level `lib/` (no 
 - `lib/midi/` — `midi-to-musicxml.ts`, `midi-player.ts`, `ble-midi.ts`
 - `lib/musicxml/` — `sheet-music-types.ts`, `musicxml-parser.ts`, `sheet-music-layout.ts`, `musicxml-playback.ts` (derives playback notes from MusicXML), `mxl.ts` (unzips `.mxl` containers)
 - `lib/circular-buffer/` — generic O(1) ring buffer
+- `lib/audio/` — `pitch-detection.ts` (FFT spectrum → spectral peaks → MIDI notes, with harmonic suppression), `note-tracker.ts` (per-frame detected set → debounced note on/off events)
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
-- `src/hooks/` — `use-bluetooth.ts`, `use-wake-lock.ts`, `use-file-history.ts`
+- `src/hooks/` — `use-bluetooth.ts`, `use-microphone.ts`, `use-wake-lock.ts`, `use-file-history.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts`, `note-colors.ts`
 
 File naming: components are `PascalCase`; everything else is `kebab-case`.
@@ -54,6 +55,8 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/components/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
+| `src/hooks/use-microphone.ts` | Microphone input: `getUserMedia` → `AnalyserNode` FFT → `findSpectralPeaks`/`peaksToMidiNotes` (`lib/audio/pitch-detection.ts`) → `note-tracker` debounce → the same `dispatchNoteEvent` as bluetooth. Returns `{ status, error, detectedNotes, enable, disable }`; powers Wait mode without a piano |
+| `src/components/MicrophoneBadge.tsx` | Temporary bottom-right badge that prompts for mic permission, toggles detection, and shows a live readout of currently-detected note names |
 | `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
@@ -61,7 +64,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 
 Three modes stored as `"wait" | "playalong" | "listen"` in `App.tsx` state and persisted in `FileHistory`.
 
-- **Wait** — score halts; `useWaitMode` listens for correct piano chords before advancing. Play/Pause and BPM controls hidden.
+- **Wait** — score halts; `useWaitMode` listens for correct piano chords before advancing. Play/Pause and BPM controls hidden. Enabled by **either** a connected bluetooth piano or an active microphone; playalong stays bluetooth-only.
 - **Playalong** — the app plays back while the user plays along; notes are scored as hit or missed in real time.
 - **Listen** — normal playback; sounding notes are highlighted in accent.
 
@@ -69,7 +72,7 @@ Every mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) consumes th
 
 Mode activation runs in a `useEffect([musicxml, mode])` inside `PracticeScreen`: the cleanup deactivates the previous mode (handle captured in the closure) and the setup activates the new one. Each hook also self-resets on `musicxml` change via its own internal effect. When the user clicks a mode button, `PracticeScreen.handleModeChange` first snaps the cursor to range start and pauses the player (matching pre-refactor behavior), then calls `onModeChange` so the mode-effect can fire. `useWaitMode.activate()` is the only one with non-trivial side effects — it snaps to its first wait point in the active range and installs a no-op `onPositionUpdate` on the player so any stray ticks don't move the cursor.
 
-The note-event routing chain breaks the construction cycle (`useBluetooth` needs a handler, mode hooks need `bluetooth.sendNote`) by indirection: App's `useBluetooth(dispatchNoteEvent)` reads from a `noteEventDispatchRef`; `PracticeScreen` writes `active.onNoteEvent` into that ref on every render via an effect.
+The note-event routing chain breaks the construction cycle (`useBluetooth` needs a handler, mode hooks need `bluetooth.sendNote`) by indirection: App's `useBluetooth(dispatchNoteEvent)` reads from a `noteEventDispatchRef`; `PracticeScreen` writes `active.onNoteEvent` into that ref on every render via an effect. `useMicrophone(dispatchNoteEvent)` feeds the **same** `dispatchNoteEvent`, so both bluetooth and microphone emit identical `(noteNumber, kind)` events into the active mode — the mode hooks are input-source-agnostic.
 
 ### Cursor and scroll system
 

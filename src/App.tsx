@@ -24,6 +24,7 @@ import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { useBluetooth } from "./hooks/use-bluetooth";
+import { useMicrophone } from "./hooks/use-microphone";
 import {
   type FileHistory,
   hashFileBytes,
@@ -131,25 +132,43 @@ export function App() {
     [],
   );
   const bluetooth = useBluetooth(dispatchNoteEvent);
+  // Microphone is a second note-input source feeding the same dispatcher.
+  // Wait mode accepts either; playalong stays bluetooth-only for now.
+  const microphone = useMicrophone(dispatchNoteEvent);
 
   useWakeLock(musicxml !== null);
 
-  // Force listen mode when no piano is connected — wait and playalong
-  // require MIDI input. This guard covers runtime disconnects; the initial
-  // load case is handled by clampModeToBluetoothStatus() at history restore.
+  // Force listen mode when the active mode loses its required input. Wait needs
+  // bluetooth OR the microphone; playalong needs bluetooth. This guard covers
+  // runtime disconnects; the initial load case is handled by
+  // clampModeToInputStatus() at history restore.
   useEffect(() => {
-    if (bluetooth.status !== "connected") {
-      setMode((m) => (m === "wait" || m === "playalong" ? "listen" : m));
-    }
-  }, [bluetooth.status]);
+    const waitInputAvailable =
+      bluetooth.status === "connected" || microphone.status === "active";
+    setMode((m) => {
+      if (m === "playalong" && bluetooth.status !== "connected") {
+        return "listen";
+      }
+      if (m === "wait" && !waitInputAvailable) {
+        return "listen";
+      }
+      return m;
+    });
+  }, [bluetooth.status, microphone.status]);
 
   // Returns the mode from history, falling back to "listen" when the saved
-  // mode requires a piano connection and none is currently connected.
-  function clampModeToBluetoothStatus(
+  // mode requires an input source that isn't currently available.
+  function clampModeToInputStatus(
     savedMode: "wait" | "playalong" | "listen",
   ): "wait" | "playalong" | "listen" {
-    const requiresBluetooth = savedMode === "wait" || savedMode === "playalong";
-    if (requiresBluetooth && bluetooth.status !== "connected") {
+    if (savedMode === "playalong" && bluetooth.status !== "connected") {
+      return "listen";
+    }
+    if (
+      savedMode === "wait" &&
+      bluetooth.status !== "connected" &&
+      microphone.status !== "active"
+    ) {
       return "listen";
     }
     return savedMode;
@@ -212,7 +231,7 @@ export function App() {
       if (history) {
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setMode(clampModeToBluetoothStatus(history.mode));
+        setMode(clampModeToInputStatus(history.mode));
         setInitialBeat(history.currentBeat);
       } else {
         setBpm(tempo);
@@ -253,7 +272,7 @@ export function App() {
         );
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setMode(clampModeToBluetoothStatus(history.mode));
+        setMode(clampModeToInputStatus(history.mode));
         setInitialBeat(history.currentBeat);
       } else {
         setSelectedTracks(trackList.map((t) => t.index));
@@ -409,6 +428,7 @@ export function App() {
         baseBpm={baseBpm}
         measureRange={measureRange}
         bluetooth={bluetooth}
+        microphone={microphone}
         noteEventDispatchRef={noteEventDispatchRef}
         mode={mode}
         tracks={tracks}

@@ -12,6 +12,7 @@ import type {
 } from "../../../lib/midi/midi-to-musicxml";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { useBluetooth } from "../../hooks/use-bluetooth";
+import type { useMicrophone } from "../../hooks/use-microphone";
 import { useCustomRanges } from "../../hooks/use-custom-ranges";
 import {
   type BluetoothHandle,
@@ -34,6 +35,7 @@ import {
 } from "../../theme";
 import { BpmInputModal } from "../BpmInputModal";
 import { ConnectionBadge } from "../ConnectionBadge";
+import { MicrophoneBadge } from "../MicrophoneBadge";
 import { HelpBadge } from "../HelpBadge";
 import { RangeNameModal } from "../RangeNameModal";
 import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
@@ -61,9 +63,10 @@ interface PracticeScreenProps {
   baseBpm: number;
   measureRange: { from: number; to: number } | null;
   bluetooth: ReturnType<typeof useBluetooth>;
+  microphone: ReturnType<typeof useMicrophone>;
   /**
-   * App-owned ref that useBluetooth dispatches MIDI note events through.
-   * PracticeScreen writes the active mode's onNoteEvent into this ref.
+   * App-owned ref that the bluetooth and microphone inputs dispatch MIDI note
+   * events through. PracticeScreen writes the active mode's onNoteEvent into it.
    */
   noteEventDispatchRef: {
     current: ((noteNumber: number, kind: "on" | "off") => void) | null;
@@ -102,6 +105,7 @@ export function PracticeScreen({
   baseBpm,
   measureRange,
   bluetooth,
+  microphone,
   noteEventDispatchRef,
   mode,
   tracks,
@@ -724,9 +728,15 @@ export function PracticeScreen({
           >
             {(["listen", "wait", "playalong"] as const).map((m) => {
               const isActive = mode === m;
-              const requiresPiano = m === "wait" || m === "playalong";
+              // Wait accepts bluetooth or the microphone; playalong is
+              // bluetooth-only for now.
+              const inputAvailable =
+                m === "playalong"
+                  ? bluetooth.status === "connected"
+                  : bluetooth.status === "connected" ||
+                    microphone.status === "active";
               const disabled =
-                requiresPiano && bluetooth.status !== "connected";
+                (m === "wait" || m === "playalong") && !inputAvailable;
               const labels: Record<string, string> = {
                 listen: "Listen",
                 wait: "Wait",
@@ -756,7 +766,11 @@ export function PracticeScreen({
                   }}
                   aria-pressed={isActive}
                   title={
-                    disabled ? "Connect a piano to use this mode" : undefined
+                    disabled
+                      ? m === "wait"
+                        ? "Connect a piano or enable the microphone"
+                        : "Connect a piano to use this mode"
+                      : undefined
                   }
                 >
                   {labels[m]}
@@ -787,6 +801,11 @@ export function PracticeScreen({
           accent={accent}
           getDebugLog={getDebugLog}
           clearDebugLog={clearDebugLog}
+        />
+        <MicrophoneBadge
+          theme={theme}
+          accent={accent}
+          microphone={microphone}
         />
         <ConnectionBadge
           theme={theme}
