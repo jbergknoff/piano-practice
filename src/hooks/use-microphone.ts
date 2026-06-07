@@ -150,7 +150,9 @@ export function useMicrophone(
 
   async function enable() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError("Microphone not available");
+      setError(
+        "This browser doesn't expose microphone access (getUserMedia). A secure context (HTTPS) and a Chromium-based browser are required.",
+      );
       setStatus("error");
       return;
     }
@@ -161,18 +163,37 @@ export function useMicrophone(
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       const name = (err as { name?: string })?.name ?? "";
-      // User dismissed the prompt — not an error, just return to idle.
-      if (name === "NotAllowedError" || name === "AbortError") {
+      const message = (err as { message?: string })?.message ?? "";
+      // Chrome reports "Permission dismissed" when the user closes the prompt
+      // without choosing — treat only that as a silent cancel.
+      if (name === "NotAllowedError" && /dismiss/i.test(message)) {
         setStatus("idle");
         return;
       }
-      setError(String(err));
+      // NotAllowedError otherwise means the permission was denied or blocked —
+      // crucially, Brave/Chrome on Android reject *without showing a prompt*
+      // when the mic is blocked by site or browser settings, so surface it.
+      if (name === "NotAllowedError") {
+        setError(
+          "Microphone permission was denied or is blocked. Check this site's permissions — on Brave, also check Shields and Settings → Site settings → Microphone.",
+        );
+        setStatus("error");
+        return;
+      }
+      if (name === "NotFoundError" || name === "OverconstrainedError") {
+        setError("No microphone was found on this device.");
+        setStatus("error");
+        return;
+      }
+      setError(message || String(err));
       setStatus("error");
       return;
     }
 
     try {
       const audioContext = new AudioContext();
+      // Mobile browsers start the context suspended; resume within the gesture.
+      await audioContext.resume();
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = FFT_SIZE;

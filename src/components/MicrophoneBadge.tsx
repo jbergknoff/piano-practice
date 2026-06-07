@@ -1,3 +1,4 @@
+import { useState } from "preact/hooks";
 import { midiNoteName } from "../../lib/midi/ble-midi";
 import type { useMicrophone } from "../hooks/use-microphone";
 import type { ThemeTokens } from "../theme";
@@ -17,9 +18,14 @@ export function MicrophoneBadge({
   accent: string;
   microphone: ReturnType<typeof useMicrophone>;
 }) {
+  // Dismissable error panel — tooltips never show on touch, so errors need to
+  // be rendered. Re-shown each time a new error appears.
+  const [errorDismissed, setErrorDismissed] = useState(false);
+
   const active = microphone.status === "active";
   const requesting = microphone.status === "requesting";
   const hasError = microphone.status === "error";
+  const showError = hasError && !errorDismissed;
 
   const dotColor = active ? "#5E8C5A" : hasError ? "#c62828" : theme.inkFaint;
 
@@ -36,6 +42,7 @@ export function MicrophoneBadge({
       microphone.disable();
       return;
     }
+    setErrorDismissed(false);
     void microphone.enable();
   }
 
@@ -66,6 +73,33 @@ export function MicrophoneBadge({
           <span style={{ color: theme.inkFaint }}>mic:</span>{" "}
           <span style={{ color: accent }}>{readoutText}</span>
         </div>
+      )}
+      {showError && (
+        <button
+          type="button"
+          onClick={() => setErrorDismissed(true)}
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            right: 0,
+            ...glassPanel(theme),
+            borderRadius: radius.md,
+            padding: "8px 12px",
+            fontSize: 12,
+            fontWeight: 500,
+            lineHeight: 1.45,
+            textAlign: "left",
+            color: "#c62828",
+            cursor: "pointer",
+            width: "min(280px, calc(100vw - 44px))",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+          }}
+        >
+          {microphone.error ?? "Microphone unavailable"}
+          <div style={{ marginTop: 6, fontSize: 11, color: theme.inkFaint }}>
+            Tap to dismiss
+          </div>
+        </button>
       )}
       <button
         type="button"
