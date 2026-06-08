@@ -55,8 +55,9 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/components/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
-| `src/hooks/use-microphone.ts` | Microphone input: `getUserMedia` → `AnalyserNode` FFT → `findSpectralPeaks`/`peaksToMidiNotes` (`lib/audio/pitch-detection.ts`) → `note-tracker` debounce → the same `dispatchNoteEvent` as bluetooth. Returns `{ status, error, detectedNotes, enable, disable }`; powers Wait mode without a piano |
+| `src/hooks/use-microphone.ts` | Microphone input: `getUserMedia` → `AnalyserNode` FFT → `findSpectralPeaks`/`peaksToMidiNotes` (`lib/audio/pitch-detection.ts`) → `note-tracker` debounce → the same `dispatchNoteEvent` as bluetooth. Returns `{ status, error, detectedNotes, enable, disable, getDiagnostics, clearDiagnostics }`; powers Wait mode without a piano. The detection gates (`MIN_PROMINENCE_DB`, `CENTS_TOLERANCE`, `ON_FRAMES`, `THRESHOLD_DB`) are exported constants tuned via the diagnostics tab |
 | `src/components/MicrophoneBadge.tsx` | Temporary bottom-right badge that prompts for mic permission, toggles detection, and shows a live readout of currently-detected note names |
+| `src/microphone-diagnostics.ts` + `src/components/MicrophoneDebugTab.tsx` | Rolling spectrum diagnostics (noise floor, candidate peaks with prominence/cents, detected vs sounding notes), captured ~every 150ms by `useMicrophone` and surfaced in the **Microphone** tab of the Help (?) modal for tuning the detection gates |
 | `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
@@ -129,6 +130,8 @@ The shared types live in `src/debug-log.ts`:
 The underlying O(1) ring buffer is a generic `CircularBuffer<T>` class in `lib/circular-buffer/index.ts`. It exposes two methods: `append(item)` and `read()` (returns entries oldest-first). Unit tests are in `lib/circular-buffer/index.test.ts` (run with `bun test`).
 
 App exposes a `getDebugLog()` callback that reads the buffer; it's passed through `PracticeScreen` to the **Debugging** tab of the Help (?) modal (`src/components/DebugLogTab.tsx`). Users copy it from there and paste it into bug reports.
+
+The **Microphone** tab of the same Help modal is separate: it reads `useMicrophone`'s own diagnostics buffer (`microphone.getDiagnostics()`, defined in `src/microphone-diagnostics.ts`) — a throttled per-frame spectrum snapshot used to tune the FFT detection gates, not a note-matching log.
 
 See `docs/debug-log.md` for the full format reference and a field-by-field guide to the three main diagnostic cases: (1) correct chord not recognised in Wait mode, (2) wrong chord accepted in Wait mode, (3) correct note scored as EXTRA in Playalong mode.
 

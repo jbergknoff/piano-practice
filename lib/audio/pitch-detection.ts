@@ -61,6 +61,41 @@ export interface FindSpectralPeaksOptions {
   maxPeaks?: number;
 }
 
+// Noise floor of the in-band spectrum = the median bin magnitude. Robust to
+// the handful of tonal peaks that sit well above it. Shared by findSpectralPeaks
+// (for its prominence gate) and the microphone diagnostics.
+export function computeNoiseFloorDb(
+  magnitudes: Float32Array | number[],
+  options: {
+    sampleRate: number;
+    fftSize: number;
+    minFrequency?: number;
+    maxFrequency?: number;
+  },
+): number {
+  const {
+    sampleRate,
+    fftSize,
+    minFrequency = 27.5,
+    maxFrequency = 5000,
+  } = options;
+  const binToFrequency = sampleRate / fftSize;
+  const minBin = Math.max(1, Math.floor(minFrequency / binToFrequency));
+  const maxBin = Math.min(
+    magnitudes.length - 2,
+    Math.ceil(maxFrequency / binToFrequency),
+  );
+  if (maxBin < minBin) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  const band: number[] = [];
+  for (let bin = minBin; bin <= maxBin; bin++) {
+    band.push(magnitudes[bin]);
+  }
+  band.sort((a, b) => a - b);
+  return band[Math.floor(band.length / 2)];
+}
+
 // Finds local maxima in an FFT magnitude array. Each returned peak is refined
 // with parabolic interpolation across its two neighbours, which recovers most
 // of the frequency resolution lost to coarse bin spacing (at 44.1 kHz / 8192
@@ -86,16 +121,14 @@ export function findSpectralPeaks(
     Math.ceil(maxFrequency / binToFrequency),
   );
 
-  // Noise floor = median of the in-band magnitudes. Robust to the handful of
-  // tonal peaks sitting well above it.
   let floorThreshold = thresholdDb;
   if (minProminenceDb > 0 && maxBin >= minBin) {
-    const band: number[] = [];
-    for (let bin = minBin; bin <= maxBin; bin++) {
-      band.push(magnitudes[bin]);
-    }
-    band.sort((a, b) => a - b);
-    const noiseFloor = band[Math.floor(band.length / 2)];
+    const noiseFloor = computeNoiseFloorDb(magnitudes, {
+      sampleRate,
+      fftSize,
+      minFrequency,
+      maxFrequency,
+    });
     floorThreshold = Math.max(thresholdDb, noiseFloor + minProminenceDb);
   }
 

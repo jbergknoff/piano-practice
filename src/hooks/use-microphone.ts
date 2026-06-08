@@ -5,10 +5,15 @@ import {
   trackFrame,
 } from "../../lib/audio/note-tracker";
 import {
+  computeNoiseFloorDb,
   findSpectralPeaks,
   nearestMidiNote,
   peaksToMidiNotes,
 } from "../../lib/audio/pitch-detection";
+import {
+  type MicrophoneFrameDiagnostic,
+  newMicrophoneDiagnosticsBuffer,
+} from "../microphone-diagnostics";
 
 export type MicrophoneStatus = "idle" | "requesting" | "active" | "error";
 
@@ -22,6 +27,9 @@ export interface MicrophoneState {
   enable: () => Promise<void>;
   // Stops detection and releases the microphone.
   disable: () => void;
+  // Rolling diagnostics for tuning the detection gates (Help → Microphone tab).
+  getDiagnostics: () => MicrophoneFrameDiagnostic[];
+  clearDiagnostics: () => void;
 }
 
 // fftSize trades frequency resolution against latency. At 44.1 kHz, 8192 bins
@@ -29,24 +37,28 @@ export interface MicrophoneState {
 // parabolic interpolation in findSpectralPeaks. The bottom octave stays
 // unreliable (a known limitation).
 const FFT_SIZE = 8192;
-const THRESHOLD_DB = -75;
+// Exported so the diagnostics tab can show the current gate values.
+export const THRESHOLD_DB = -75;
 // A peak must rise this far above the noise floor to count. The main guard
 // against speech and key clicks, which are broadband and lift the whole floor
 // rather than producing a sharp, isolated peak.
-const MIN_PROMINENCE_DB = 20;
+export const MIN_PROMINENCE_DB = 20;
 const MIN_FREQUENCY = 27.5; // A0
 const MAX_FREQUENCY = 5000;
 // How close (in cents) a peak must sit to a semitone center to register —
 // tighter than the default so off-pitch energy (most speech) is rejected.
-const CENTS_TOLERANCE = 25;
+export const CENTS_TOLERANCE = 25;
 // A detected note must persist this many consecutive frames before it fires.
 // Higher than the default so transient sounds (key clicks, consonants), which
 // only last a frame or two, never register.
-const ON_FRAMES = 4;
+export const ON_FRAMES = 4;
 const OFF_FRAMES = 5;
 // Cap on simultaneous peaks. A genuine chord is a handful of notes; a much
 // larger count is noise, so keeping only the strongest few helps.
 const MAX_PEAKS = 8;
+// How often to capture a diagnostics snapshot (ms). Throttled well below the
+// rAF rate so a copyable log spans several seconds.
+const DIAGNOSTIC_INTERVAL_MS = 150;
 // dB range mapped onto MIDI velocity 1..127.
 const VELOCITY_MIN_DB = -60;
 const VELOCITY_MAX_DB = -20;
@@ -81,6 +93,8 @@ export function useMicrophone(
   const trackerRef = useRef<NoteTrackerState | null>(null);
   // The last detected set we pushed to state, so we only re-render on change.
   const lastDetectedKeyRef = useRef<string>("");
+  const diagnosticsBufferRef = useRef(newMicrophoneDiagnosticsBuffer());
+  const lastDiagnosticTimeRef = useRef(0);
 
   useEffect(() => {
     onNoteEventRef.current = onNoteEvent;
@@ -164,6 +178,46 @@ export function useMicrophone(
       setDetectedNotes(onNotes);
     }
 
+    // Throttled diagnostics capture. Re-scan permissively (no prominence gate,
+    // lower threshold) so peaks that were *rejected* show up too, annotated
+    // with how close they came to the gates.
+    const now = Date.now();
+    if (now - lastDiagnosticTimeRef.current >= DIAGNOSTIC_INTERVAL_MS) {
+      lastDiagnosticTimeRef.current = now;
+      const noiseFloorDb = computeNoiseFloorDb(buffer, {
+        sampleRate: audioContext.sampleRate,
+        fftSize: FFT_SIZE,
+        minFrequency: MIN_FREQUENCY,
+        maxFrequency: MAX_FREQUENCY,
+      });
+      const candidatePeaks = findSpectralPeaks(buffer, {
+        sampleRate: audioContext.sampleRate,
+        fftSize: FFT_SIZE,
+        thresholdDb: -95,
+        minProminenceDb: 0,
+        minFrequency: MIN_FREQUENCY,
+        maxFrequency: MAX_FREQUENCY,
+        maxPeaks: 10,
+      });
+      diagnosticsBufferRef.current.append({
+        t: now,
+        noiseFloorDb,
+        peaks: candidatePeaks.map((peak) => {
+          const { midiNote, centsOff } = nearestMidiNote(peak.frequency);
+          return {
+            frequency: peak.frequency,
+            magnitudeDb: peak.magnitude,
+            prominenceDb: peak.magnitude - noiseFloorDb,
+            note: midiNote,
+            centsOff,
+            accepted: detected.has(midiNote),
+          };
+        }),
+        detected: [...detected].sort((a, b) => a - b),
+        on: onNotes,
+      });
+    }
+
     animationFrameRef.current = requestAnimationFrame(analyze);
   }
 
@@ -235,6 +289,8 @@ export function useMicrophone(
         offFrames: OFF_FRAMES,
       });
       lastDetectedKeyRef.current = "";
+      diagnosticsBufferRef.current = newMicrophoneDiagnosticsBuffer();
+      lastDiagnosticTimeRef.current = 0;
 
       setDetectedNotes([]);
       setStatus("active");
@@ -252,6 +308,14 @@ export function useMicrophone(
     setStatus("idle");
   }
 
+  function getDiagnostics(): MicrophoneFrameDiagnostic[] {
+    return diagnosticsBufferRef.current.read();
+  }
+
+  function clearDiagnostics() {
+    diagnosticsBufferRef.current = newMicrophoneDiagnosticsBuffer();
+  }
+
   // Release the microphone if the component unmounts while active.
   // biome-ignore lint/correctness/useExhaustiveDependencies: stop only touches refs
   useEffect(() => {
@@ -260,5 +324,13 @@ export function useMicrophone(
     };
   }, []);
 
-  return { status, error, detectedNotes, enable, disable };
+  return {
+    status,
+    error,
+    detectedNotes,
+    enable,
+    disable,
+    getDiagnostics,
+    clearDiagnostics,
+  };
 }

@@ -801,6 +801,8 @@ export function PracticeScreen({
           accent={accent}
           getDebugLog={getDebugLog}
           clearDebugLog={clearDebugLog}
+          getMicrophoneDiagnostics={microphone.getDiagnostics}
+          clearMicrophoneDiagnostics={microphone.clearDiagnostics}
         />
         <MicrophoneBadge
           theme={theme}

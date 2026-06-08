@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import type { MicrophoneFrameDiagnostic } from "../microphone-diagnostics";
 import type { DebugBeatEvent } from "../modes/use-wait-mode";
 import type { ThemeTokens } from "../theme";
 import {
@@ -11,14 +12,16 @@ import {
   serifTitle,
 } from "../theme";
 import { DebugLogTab } from "./DebugLogTab";
+import { MicrophoneDebugTab } from "./MicrophoneDebugTab";
 import { BluetoothIcon } from "./icons";
 
 const IS_MOBILE_BRAVE =
   "brave" in navigator && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-type Tab = "about" | "bluetooth" | "debugging";
+type Tab = "about" | "bluetooth" | "debugging" | "microphone";
 
 const emptyLog = (): DebugBeatEvent[] => [];
+const emptyDiagnostics = (): MicrophoneFrameDiagnostic[] => [];
 const noopClear = () => {};
 
 export function HelpBadge({
@@ -26,11 +29,15 @@ export function HelpBadge({
   accent,
   getDebugLog = emptyLog,
   clearDebugLog = noopClear,
+  getMicrophoneDiagnostics = emptyDiagnostics,
+  clearMicrophoneDiagnostics = noopClear,
 }: {
   theme: ThemeTokens;
   accent: string;
   getDebugLog?: () => DebugBeatEvent[];
   clearDebugLog?: () => void;
+  getMicrophoneDiagnostics?: () => MicrophoneFrameDiagnostic[];
+  clearMicrophoneDiagnostics?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("about");
@@ -130,36 +137,39 @@ export function HelpBadge({
                 flexShrink: 0,
               }}
             >
-              {(["about", "bluetooth", "debugging"] as Tab[]).map((t) => {
-                const active = tab === t;
-                const labels: Record<Tab, string> = {
-                  about: "About",
-                  bluetooth: "Bluetooth",
-                  debugging: "Debugging",
-                };
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTab(t)}
-                    style={{
-                      padding: "5px 14px",
-                      borderRadius: 20,
-                      border: active ? "none" : `0.5px solid ${theme.border}`,
-                      background: active ? accent : "transparent",
-                      color: active ? "#FFF7E5" : theme.inkSoft,
-                      fontSize: 12,
-                      fontWeight: active ? 600 : 400,
-                      cursor: "pointer",
-                      outline: "none",
-                      fontFamily: FONT_SANS,
-                      transition: "background 0.15s, color 0.15s",
-                    }}
-                  >
-                    {labels[t]}
-                  </button>
-                );
-              })}
+              {(["about", "bluetooth", "debugging", "microphone"] as Tab[]).map(
+                (t) => {
+                  const active = tab === t;
+                  const labels: Record<Tab, string> = {
+                    about: "About",
+                    bluetooth: "Bluetooth",
+                    debugging: "Debugging",
+                    microphone: "Microphone",
+                  };
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTab(t)}
+                      style={{
+                        padding: "5px 14px",
+                        borderRadius: 20,
+                        border: active ? "none" : `0.5px solid ${theme.border}`,
+                        background: active ? accent : "transparent",
+                        color: active ? "#FFF7E5" : theme.inkSoft,
+                        fontSize: 12,
+                        fontWeight: active ? 600 : 400,
+                        cursor: "pointer",
+                        outline: "none",
+                        fontFamily: FONT_SANS,
+                        transition: "background 0.15s, color 0.15s",
+                      }}
+                    >
+                      {labels[t]}
+                    </button>
+                  );
+                },
+              )}
             </div>
 
             {/* Tab content */}
@@ -174,12 +184,19 @@ export function HelpBadge({
                 <AboutTab theme={theme} accent={accent} />
               ) : tab === "bluetooth" ? (
                 <BluetoothTab theme={theme} accent={accent} />
-              ) : (
+              ) : tab === "debugging" ? (
                 <DebugLogTab
                   theme={theme}
                   accent={accent}
                   getDebugLog={getDebugLog}
                   clearDebugLog={clearDebugLog}
+                />
+              ) : (
+                <MicrophoneDebugTab
+                  theme={theme}
+                  accent={accent}
+                  getDiagnostics={getMicrophoneDiagnostics}
+                  clearDiagnostics={clearMicrophoneDiagnostics}
                 />
               )}
             </div>
