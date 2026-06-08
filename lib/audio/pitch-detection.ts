@@ -48,6 +48,11 @@ export interface FindSpectralPeaksOptions {
   // Ignore bins quieter than this. For dB input (getFloatFrequencyData),
   // something like -70 works as a noise gate.
   thresholdDb: number;
+  // Require each peak to rise at least this many dB above the band's noise
+  // floor (the median bin magnitude). Tonal sounds (piano notes) produce sharp
+  // peaks far above the floor; broadband sounds (speech, key clicks) raise the
+  // whole floor without standing out, so this rejects them. 0 disables it.
+  minProminenceDb?: number;
   // Frequency window to consider. Defaults span the piano's fundamental range
   // up through the low harmonics we care about.
   minFrequency?: number;
@@ -68,6 +73,7 @@ export function findSpectralPeaks(
     sampleRate,
     fftSize,
     thresholdDb,
+    minProminenceDb = 0,
     minFrequency = 27.5,
     maxFrequency = 5000,
     maxPeaks = 12,
@@ -80,10 +86,23 @@ export function findSpectralPeaks(
     Math.ceil(maxFrequency / binToFrequency),
   );
 
+  // Noise floor = median of the in-band magnitudes. Robust to the handful of
+  // tonal peaks sitting well above it.
+  let floorThreshold = thresholdDb;
+  if (minProminenceDb > 0 && maxBin >= minBin) {
+    const band: number[] = [];
+    for (let bin = minBin; bin <= maxBin; bin++) {
+      band.push(magnitudes[bin]);
+    }
+    band.sort((a, b) => a - b);
+    const noiseFloor = band[Math.floor(band.length / 2)];
+    floorThreshold = Math.max(thresholdDb, noiseFloor + minProminenceDb);
+  }
+
   const peaks: SpectralPeak[] = [];
   for (let bin = minBin; bin <= maxBin; bin++) {
     const value = magnitudes[bin];
-    if (value < thresholdDb) {
+    if (value < floorThreshold) {
       continue;
     }
     const left = magnitudes[bin - 1];

@@ -29,9 +29,24 @@ export interface MicrophoneState {
 // parabolic interpolation in findSpectralPeaks. The bottom octave stays
 // unreliable (a known limitation).
 const FFT_SIZE = 8192;
-const THRESHOLD_DB = -70;
+const THRESHOLD_DB = -75;
+// A peak must rise this far above the noise floor to count. The main guard
+// against speech and key clicks, which are broadband and lift the whole floor
+// rather than producing a sharp, isolated peak.
+const MIN_PROMINENCE_DB = 20;
 const MIN_FREQUENCY = 27.5; // A0
 const MAX_FREQUENCY = 5000;
+// How close (in cents) a peak must sit to a semitone center to register —
+// tighter than the default so off-pitch energy (most speech) is rejected.
+const CENTS_TOLERANCE = 25;
+// A detected note must persist this many consecutive frames before it fires.
+// Higher than the default so transient sounds (key clicks, consonants), which
+// only last a frame or two, never register.
+const ON_FRAMES = 4;
+const OFF_FRAMES = 5;
+// Cap on simultaneous peaks. A genuine chord is a handful of notes; a much
+// larger count is noise, so keeping only the strongest few helps.
+const MAX_PEAKS = 8;
 // dB range mapped onto MIDI velocity 1..127.
 const VELOCITY_MIN_DB = -60;
 const VELOCITY_MAX_DB = -20;
@@ -110,10 +125,14 @@ export function useMicrophone(
       sampleRate: audioContext.sampleRate,
       fftSize: FFT_SIZE,
       thresholdDb: THRESHOLD_DB,
+      minProminenceDb: MIN_PROMINENCE_DB,
       minFrequency: MIN_FREQUENCY,
       maxFrequency: MAX_FREQUENCY,
+      maxPeaks: MAX_PEAKS,
     });
-    const detected = peaksToMidiNotes(peaks);
+    const detected = peaksToMidiNotes(peaks, {
+      centsTolerance: CENTS_TOLERANCE,
+    });
 
     // Velocity per detected note from the loudest peak that rounds to it.
     const velocities = new Map<number, number>();
@@ -211,7 +230,10 @@ export function useMicrophone(
           analyser.frequencyBinCount * Float32Array.BYTES_PER_ELEMENT,
         ),
       );
-      trackerRef.current = createNoteTracker();
+      trackerRef.current = createNoteTracker({
+        onFrames: ON_FRAMES,
+        offFrames: OFF_FRAMES,
+      });
       lastDetectedKeyRef.current = "";
 
       setDetectedNotes([]);

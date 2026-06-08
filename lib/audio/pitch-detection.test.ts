@@ -104,6 +104,27 @@ describe("findSpectralPeaks", () => {
     expect(peak.frequency).toBeCloseTo(150 * binToFrequency, 3);
   });
 
+  test("minProminenceDb rejects peaks that don't rise above the noise floor", () => {
+    // A raised, broadband floor (like speech/clicks) at -50 across the band,
+    // with two local maxima: one barely above the floor, one well above.
+    const magnitudes = new Float32Array(fftSize / 2).fill(-50);
+    magnitudes[120] = -44; // only 6 dB above the floor → not prominent
+    magnitudes[121] = -50;
+    magnitudes[119] = -50;
+    magnitudes[240] = -18; // 32 dB above the floor → clearly prominent
+    magnitudes[241] = -50;
+    magnitudes[239] = -50;
+
+    const peaks = findSpectralPeaks(magnitudes, {
+      sampleRate,
+      fftSize,
+      thresholdDb: -90,
+      minProminenceDb: 15,
+    });
+
+    expect(peaks.map((peak) => Math.round(peak.binIndex))).toEqual([240]);
+  });
+
   test("respects the frequency window and maxPeaks cap", () => {
     const magnitudes = new Float32Array(fftSize / 2).fill(-120);
     // Three peaks of decreasing strength.
