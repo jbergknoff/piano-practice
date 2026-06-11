@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 test("renders sheet music from a MusicXML file", async ({ page }) => {
-  await loadFile(page, "underwater-theme.musicxml");
+  await loadFile(page, "simple-grand-piano.musicxml");
 
   // At least one SMuFL text element (notehead, clef, etc.) should be present
   const svg = page.locator("svg").first();

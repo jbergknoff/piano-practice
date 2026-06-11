@@ -1033,31 +1033,30 @@ describe("fixture comparison – c-major-melody.mid vs hand-written expected", (
   });
 });
 
-describe("fixture comparison – underwater theme midi from ninsheetmusic.org vs. Audiveris-generated MusicXML", () => {
+describe("fixture comparison – simple-grand-piano MIDI vs. reference MusicXML", () => {
   const midiData = parseMidi(
-    readFileSync("tests/fixtures/underwater-theme.mid"),
+    readFileSync("tests/fixtures/simple-grand-piano.mid"),
   );
   const { musicxml: ourXml } = midiToMusicXmlWithTracks(
     midiData,
     getMidiTracks(midiData).map((track) => track.index),
   );
   const expected = readFileSync(
-    "tests/fixtures/underwater-theme.musicxml",
+    "tests/fixtures/simple-grand-piano.musicxml",
     "utf8",
   );
 
   const expMeasures = parseMeasureNotes(expected);
 
   // Extract only the first part's measures from our multi-part output so we
-  // can compare the Piano track against the reference score measure by measure.
+  // can compare the treble track against the reference score measure by measure.
   // The XML has multiple <part> elements; we take the measures inside the first.
   const firstPartXml =
     ourXml.match(/<part [^>]*>([\s\S]*?)<\/part>/)?.[1] ?? "";
   const ourMeasures = parseMeasureNotes(firstPartXml);
 
-  // The MIDI plays through the 32-measure piece twice; the score has it once.
-  test("our first-part output has twice as many measures as the reference score", () => {
-    expect(ourMeasures.length).toBe(expMeasures.length * 2);
+  test("converted MIDI has the same number of measures as the reference score", () => {
+    expect(ourMeasures.length).toBe(expMeasures.length);
   });
 
   test("3/4 time signature", () => {
@@ -1071,7 +1070,6 @@ describe("fixture comparison – underwater theme midi from ninsheetmusic.org vs
   });
 
   test("all measures in the first part are non-empty (each has at least one pitch note)", () => {
-    // The Piano track plays throughout the piece; no measure should be all rests.
     for (let i = 0; i < ourMeasures.length; i++) {
       expect(ourMeasures[i].length).toBeGreaterThan(0);
     }

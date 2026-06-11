@@ -308,12 +308,12 @@ describe("parseScore (mozart-k265-var1 via MIDI pipeline)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Integration — underwater theme exercises all four notation features
+// Integration — simple-grand-piano exercises all four notation features
 // ---------------------------------------------------------------------------
 
-describe("parseScore (underwater-theme via MIDI pipeline)", () => {
+describe("parseScore (simple-grand-piano via MIDI pipeline)", () => {
   const midiData = parseMidi(
-    readFileSync("tests/fixtures/underwater-theme.mid"),
+    readFileSync("tests/fixtures/simple-grand-piano.mid"),
   );
   const trackIndices = getMidiTracks(midiData).map((t) => t.index);
   const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
@@ -908,7 +908,7 @@ describe("groupBeamableEvents", () => {
   test("a lone eighth in its own beat is left unbeamed (gets a flag)", () => {
     // Eighth rest then five eighths: positions rest@0, then 2,4,6,8,10.
     // Beat 0 holds only the first eighth (index 1) → no group; beats 1 and 2
-    // each hold a pair. Mirrors measure 8 of the underwater theme.
+    // each hold a pair.
     const events = [
       rest(2, "eighth"),
       chord([p("G", 4)], "eighth", 2),
@@ -996,7 +996,7 @@ describe("accidental display", () => {
   });
 
   test("two sharps a sixth apart in one chord both show", () => {
-    // F#4 + D#5 (measure 6 of the underwater theme).
+    // F#4 + D#5.
     const score = parseScore(
       scoreXml([
         `${note("F", 4, 1).replace("</note>", "</note>")}<note><chord/><pitch><step>D</step><alter>1</alter><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>`,

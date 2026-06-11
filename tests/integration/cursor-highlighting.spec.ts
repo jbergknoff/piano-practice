@@ -108,12 +108,12 @@ test("cursor advance crosses the barline to highlight measure 2 (regression #44)
 test("multi-staff piece highlights notes in both staves simultaneously (regression #43)", async ({
   page,
 }) => {
-  await loadFile(page, "underwater-theme.musicxml");
+  await loadFile(page, "simple-grand-piano.musicxml");
   await waitForMockBluetoothConnected(page);
 
   await startListenPlayback(page);
 
-  // Underwater Theme is 3/4 at 120 bpm; in the first measure both staves
+  // The fixture is 3/4 at 120 bpm; in the first measure both staves
   // (treble + bass piano) sound simultaneously. After ~0.5s of audio,
   // we should see at least one highlighted note in each staff.
   await advanceAudioTime(page, 0.25);
@@ -139,7 +139,7 @@ test("multi-staff piece highlights notes in both staves simultaneously (regressi
 test("multi-staff piece screenshot mid-playback (regression #43, #44, #48)", async ({
   page,
 }) => {
-  await loadFile(page, "underwater-theme.musicxml");
+  await loadFile(page, "simple-grand-piano.musicxml");
   await waitForMockBluetoothConnected(page);
 
   await startListenPlayback(page);
