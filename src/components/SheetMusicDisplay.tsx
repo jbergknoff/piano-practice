@@ -1923,7 +1923,9 @@ const ChordGroupEl = memo(function ChordGroupEl({
     const clampedRise = Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
     const dX = graceXs[graceXs.length - 1] - graceXs[0];
     const slope = dX === 0 ? 0 : clampedRise / dX;
-    graceStemTipYs = graceXs.map((gx) => naturalTipYs[0] + slope * (gx - graceXs[0]));
+    graceStemTipYs = graceXs.map(
+      (gx) => naturalTipYs[0] + slope * (gx - graceXs[0]),
+    );
   }
 
   // A staccato chord gets a single dot on the outer notehead away from the
