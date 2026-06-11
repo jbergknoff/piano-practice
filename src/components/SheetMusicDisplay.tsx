@@ -151,16 +151,42 @@ function computeBeamGroups(
     const dX = stemXs[stemXs.length - 1] - stemXs[0];
     const slope = dX === 0 ? 0 : (beamEndY - beamStartY) / dX;
 
+    // The diagonal beam must not shorten any interior stem below the minimum.
+    // If an intermediate chord's anchor is closer to the beam line than
+    // stemLength, shift the entire beam away from the noteheads to compensate.
+    let beamShift = 0;
+    for (let j = 0; j < chords.length; j++) {
+      const tipY = beamStartY + slope * (stemXs[j] - stemXs[0]);
+      if (stemDir === "up") {
+        // tipY must be <= anchorYs[j] - stemLength (i.e., above the anchor)
+        const shortfall = tipY - (anchorYs[j] - stemLength);
+        if (shortfall > beamShift) {
+          beamShift = shortfall;
+        }
+      } else {
+        // tipY must be >= anchorYs[j] + stemLength (i.e., below the anchor)
+        const shortfall = anchorYs[j] + stemLength - tipY;
+        if (shortfall > beamShift) {
+          beamShift = shortfall;
+        }
+      }
+    }
+    const adjustedBeamStartY =
+      stemDir === "up" ? beamStartY - beamShift : beamStartY + beamShift;
+    const adjustedBeamEndY =
+      stemDir === "up" ? beamEndY - beamShift : beamEndY + beamShift;
+
     const stems = chords.map((_, j) => ({
       stemX: stemXs[j],
-      stemTipY: beamStartY + slope * (stemXs[j] - stemXs[0]),
+      stemTipY:
+        adjustedBeamStartY + slope * (stemXs[j] - stemXs[0]),
     }));
 
     return {
       eventIndices: indices,
       stemDir,
-      beamStartY,
-      beamEndY,
+      beamStartY: adjustedBeamStartY,
+      beamEndY: adjustedBeamEndY,
       stems,
       types: chords.map((g) => g.type),
     };
