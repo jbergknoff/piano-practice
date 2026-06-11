@@ -42,7 +42,7 @@ const FIXTURES = [
   "c-major-melody.mid",
   "g-major-melody.mid",
   "mozart-k265-var1.mid",
-  "underwater-theme.mid",
+  "simple-grand-piano.mid",
 ];
 
 describe("musicXmlToConversion – playback/render ID contract", () => {

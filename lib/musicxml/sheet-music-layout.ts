@@ -31,7 +31,7 @@ export const MIN_EVENT_ADVANCE = 18;
 // Horizontal space reserved per grace-note group to the left of the main
 // notehead. The main chord's onset is pushed right by this amount × the number
 // of grace groups, making room for the small noteheads, stems, and flags.
-export const GRACE_NOTE_ADVANCE = 20;
+export const GRACE_NOTE_ADVANCE = 14;
 
 export const MEASURE_PADDING_LEFT = 14;
 export const MEASURE_PADDING_RIGHT = 4;

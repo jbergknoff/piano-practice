@@ -48,3 +48,5 @@ messages, which are displayed in a scrolling log (up to 200 entries).
 ## Licenses
 
 Sheet music notation glyphs are rendered using the [Bravura](https://github.com/steinbergmedia/bravura) font by Steinberg Media Technologies GmbH, licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/).
+
+MusicXML test fixtures include the Rondo alla Turca (Piano Sonata No. 11 K. 331, 3rd movement) by W. A. Mozart, sourced from the [musetrainer/library](https://musetrainer.github.io/library/) collection of public domain MusicXML files. Mozart's works are in the public domain.

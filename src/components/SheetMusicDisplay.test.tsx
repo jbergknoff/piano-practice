@@ -259,7 +259,7 @@ describe("SheetMusicDisplay rendering", () => {
   });
 
   test("a staccato chord renders one dot, not one per note", () => {
-    // Mirrors measure 3 of the underwater theme: [D4, B4], both staccato.
+    // Mirrors measure 3 of the simple-grand-piano fixture: [D4, B4], both staccato.
     const { circles } = renderSheetMusic(
       scoreXml([
         { step: "D", octave: 4, duration: 4, type: "quarter", staccato: true },

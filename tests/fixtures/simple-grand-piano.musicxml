@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!--
+  Synthetic test fixture — not based on any copyrighted work.
+  8 measures, 3/4, C major, grand piano (treble + bass staves).
+
+  Features exercised:
+    - Two staves (cursor-highlighting tests need notes on both in m1)
+    - Staccato articulation on bass notes (staccato-rendering tests)
+    - F#4 followed by F♮4 in measure 3 (natural-accidental cancellation)
+    - Sixth-note runs in measure 2 (per-beat beam-group splitting in 3/4)
+    - Staccato chord D4+B4 in measure 3 (one dot per chord, not per note)
+-->
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+      <score-instrument id="P1-I1">
+        <instrument-name>Piano</instrument-name>
+      </score-instrument>
+    </score-part>
+  </part-list>
+  <part id="P1">
+
+    <!-- ── Measure 1: notes on both staves (cursor-highlighting regression) ── -->
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>3</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <!-- Treble: C5 E5 G5 -->
+      <note><pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <!-- Bass: C3 G2 E3, all staccato -->
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>G</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <!-- ── Measure 2: six eighth notes in treble → three per-beat beam groups ── -->
+    <measure number="2">
+      <!-- Treble: G4 A4 | B4 C5 | D5 E5 (pairs beam per beat in 3/4) -->
+      <note><pitch><step>G</step><octave>4</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>eighth</type>
+        <stem>up</stem><staff>1</staff>
+        <beam number="1">begin</beam></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>eighth</type>
+        <stem>up</stem><staff>1</staff>
+        <beam number="1">end</beam></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>eighth</type>
+        <stem>up</stem><staff>1</staff>
+        <beam number="1">begin</beam></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>eighth</type>
+        <stem>up</stem><staff>1</staff>
+        <beam number="1">end</beam></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>eighth</type>
+        <stem>down</stem><staff>1</staff>
+        <beam number="1">begin</beam></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>eighth</type>
+        <stem>down</stem><staff>1</staff>
+        <beam number="1">end</beam></note>
+      <!-- Bass: C3 G2 E3, all staccato -->
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>G</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <!-- ── Measure 3: staccato chord D4+B4, then F#4, then F♮4 ── -->
+    <!--   D4+B4 staccato chord exercises "one dot per chord, not per note"  -->
+    <!--   F#4 → F♮4 within the measure exercises natural-accidental logic   -->
+    <measure number="3">
+      <!-- Treble: D4+B4 chord (staccato), F#4, F♮4 -->
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><chord/><pitch><step>B</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>4</octave></pitch>
+        <accidental>sharp</accidental>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch>
+        <accidental>natural</accidental>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <!-- Bass: A2 E3 A2, all staccato -->
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>A</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>A</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <!-- ── Measures 4–8: simple filler; all measures non-empty ── -->
+    <measure number="4">
+      <note><pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>G</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <measure number="5">
+      <note><pitch><step>G</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>G</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>D</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>G</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <measure number="6">
+      <note><pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>down</stem><staff>1</staff></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>F</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>F</step><octave>2</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <measure number="7">
+      <note><pitch><step>G</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice><type>quarter</type>
+        <stem>up</stem><staff>1</staff></note>
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>G</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch>
+        <duration>4</duration><voice>5</voice><type>quarter</type>
+        <stem>up</stem><staff>2</staff>
+        <notations><articulations><staccato/></articulations></notations></note>
+    </measure>
+
+    <measure number="8">
+      <note><pitch><step>C</step><octave>5</octave></pitch>
+        <duration>12</duration><voice>1</voice><type>dotted-half</type>
+        <dot/><stem>down</stem><staff>1</staff></note>
+      <backup><duration>12</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch>
+        <duration>12</duration><voice>5</voice><type>dotted-half</type>
+        <dot/><stem>up</stem><staff>2</staff></note>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
+    </measure>
+
+  </part>
+</score-partwise>

@@ -89,8 +89,10 @@ function timeSigGlyphs(value: number): string {
 interface BeamGroupData {
   eventIndices: number[];
   stemDir: "up" | "down";
-  /** Y coordinate of the primary (outermost) beam line */
-  beamY: number;
+  /** Y coordinate of the primary beam at the first stem */
+  beamStartY: number;
+  /** Y coordinate of the primary beam at the last stem */
+  beamEndY: number;
   /** Per-event stem X and the Y where the stem meets the beam */
   stems: Array<{ stemX: number; stemTipY: number }>;
   /** NoteType of each event, used to place secondary beams for 16th notes */
@@ -112,40 +114,78 @@ function computeBeamGroups(
   beatDivisions: number,
 ): BeamGroupData[] {
   const stemLength = staffSpace * 3;
+  // Diagonal beams may not exceed this total rise/fall, keeping angles readable.
+  const maxBeamRise = staffSpace * 1.5;
   const nrx = staffSpace * 0.55;
 
   return groupBeamableEvents(events, beatDivisions).map((indices) => {
     const chords = indices.map((i) => events[i] as ChordGroup);
     const stemDir = beamStemDirection(chords, clef);
 
-    // Candidate stem-tip Y using the standard stem length for each chord.
-    const candidateTipYs = chords.map((g) => {
+    // Reference Y for each chord: the notehead the beam must clear, i.e. the
+    // outermost note in the beam direction (top note for stem-up, bottom note
+    // for stem-down). The natural beam position sits stemLength beyond this.
+    const referenceYs = chords.map((g) => {
       const ys = g.notes.map((n) =>
         noteY(n.pitch, clef, staffBottomY, staffSpace),
       );
-      const topY = Math.min(...ys);
-      const bottomY = Math.max(...ys);
-      return stemDir === "up" ? topY - stemLength : bottomY + stemLength;
+      return stemDir === "up" ? Math.min(...ys) : Math.max(...ys);
     });
 
-    // Flat beam: set beam Y so every stem is at least stemLength long.
-    const beamY =
+    const stemXs = indices.map((i) =>
+      stemDir === "up" ? eventXs[i] + nrx : eventXs[i] - nrx,
+    );
+
+    // Beam endpoints: natural stem tip (standard length) for the first and last
+    // chord, then clamped so the total rise stays within maxBeamRise.
+    const beamStartY =
       stemDir === "up"
-        ? Math.min(...candidateTipYs)
-        : Math.max(...candidateTipYs);
+        ? referenceYs[0] - stemLength
+        : referenceYs[0] + stemLength;
+    const naturalEndY =
+      stemDir === "up"
+        ? referenceYs[referenceYs.length - 1] - stemLength
+        : referenceYs[referenceYs.length - 1] + stemLength;
+    const rawRise = naturalEndY - beamStartY;
+    const beamEndY =
+      beamStartY + Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
+
+    // Slope in SVG-Y-per-X. Interpolate each stem's tip along the beam line.
+    const dX = stemXs[stemXs.length - 1] - stemXs[0];
+    const slope = dX === 0 ? 0 : (beamEndY - beamStartY) / dX;
+
+    // Ensure no interior chord's beam point falls short of clearing its own
+    // outermost notehead. Shift the entire beam if any chord has a shortfall.
+    let beamShift = 0;
+    for (let j = 0; j < chords.length; j++) {
+      const tipY = beamStartY + slope * (stemXs[j] - stemXs[0]);
+      if (stemDir === "up") {
+        const shortfall = tipY - (referenceYs[j] - stemLength);
+        if (shortfall > beamShift) {
+          beamShift = shortfall;
+        }
+      } else {
+        const shortfall = referenceYs[j] + stemLength - tipY;
+        if (shortfall > beamShift) {
+          beamShift = shortfall;
+        }
+      }
+    }
+    const adjustedBeamStartY =
+      stemDir === "up" ? beamStartY - beamShift : beamStartY + beamShift;
+    const adjustedBeamEndY =
+      stemDir === "up" ? beamEndY - beamShift : beamEndY + beamShift;
 
     const stems = chords.map((_, j) => ({
-      stemX:
-        stemDir === "up"
-          ? eventXs[indices[j]] + nrx
-          : eventXs[indices[j]] - nrx,
-      stemTipY: beamY,
+      stemX: stemXs[j],
+      stemTipY: adjustedBeamStartY + slope * (stemXs[j] - stemXs[0]),
     }));
 
     return {
       eventIndices: indices,
       stemDir,
-      beamY,
+      beamStartY: adjustedBeamStartY,
+      beamEndY: adjustedBeamEndY,
       stems,
       types: chords.map((g) => g.type),
     };
@@ -153,12 +193,22 @@ function computeBeamGroups(
 }
 
 // Compute secondary beam segments for 16th notes within a beam group.
-// Returns x-spans to draw at the secondary beam Y.
+// Returns x/y endpoints for each segment, following the diagonal of the primary
+// beam (offset toward the noteheads by beamOffset).
 function secondaryBeamSegments(
   types: NoteType[],
-  stems: Array<{ stemX: number }>,
-): Array<{ x1: number; x2: number }> {
-  const segments: Array<{ x1: number; x2: number }> = [];
+  stems: Array<{ stemX: number; stemTipY: number }>,
+  beamOffset: number,
+  stemDir: "up" | "down",
+): Array<{ x1: number; y1: number; x2: number; y2: number }> {
+  const yOffset = stemDir === "up" ? beamOffset : -beamOffset;
+  // Pre-compute beam slope for interpolating y at stub endpoints.
+  const dX = stems[stems.length - 1].stemX - stems[0].stemX;
+  const slope =
+    dX === 0 ? 0 : (stems[stems.length - 1].stemTipY - stems[0].stemTipY) / dX;
+
+  const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> =
+    [];
   let i = 0;
   while (i < types.length) {
     if (types[i] !== "16th") {
@@ -172,13 +222,16 @@ function secondaryBeamSegments(
     const runEnd = i;
 
     if (runEnd - runStart === 1) {
-      // Isolated 16th: half-stub toward nearest neighbor
+      // Isolated 16th: half-stub toward nearest neighbor.
       const idx = runStart;
+      const stemY = stems[idx].stemTipY + yOffset;
       if (idx > 0) {
         const halfGap = (stems[idx].stemX - stems[idx - 1].stemX) / 2;
         segments.push({
           x1: stems[idx].stemX - halfGap,
+          y1: stemY - slope * halfGap,
           x2: stems[idx].stemX,
+          y2: stemY,
         });
       } else {
         const halfGap =
@@ -187,13 +240,17 @@ function secondaryBeamSegments(
           2;
         segments.push({
           x1: stems[idx].stemX,
+          y1: stemY,
           x2: stems[idx].stemX + halfGap,
+          y2: stemY + slope * halfGap,
         });
       }
     } else {
       segments.push({
         x1: stems[runStart].stemX,
+        y1: stems[runStart].stemTipY + yOffset,
         x2: stems[runEnd - 1].stemX,
+        y2: stems[runEnd - 1].stemTipY + yOffset,
       });
     }
   }
@@ -1659,7 +1716,7 @@ function TimeSig({
 // staffSpace vs. 4 × staffSpace for regular notes). They always use filled
 // (black) noteheads, always stem up, and always show an eighth-note flag.
 // Acciaccatura (slash=true) additionally draws a diagonal slash through the stem.
-const GRACE_FONT_FACTOR = 2.0; // × staffSpace
+const GRACE_FONT_FACTOR = 2.4; // × staffSpace
 
 function GraceNoteGroupEl({
   graceGroup,
@@ -1863,7 +1920,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
   // Grace note geometry — proportional to the smaller grace scale.
   const graceScale = GRACE_FONT_FACTOR / 4;
   const graceNrx = staffSpace * 0.55 * graceScale; // grace notehead half-width
-  const graceStemLength = staffSpace * 2.5;
+  const graceStemLength = staffSpace * 2.0;
   const isGraceBeamed = N > 1;
   // When the main chord has accidentals, push grace notes further left so
   // the grace stem/flag doesn't overlap the accidental glyph.
@@ -1875,17 +1932,25 @@ const ChordGroupEl = memo(function ChordGroupEl({
     { length: N },
     (_, gi) => x - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE,
   );
-  // When beaming multiple grace groups all stems extend to the same Y.
-  let graceStemTipOverride: number | undefined;
+  // When beaming multiple grace groups, compute a diagonal beam from the first
+  // to the last note's natural stem tip (same slope logic as regular beams).
+  let graceStemTipYs: number[] | undefined;
   if (isGraceBeamed && gracesBefore) {
-    const tipYs = gracesBefore.map((gg) => {
-      // notes are sorted low→high; last = highest pitch.
+    // Natural stem tip for each grace group (top note → stem goes up).
+    const naturalTipYs = gracesBefore.map((gg) => {
       const topNote = gg.notes[gg.notes.length - 1];
       return (
         noteY(topNote.pitch, clef, staffBottomY, staffSpace) - graceStemLength
       );
     });
-    graceStemTipOverride = Math.min(...tipYs);
+    const maxBeamRise = staffSpace * 1.5;
+    const rawRise = naturalTipYs[naturalTipYs.length - 1] - naturalTipYs[0];
+    const clampedRise = Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
+    const dX = graceXs[graceXs.length - 1] - graceXs[0];
+    const slope = dX === 0 ? 0 : clampedRise / dX;
+    graceStemTipYs = graceXs.map(
+      (gx) => naturalTipYs[0] + slope * (gx - graceXs[0]),
+    );
   }
 
   // A staccato chord gets a single dot on the outer notehead away from the
@@ -1925,16 +1990,16 @@ const ChordGroupEl = memo(function ChordGroupEl({
           staffSpace={staffSpace}
           inkColor={inkColor}
           showFlag={!isGraceBeamed}
-          stemTipOverride={graceStemTipOverride}
+          stemTipOverride={graceStemTipYs?.[gi]}
         />
       ))}
       {/* Beam bar connecting multiple grace note groups */}
-      {isGraceBeamed && graceStemTipOverride !== undefined && (
+      {isGraceBeamed && graceStemTipYs !== undefined && (
         <line
           x1={graceXs[0] + graceNrx}
           x2={graceXs[N - 1] + graceNrx}
-          y1={graceStemTipOverride}
-          y2={graceStemTipOverride}
+          y1={graceStemTipYs[0]}
+          y2={graceStemTipYs[N - 1]}
           stroke={inkColor}
           stroke-width={staffSpace * 0.5 * graceScale}
         />
@@ -2105,13 +2170,16 @@ function BeamLines({
   return (
     <g>
       {beamGroups.map((group) => {
-        const { eventIndices, stems, beamY, stemDir, types } = group;
+        const { eventIndices, stems, beamStartY, beamEndY, stemDir, types } =
+          group;
         const x1 = stems[0].stemX;
         const x2 = stems[stems.length - 1].stemX;
-        // Secondary beam sits closer to the noteheads than the primary beam.
-        const beam2Y =
-          stemDir === "up" ? beamY + beamOffset : beamY - beamOffset;
-        const secSegments = secondaryBeamSegments(types, stems);
+        const secSegments = secondaryBeamSegments(
+          types,
+          stems,
+          beamOffset,
+          stemDir,
+        );
         // Use first event index as stable key — unique within a measure.
         const groupKey = eventIndices[0];
 
@@ -2120,8 +2188,8 @@ function BeamLines({
             <line
               x1={x1}
               x2={x2}
-              y1={beamY}
-              y2={beamY}
+              y1={beamStartY}
+              y2={beamEndY}
               stroke={inkColor}
               stroke-width={beamThickness}
             />
@@ -2130,8 +2198,8 @@ function BeamLines({
                 key={seg.x1}
                 x1={seg.x1}
                 x2={seg.x2}
-                y1={beam2Y}
-                y2={beam2Y}
+                y1={seg.y1}
+                y2={seg.y2}
                 stroke={inkColor}
                 stroke-width={beamThickness}
               />
