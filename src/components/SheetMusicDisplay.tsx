@@ -1907,17 +1907,23 @@ const ChordGroupEl = memo(function ChordGroupEl({
     { length: N },
     (_, gi) => x - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE,
   );
-  // When beaming multiple grace groups all stems extend to the same Y.
-  let graceStemTipOverride: number | undefined;
+  // When beaming multiple grace groups, compute a diagonal beam from the first
+  // to the last note's natural stem tip (same slope logic as regular beams).
+  let graceStemTipYs: number[] | undefined;
   if (isGraceBeamed && gracesBefore) {
-    const tipYs = gracesBefore.map((gg) => {
-      // notes are sorted low→high; last = highest pitch.
+    // Natural stem tip for each grace group (top note → stem goes up).
+    const naturalTipYs = gracesBefore.map((gg) => {
       const topNote = gg.notes[gg.notes.length - 1];
       return (
         noteY(topNote.pitch, clef, staffBottomY, staffSpace) - graceStemLength
       );
     });
-    graceStemTipOverride = Math.min(...tipYs);
+    const maxBeamRise = staffSpace * 1.5;
+    const rawRise = naturalTipYs[naturalTipYs.length - 1] - naturalTipYs[0];
+    const clampedRise = Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
+    const dX = graceXs[graceXs.length - 1] - graceXs[0];
+    const slope = dX === 0 ? 0 : clampedRise / dX;
+    graceStemTipYs = graceXs.map((gx) => naturalTipYs[0] + slope * (gx - graceXs[0]));
   }
 
   // A staccato chord gets a single dot on the outer notehead away from the
@@ -1957,16 +1963,16 @@ const ChordGroupEl = memo(function ChordGroupEl({
           staffSpace={staffSpace}
           inkColor={inkColor}
           showFlag={!isGraceBeamed}
-          stemTipOverride={graceStemTipOverride}
+          stemTipOverride={graceStemTipYs?.[gi]}
         />
       ))}
       {/* Beam bar connecting multiple grace note groups */}
-      {isGraceBeamed && graceStemTipOverride !== undefined && (
+      {isGraceBeamed && graceStemTipYs !== undefined && (
         <line
           x1={graceXs[0] + graceNrx}
           x2={graceXs[N - 1] + graceNrx}
-          y1={graceStemTipOverride}
-          y2={graceStemTipOverride}
+          y1={graceStemTipYs[0]}
+          y2={graceStemTipYs[N - 1]}
           stroke={inkColor}
           stroke-width={staffSpace * 0.5 * graceScale}
         />
