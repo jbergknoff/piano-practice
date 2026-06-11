@@ -39,3 +39,20 @@ test("renders sheet music from a MIDI file", async ({ page }) => {
     await expect(page).toHaveScreenshot("sheet-music-midi.png");
   }
 });
+
+// Rondo alla Turca has dense runs of beamed 16th notes — a good visual
+// regression target for beam geometry (slope, stem length, secondary beams).
+test("renders beamed 16th-note runs (Rondo alla Turca clip)", async ({
+  page,
+}) => {
+  await loadFile(page, "rondo-alla-turca-clip.mxl");
+
+  const svg = page.locator("svg").first();
+  await expect(svg).toBeVisible();
+  await expect(svg.locator("text").first()).toBeVisible();
+
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("sheet-music-rondo-beams.png");
+  }
+});
