@@ -122,13 +122,14 @@ function computeBeamGroups(
     const chords = indices.map((i) => events[i] as ChordGroup);
     const stemDir = beamStemDirection(chords, clef);
 
-    // Anchor Y for each chord: the notehead farthest from the beam end of the
-    // stem (bottom note for stem-up, top note for stem-down).
-    const anchorYs = chords.map((g) => {
+    // Reference Y for each chord: the notehead the beam must clear, i.e. the
+    // outermost note in the beam direction (top note for stem-up, bottom note
+    // for stem-down). The natural beam position sits stemLength beyond this.
+    const referenceYs = chords.map((g) => {
       const ys = g.notes.map((n) =>
         noteY(n.pitch, clef, staffBottomY, staffSpace),
       );
-      return stemDir === "up" ? Math.max(...ys) : Math.min(...ys);
+      return stemDir === "up" ? Math.min(...ys) : Math.max(...ys);
     });
 
     const stemXs = indices.map((i) =>
@@ -138,11 +139,13 @@ function computeBeamGroups(
     // Beam endpoints: natural stem tip (standard length) for the first and last
     // chord, then clamped so the total rise stays within maxBeamRise.
     const beamStartY =
-      stemDir === "up" ? anchorYs[0] - stemLength : anchorYs[0] + stemLength;
+      stemDir === "up"
+        ? referenceYs[0] - stemLength
+        : referenceYs[0] + stemLength;
     const naturalEndY =
       stemDir === "up"
-        ? anchorYs[anchorYs.length - 1] - stemLength
-        : anchorYs[anchorYs.length - 1] + stemLength;
+        ? referenceYs[referenceYs.length - 1] - stemLength
+        : referenceYs[referenceYs.length - 1] + stemLength;
     const rawRise = naturalEndY - beamStartY;
     const beamEndY =
       beamStartY + Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
@@ -151,21 +154,18 @@ function computeBeamGroups(
     const dX = stemXs[stemXs.length - 1] - stemXs[0];
     const slope = dX === 0 ? 0 : (beamEndY - beamStartY) / dX;
 
-    // The diagonal beam must not shorten any interior stem below the minimum.
-    // If an intermediate chord's anchor is closer to the beam line than
-    // stemLength, shift the entire beam away from the noteheads to compensate.
+    // Ensure no interior chord's beam point falls short of clearing its own
+    // outermost notehead. Shift the entire beam if any chord has a shortfall.
     let beamShift = 0;
     for (let j = 0; j < chords.length; j++) {
       const tipY = beamStartY + slope * (stemXs[j] - stemXs[0]);
       if (stemDir === "up") {
-        // tipY must be <= anchorYs[j] - stemLength (i.e., above the anchor)
-        const shortfall = tipY - (anchorYs[j] - stemLength);
+        const shortfall = tipY - (referenceYs[j] - stemLength);
         if (shortfall > beamShift) {
           beamShift = shortfall;
         }
       } else {
-        // tipY must be >= anchorYs[j] + stemLength (i.e., below the anchor)
-        const shortfall = anchorYs[j] + stemLength - tipY;
+        const shortfall = referenceYs[j] + stemLength - tipY;
         if (shortfall > beamShift) {
           beamShift = shortfall;
         }
@@ -178,8 +178,7 @@ function computeBeamGroups(
 
     const stems = chords.map((_, j) => ({
       stemX: stemXs[j],
-      stemTipY:
-        adjustedBeamStartY + slope * (stemXs[j] - stemXs[0]),
+      stemTipY: adjustedBeamStartY + slope * (stemXs[j] - stemXs[0]),
     }));
 
     return {
