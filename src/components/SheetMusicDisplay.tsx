@@ -138,17 +138,14 @@ function computeBeamGroups(
     // Beam endpoints: natural stem tip (standard length) for the first and last
     // chord, then clamped so the total rise stays within maxBeamRise.
     const beamStartY =
-      stemDir === "up"
-        ? anchorYs[0] - stemLength
-        : anchorYs[0] + stemLength;
+      stemDir === "up" ? anchorYs[0] - stemLength : anchorYs[0] + stemLength;
     const naturalEndY =
       stemDir === "up"
         ? anchorYs[anchorYs.length - 1] - stemLength
         : anchorYs[anchorYs.length - 1] + stemLength;
     const rawRise = naturalEndY - beamStartY;
     const beamEndY =
-      beamStartY +
-      Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
+      beamStartY + Math.max(-maxBeamRise, Math.min(maxBeamRise, rawRise));
 
     // Slope in SVG-Y-per-X. Interpolate each stem's tip along the beam line.
     const dX = stemXs[stemXs.length - 1] - stemXs[0];
@@ -183,9 +180,7 @@ function secondaryBeamSegments(
   // Pre-compute beam slope for interpolating y at stub endpoints.
   const dX = stems[stems.length - 1].stemX - stems[0].stemX;
   const slope =
-    dX === 0
-      ? 0
-      : (stems[stems.length - 1].stemTipY - stems[0].stemTipY) / dX;
+    dX === 0 ? 0 : (stems[stems.length - 1].stemTipY - stems[0].stemTipY) / dX;
 
   const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> =
     [];
