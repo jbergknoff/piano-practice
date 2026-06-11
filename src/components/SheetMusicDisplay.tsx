@@ -1691,7 +1691,7 @@ function TimeSig({
 // staffSpace vs. 4 × staffSpace for regular notes). They always use filled
 // (black) noteheads, always stem up, and always show an eighth-note flag.
 // Acciaccatura (slash=true) additionally draws a diagonal slash through the stem.
-const GRACE_FONT_FACTOR = 2.0; // × staffSpace
+const GRACE_FONT_FACTOR = 2.4; // × staffSpace
 
 function GraceNoteGroupEl({
   graceGroup,
