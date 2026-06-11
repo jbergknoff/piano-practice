@@ -2,7 +2,7 @@
  * Generates tests/fixtures/simple-grand-piano.mid — a synthetic 8-measure
  * grand-piano piece in 3/4, C major, 120 BPM.  Run once with:
  *
- *   bun scripts/generate-simple-grand-piano-mid.ts
+ *   bun tests/fixtures/generate-simple-grand-piano-mid.ts
  *
  * The resulting MIDI exercises:
  *   - Two tracks (treble + bass) → two staves after conversion
