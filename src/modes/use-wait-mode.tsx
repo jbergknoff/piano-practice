@@ -20,7 +20,8 @@ import {
   saveAttempt,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
-import type { ModeControl, ModeHandle } from "./mode-control";
+import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
+import { useStableHighlights } from "./note-colors";
 
 export type { DebugBeatEvent } from "../debug-log";
 
@@ -180,22 +181,25 @@ export function useWaitMode(
     ctrl.player.seek(targetBeat);
   }, [control.measureRange]);
 
-  const noteColors = useMemo<Record<string, string>>(() => {
+  const computedHighlights = useMemo<ReadonlyArray<NoteHighlight>>(() => {
     if (!active || !control.musicxml || waitPoints.length === 0) {
-      return {};
+      return [];
     }
     const idx = Math.min(pointIndex, waitPoints.length - 1);
     const targetBeat = waitPoints[idx].beat;
-    const colors: Record<string, string> = {};
+    const highlights: NoteHighlight[] = [];
     for (const note of control.musicxml.notes) {
       if (!note.tieStop && note.startBeat === targetBeat) {
-        colors[
-          `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`
-        ] = settings.accent;
+        highlights.push({
+          kind: "score",
+          id: `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
+          color: settings.accent,
+        });
       }
     }
-    return colors;
+    return highlights;
   }, [active, control.musicxml, waitPoints, pointIndex, settings.accent]);
+  const noteHighlights = useStableHighlights(computedHighlights);
 
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
@@ -598,7 +602,7 @@ export function useWaitMode(
     : null;
 
   return {
-    noteColors,
+    noteHighlights,
     activeRef,
     onNoteEvent,
     activate,

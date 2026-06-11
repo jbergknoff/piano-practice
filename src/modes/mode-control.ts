@@ -128,7 +128,7 @@ export interface ModeControl {
   setCursor: (beat: number, behavior: "jump" | "smooth") => void;
   setIsPlaying: (playing: boolean) => void;
   /**
-   * Live current-beat value — drive UI memos (noteColors, etc.) off this.
+   * Live current-beat value — drive UI memos (noteHighlights, etc.) off this.
    * For event handlers that mustn't go stale, read `currentBeatRef.current`.
    */
   currentBeat: number;
@@ -145,8 +145,19 @@ export interface ModeControl {
   appendToDebugLog: (event: DebugBeatEvent) => void;
 }
 
+/**
+ * One coloured element drawn on the staff. Two flavours:
+ * - `score` recolours an existing notehead identified by its score `id`
+ *   (`p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}`).
+ * - `marker` draws a new circle at an arbitrary (beat, pitch) — used by
+ *   playalong to show where the user actually pressed keys.
+ */
+export type NoteHighlight =
+  | { kind: "score"; id: string; color: string }
+  | { kind: "marker"; noteNumber: number; beat: number; color: string };
+
 export interface ModeHandle {
-  noteColors: Record<string, string>;
+  noteHighlights: ReadonlyArray<NoteHighlight>;
   activeRef: { current: boolean };
   onNoteEvent: (noteNumber: number, kind: "on" | "off") => void;
   activate: () => void;

@@ -44,8 +44,10 @@ import type {
   ParsedPart,
   ParsedRest,
   ParsedScore,
+  Pitch,
   ResolvedLayout,
 } from "../../lib/musicxml/sheet-music-types";
+import type { NoteHighlight } from "../modes/mode-control";
 import { FONT_BRAVURA, FONT_SANS } from "../theme";
 
 // SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
@@ -416,21 +418,122 @@ function computeNoteRenderInfos(
   return infos;
 }
 
+// Sharps-preferring MIDI → diatonic pitch mapping. Mirrors noteNumberToPitch
+// in lib/midi/midi-to-musicxml.ts; duplicated here to keep this component free
+// of MIDI imports.
+const PITCH_TABLE: ReadonlyArray<{ step: Pitch["step"]; alter: number }> = [
+  { step: "C", alter: 0 },
+  { step: "C", alter: 1 },
+  { step: "D", alter: 0 },
+  { step: "D", alter: 1 },
+  { step: "E", alter: 0 },
+  { step: "F", alter: 0 },
+  { step: "F", alter: 1 },
+  { step: "G", alter: 0 },
+  { step: "G", alter: 1 },
+  { step: "A", alter: 0 },
+  { step: "A", alter: 1 },
+  { step: "B", alter: 0 },
+];
+
+function midiNumberToPitch(noteNumber: number): Pitch {
+  const entry = PITCH_TABLE[((noteNumber % 12) + 12) % 12];
+  const octave = Math.floor(noteNumber / 12) - 1;
+  return { step: entry.step, alter: entry.alter, octave };
+}
+
+// Player markers: one per user key press. x comes from the press's beat, y is
+// computed against whichever visible staff places the pitch closest to its
+// middle line (so high notes naturally land on treble, low on bass).
+const PlayerMarkerOverlay = memo(function PlayerMarkerOverlay({
+  markers,
+  score,
+  layout,
+  measureStartBeats,
+  visibleParts,
+  inkColor,
+}: {
+  markers: ReadonlyArray<{
+    noteNumber: number;
+    beat: number;
+    color: string;
+  }>;
+  score: ParsedScore;
+  layout: ResolvedLayout;
+  measureStartBeats: number[];
+  visibleParts: Set<string> | undefined;
+  inkColor: string;
+}) {
+  const { staffSpace, staffBottomYs } = layout;
+  const visibleIndices = score.parts
+    .map((part, i) => ({ part, i }))
+    .filter(({ part }) => (visibleParts ? visibleParts.has(part.id) : true))
+    .map(({ i }) => i);
+  if (visibleIndices.length === 0) {
+    return null;
+  }
+  const radius = staffSpace * 0.5;
+  const strokeWidth = Math.max(1, staffSpace * 0.12);
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      {markers.map((marker, index) => {
+        const x = computeCursorX(marker.beat, score, layout, measureStartBeats);
+        if (x === null) {
+          return null;
+        }
+        const pitch = midiNumberToPitch(marker.noteNumber);
+        let bestStaff = visibleIndices[0];
+        let bestDistance = Number.POSITIVE_INFINITY;
+        for (const i of visibleIndices) {
+          const clef = score.parts[i].clef;
+          const middleY = staffBottomYs[i] - 2 * staffSpace;
+          const y = noteY(pitch, clef, staffBottomYs[i], staffSpace);
+          const distance = Math.abs(y - middleY);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestStaff = i;
+          }
+        }
+        const clef = score.parts[bestStaff].clef;
+        const y = noteY(pitch, clef, staffBottomYs[bestStaff], staffSpace);
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: marker list is append-only during a session
+          <g key={index}>
+            <circle
+              cx={x}
+              cy={y}
+              r={radius}
+              fill={marker.color}
+              fillOpacity={0.85}
+              stroke={inkColor}
+              strokeWidth={strokeWidth}
+              strokeOpacity={0.85}
+              data-player-marker="true"
+              data-marker-pitch={marker.noteNumber}
+              data-marker-beat={marker.beat}
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
+});
+
 // Renders colored notehead glyphs on top of the ink notes. Only the notes
-// present in noteColors are drawn, so this re-renders cheaply (a handful of
-// glyphs) while the heavyweight note tree below never re-renders on color
-// changes. Memoized on [infos, noteColors] — noteColors identity is stabilized
+// present in the supplied entries are drawn, so this re-renders cheaply (a
+// handful of glyphs) while the heavyweight note tree below never re-renders on
+// color changes. Memoized on [infos, entries] — entries identity is stabilized
 // upstream so this skips entirely when the active set is unchanged.
 const NoteColorOverlay = memo(function NoteColorOverlay({
   infos,
-  noteColors,
+  entries,
 }: {
   infos: Map<string, NoteRenderInfo>;
-  noteColors: Record<string, string>;
+  entries: ReadonlyArray<{ id: string; color: string }>;
 }) {
   return (
     <g style={{ pointerEvents: "none" }}>
-      {Object.entries(noteColors).map(([id, color]) => {
+      {entries.map(({ id, color }) => {
         const info = infos.get(id);
         if (!info) {
           return null;
@@ -465,7 +568,7 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
 interface SheetMusicDisplayProps {
   musicxml: string;
   layout?: LayoutConfig;
-  noteColors?: Record<string, string>;
+  noteHighlights?: ReadonlyArray<NoteHighlight>;
   visibleParts?: Set<string>;
   /** Accent color used for the focus-range handles. Defaults to blue (#1976d2). */
   accentColor?: string;
@@ -512,7 +615,7 @@ interface SheetMusicDisplayProps {
 export function SheetMusicDisplay({
   musicxml,
   layout: layoutConfig,
-  noteColors = {},
+  noteHighlights,
   visibleParts,
   accentColor = "#1976d2",
   glyphFontSize,
@@ -561,6 +664,28 @@ export function SheetMusicDisplay({
     () => computeNoteRenderInfos(score, layout),
     [score, layout],
   );
+
+  // Split the unified highlight stream into the two render passes (notehead
+  // recolouring vs. arbitrary-position circles). The intermediate arrays are
+  // referentially stable as long as `noteHighlights` is, so the memoized
+  // overlays still skip work when nothing changed.
+  const { scoreEntries, markerEntries } = useMemo(() => {
+    const scores: Array<{ id: string; color: string }> = [];
+    const markers: Array<{ noteNumber: number; beat: number; color: string }> =
+      [];
+    for (const highlight of noteHighlights ?? []) {
+      if (highlight.kind === "score") {
+        scores.push({ id: highlight.id, color: highlight.color });
+      } else {
+        markers.push({
+          noteNumber: highlight.noteNumber,
+          beat: highlight.beat,
+          color: highlight.color,
+        });
+      }
+    }
+    return { scoreEntries: scores, markerEntries: markers };
+  }, [noteHighlights]);
 
   const fontSize = glyphFontSize ?? layout.staffSpace * 4;
 
@@ -962,7 +1087,17 @@ export function SheetMusicDisplay({
               inkColor={inkColor}
             />
           ))}
-          <NoteColorOverlay infos={noteInfos} noteColors={noteColors} />
+          <NoteColorOverlay infos={noteInfos} entries={scoreEntries} />
+          {markerEntries.length > 0 && (
+            <PlayerMarkerOverlay
+              markers={markerEntries}
+              score={score}
+              layout={layout}
+              measureStartBeats={measureStartBeats}
+              visibleParts={visibleParts}
+              inkColor={inkColor}
+            />
+          )}
           {/* Visible handle bars — SVG only, no pointer events */}
           {focusX1 !== null && focusX2 !== null && onFocusRangeChange && (
             <g style={{ pointerEvents: "none" }}>

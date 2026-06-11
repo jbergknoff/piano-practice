@@ -7,9 +7,14 @@ import {
   mockCryptoSubtle,
   sendNoteOff,
   sendNoteOn,
+  waitForFonts,
   waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
 } from "./helpers";
+
+// Same gate as the other screenshot-using specs: pixel screenshots are stable
+// only inside the playwright Docker image. Outside of it, set SKIP_SCREENSHOTS=1.
+const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 test.beforeEach(async ({ page }) => {
   await mockCryptoSubtle(page);
@@ -114,6 +119,137 @@ test("wrong notes do not get highlighted green", async ({ page }) => {
       .sort(),
   );
   expect(greenIds).toEqual(["p0-m1-n0-v0"]);
+});
+
+// Player markers carry the (pitch, beat, color) the user actually pressed.
+// Green (#43a047) is "matched within timing tolerance"; red (#e53935) is not.
+async function readPlayerMarkers(page: import("@playwright/test").Page) {
+  return await page.evaluate(() =>
+    Array.from(document.querySelectorAll("[data-player-marker]")).map(
+      (element) => ({
+        pitch: Number(element.getAttribute("data-marker-pitch")),
+        beat: Number(element.getAttribute("data-marker-beat")),
+        color: element.getAttribute("fill") ?? "",
+      }),
+    ),
+  );
+}
+
+test("player markers appear at every press and are coloured by match", async ({
+  page,
+}) => {
+  await loadFile(page, "c-major-melody.mid");
+  await waitForMockBluetoothConnected(page);
+  await disableCountIn(page);
+
+  await page.getByRole("button", { name: "Playalong" }).click();
+  await page.getByTitle("Play").click();
+
+  // First note: E4 at beat 0 — both starts playback and matches the first
+  // expected note (timing tolerance 0.4 beats). Marker should be green.
+  await sendNoteOn(page, E4);
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-player-marker]").length >= 1,
+    null,
+    { timeout: 3_000 },
+  );
+  await sendNoteOff(page, E4);
+
+  const afterFirst = await readPlayerMarkers(page);
+  expect(afterFirst).toHaveLength(1);
+  expect(afterFirst[0].pitch).toBe(E4);
+  expect(afterFirst[0].color).toBe("#43a047");
+
+  // Second note: MIDI 100 is far outside any expected pitch in c-major-melody,
+  // so the press records as an extra (red) marker — a second circle is drawn
+  // at the time/pitch the user actually played.
+  await sendNoteOn(page, 100);
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-player-marker]").length >= 2,
+    null,
+    { timeout: 3_000 },
+  );
+  await sendNoteOff(page, 100);
+
+  const afterSecond = await readPlayerMarkers(page);
+  expect(afterSecond).toHaveLength(2);
+  // The first marker is unchanged.
+  expect(afterSecond[0]).toMatchObject({ pitch: E4, color: "#43a047" });
+  // The second marker is red and carries the wrong pitch the user played.
+  expect(afterSecond[1].pitch).toBe(100);
+  expect(afterSecond[1].color).toBe("#e53935");
+
+  // Pressing Stop must clear all markers (they're tied to the attempt;
+  // playalong has no separate Reset button — Stop on the play control plays
+  // that role).
+  await page.getByTitle("Stop").click();
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-player-marker]").length === 0,
+    null,
+    { timeout: 2_000 },
+  );
+});
+
+test("player markers screenshot (visual regression for marker rendering)", async ({
+  page,
+}) => {
+  await loadFile(page, "c-major-melody.mid");
+  await waitForMockBluetoothConnected(page);
+  await disableCountIn(page);
+
+  await page.getByRole("button", { name: "Playalong" }).click();
+  await page.getByTitle("Play").click();
+
+  // Piece: c-major-melody at 120 BPM (1 beat = 0.5 s), 8 quarter notes.
+  // Expected pitches per beat:
+  //   beat 0 E4, beat 1 C5, beat 2 E5, beat 3 B4,
+  //   beat 4 G4, beat 5 C5, beat 6 D5, beat 7 F4.
+  // Timing tolerance for a hit: ±0.4 beats.
+  //
+  // The sequence below stays inside measure 1 (beats 0–4) and exercises:
+  //   - on-beat correct: E4 at beat 0
+  //   - early correct:   C5 at beat ~0.7 (target beat 1, 0.3 early → in tol)
+  //   - late correct:    E5 at beat ~2.1 (target beat 2, 0.1 late → in tol)
+  //   - wrong pitch:     G4 at beat ~3.0 (G4 lives at beat 4, far out of tol)
+  //   - way off-beat:    F4 at beat ~3.6 (F4 lives at beat 7, far out of tol)
+  // Producing 3 green + 2 red markers across measure 1, with the latter four
+  // landing visibly between noteheads to show the horizontal timing offset.
+  type Press = { advanceSeconds: number; note: number };
+  const sequence: Press[] = [
+    { advanceSeconds: 0, note: E4 },
+    { advanceSeconds: 0.35, note: C5 },
+    { advanceSeconds: 0.7, note: 76 }, // E5
+    { advanceSeconds: 0.45, note: 67 }, // G4 (wrong: B4 expected here)
+    { advanceSeconds: 0.3, note: 65 }, // F4 (wrong: still in m1)
+  ];
+
+  for (let i = 0; i < sequence.length; i++) {
+    const press = sequence[i];
+    if (press.advanceSeconds > 0) {
+      await advanceAudioTime(page, press.advanceSeconds);
+      // Let the player's rAF tick propagate the new beat into currentBeatRef
+      // before the press reads it (otherwise the press records at the old beat).
+      await page.waitForTimeout(120);
+    }
+    await sendNoteOn(page, press.note);
+    const expectedCount = i + 1;
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("[data-player-marker]").length >= n,
+      expectedCount,
+      { timeout: 3_000 },
+    );
+    await sendNoteOff(page, press.note);
+  }
+
+  // Nudge the cursor a touch further so it doesn't overlap the final marker,
+  // but stays inside measure 1 to keep the framing stable.
+  await advanceAudioTime(page, 0.15);
+  await page.waitForTimeout(120);
+
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("playalong-player-markers.png");
+  }
 });
 
 test("count-in overlay is visible after starting playalong with count-in enabled", async ({
