@@ -1895,7 +1895,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
   // Grace note geometry — proportional to the smaller grace scale.
   const graceScale = GRACE_FONT_FACTOR / 4;
   const graceNrx = staffSpace * 0.55 * graceScale; // grace notehead half-width
-  const graceStemLength = staffSpace * 2.5;
+  const graceStemLength = staffSpace * 2.0;
   const isGraceBeamed = N > 1;
   // When the main chord has accidentals, push grace notes further left so
   // the grace stem/flag doesn't overlap the accidental glyph.
