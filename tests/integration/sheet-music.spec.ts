@@ -1,10 +1,18 @@
 import { expect, test } from "@playwright/test";
-import { loadFile, mockCryptoSubtle, waitForFonts } from "./helpers";
+import {
+  advanceAudioTime,
+  installMocks,
+  loadFile,
+  mockCryptoSubtle,
+  waitForFonts,
+  waitForMockBluetoothConnected,
+} from "./helpers";
 
 // Shared setup: must happen before goto() so init scripts and routes
 // are registered before the page begins loading.
 test.beforeEach(async ({ page }) => {
   await mockCryptoSubtle(page);
+  await installMocks(page);
   await page.goto("/");
 });
 
@@ -55,4 +63,41 @@ test("renders beamed 16th-note runs (Rondo alla Turca clip)", async ({
     await waitForFonts(page);
     await expect(page).toHaveScreenshot("sheet-music-rondo-beams.png");
   }
+});
+
+// Helper: load the full Rondo, start listen playback, advance the mock audio
+// clock to `seconds`, wait for the cursor highlight and scroll to settle, then
+// take a screenshot.  The piece is 2/4 at 120 BPM (2 beats/sec), so
+// `seconds` maps to beat = seconds * 2. Measure n (1-indexed, pickup = 1)
+// starts at beat 2n - 1, i.e. measure 60 ≈ 59.5 s, measure 120 ≈ 119.5 s.
+async function screenshotRondoAtSeconds(
+  page: import("@playwright/test").Page,
+  seconds: number,
+  filename: string,
+): Promise<void> {
+  await loadFile(page, "rondo-alla-turca-full.mxl");
+  await waitForMockBluetoothConnected(page);
+  await page.getByTitle("Play").click();
+  await advanceAudioTime(page, seconds);
+  // Wait until the cursor has reached the target region (at least one note
+  // highlighted) before taking the screenshot.
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-color-id]").length > 0,
+    null,
+    { timeout: 5_000 },
+  );
+  // Allow the smooth-scroll animation a moment to settle on the new position.
+  await page.waitForTimeout(400);
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot(filename);
+  }
+}
+
+test("Rondo alla Turca full score — around measure 60", async ({ page }) => {
+  await screenshotRondoAtSeconds(page, 59.5, "rondo-full-m60.png");
+});
+
+test("Rondo alla Turca full score — around measure 120", async ({ page }) => {
+  await screenshotRondoAtSeconds(page, 119.5, "rondo-full-m120.png");
 });
