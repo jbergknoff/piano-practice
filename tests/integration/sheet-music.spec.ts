@@ -86,8 +86,45 @@ async function screenshotRondoAtSeconds(
     null,
     { timeout: 5_000 },
   );
-  // Allow the smooth-scroll animation a moment to settle on the new position.
-  await page.waitForTimeout(400);
+  // Pause playback so the rAF loop stops firing and the DOM is fully stable
+  // before the screenshot is taken.
+  await page.getByTitle("Pause").click();
+  // Wait for the scroll position to stabilise: poll until scrollLeft is unchanged
+  // across two consecutive 100ms samples (the rAF page-turn fires within ~16ms,
+  // so two stable samples confirm the container has finished moving).
+  await page.waitForFunction(
+    () => {
+      const containers = Array.from(
+        document.querySelectorAll("div"),
+      ) as HTMLElement[];
+      const scrollContainer = containers.find(
+        (el) => el.scrollWidth > el.clientWidth && el.clientWidth > 0,
+      );
+      if (!scrollContainer) {
+        return false;
+      }
+      const current = scrollContainer.scrollLeft;
+      const win = window as Window & {
+        __prevScrollLeft?: number;
+        __prevScrollLeftTime?: number;
+      };
+      const now = Date.now();
+      if (
+        win.__prevScrollLeft === current &&
+        win.__prevScrollLeftTime !== undefined &&
+        now - win.__prevScrollLeftTime >= 100
+      ) {
+        return true;
+      }
+      if (win.__prevScrollLeft !== current) {
+        win.__prevScrollLeft = current;
+        win.__prevScrollLeftTime = now;
+      }
+      return false;
+    },
+    null,
+    { timeout: 5_000, polling: 50 },
+  );
   if (screenshotsEnabled) {
     await waitForFonts(page);
     await expect(page).toHaveScreenshot(filename);
