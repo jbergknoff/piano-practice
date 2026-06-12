@@ -108,7 +108,7 @@ export function useWaitMode(
     }
     const beatMap = new Map<number, Set<number>>();
     for (const note of musicxml.notes) {
-      if (note.tieStop) {
+      if (note.tieStop || note.isGrace) {
         continue;
       }
       const existing = beatMap.get(note.startBeat);
