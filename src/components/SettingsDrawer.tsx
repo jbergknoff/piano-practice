@@ -1,4 +1,4 @@
-import type { TrackInfo } from "../../lib/midi/midi-to-musicxml";
+import type { TrackInfo } from "@piano-practice/midi-to-musicxml";
 import {
   type ThemeTokens,
   chipToggleButtonStyle,

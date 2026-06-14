@@ -1,5 +1,4 @@
-import { diatonicIndex } from "./musicxml-parser";
-import { isRest } from "./musicxml-parser";
+import { diatonicIndex, isRest } from "@piano-practice/sheet-music-core";
 import type {
   ChordGroup,
   LayoutConfig,
@@ -11,7 +10,7 @@ import type {
   ParsedScore,
   Pitch,
   ResolvedLayout,
-} from "./sheet-music-types";
+} from "@piano-practice/sheet-music-core";
 
 // MusicXML divisions per quarter note (matches the generator constant)
 export const DIVISIONS = 4;

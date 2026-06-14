@@ -5,8 +5,17 @@ import { parseMidi } from "midi-file";
 import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "../midi/midi-to-musicxml";
-import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
+} from "@piano-practice/midi-to-musicxml";
+import {
+  type ChordGroup,
+  type MeasureEvent,
+  type ParsedMeasure,
+  type ParsedRest,
+  type Pitch,
+  diatonicIndex,
+  isRest,
+  parseScore,
+} from "@piano-practice/sheet-music-core";
 import {
   DIVISIONS,
   beamStemDirection,
@@ -20,14 +29,7 @@ import {
   noteY,
   resolveLayout,
   stemDirection,
-} from "./sheet-music-layout";
-import type {
-  ChordGroup,
-  MeasureEvent,
-  ParsedMeasure,
-  ParsedRest,
-  Pitch,
-} from "./sheet-music-types";
+} from "@piano-practice/sheet-music-display";
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

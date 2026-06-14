@@ -33,7 +33,7 @@ typecheck: node_modules
 	$(tsc) --noEmit
 
 unit-test: node_modules
-	$(bun) test src lib
+	$(bun) test src lib packages tests/unit
 
 build: node_modules
 	mkdir -p dist

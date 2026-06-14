@@ -6,12 +6,14 @@ import { describe, expect, test } from "bun:test";
  * decisions actually reach the rendered glyphs and geometry — note positions,
  * stem direction, ledger lines, chord spacing, accidentals, beams, staccato.
  */
+import {
+  computeMeasureStartBeats,
+  parseScore,
+} from "@piano-practice/sheet-music-core";
 import { readFileSync, writeFileSync } from "node:fs";
 import { render } from "preact";
-import { parseScore } from "../../lib/musicxml/musicxml-parser";
-import { resolveLayout } from "../../lib/musicxml/sheet-music-layout";
-import { computeMeasureStartBeats } from "../../lib/musicxml/musicxml-playback";
 import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
+import { resolveLayout } from "./sheet-music-layout";
 
 // SMuFL glyphs we assert on (must match the G map in SheetMusicDisplay.tsx).
 const SHARP = "";

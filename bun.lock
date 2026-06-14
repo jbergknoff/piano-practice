@@ -9,6 +9,9 @@
         "@fontsource/geist": "^5.2.9",
         "@fontsource/geist-mono": "^5.2.8",
         "@fontsource/instrument-serif": "^5.2.8",
+        "@piano-practice/midi-to-musicxml": "workspace:*",
+        "@piano-practice/sheet-music-core": "workspace:*",
+        "@piano-practice/sheet-music-display": "workspace:*",
         "midi-file": "^1.2.4",
         "preact": "^10.25.4",
       },
@@ -20,6 +23,28 @@
         "@types/xmldom": "^0.1.34",
         "linkedom": "^0.18.12",
         "typescript": "^5.8.3",
+      },
+    },
+    "packages/midi-to-musicxml": {
+      "name": "@piano-practice/midi-to-musicxml",
+      "version": "0.0.0",
+      "dependencies": {
+        "@piano-practice/sheet-music-core": "workspace:*",
+        "midi-file": "^1.2.4",
+      },
+    },
+    "packages/sheet-music-core": {
+      "name": "@piano-practice/sheet-music-core",
+      "version": "0.0.0",
+    },
+    "packages/sheet-music-display": {
+      "name": "@piano-practice/sheet-music-display",
+      "version": "0.0.0",
+      "dependencies": {
+        "@piano-practice/sheet-music-core": "workspace:*",
+      },
+      "peerDependencies": {
+        "preact": "^10.25.4",
       },
     },
   },
@@ -49,6 +74,12 @@
     "@fontsource/geist-mono": ["@fontsource/geist-mono@5.2.8", "", {}, "sha512-YqZUb3X42GjRaHkibUNyE8K4Rk9A6I9Ez81YpJYiuJN4ggmTW2ixoQpa9EWCPfXZtIsCQJTyrDoV9OJOZO/UcA=="],
 
     "@fontsource/instrument-serif": ["@fontsource/instrument-serif@5.2.8", "", {}, "sha512-s+bkz+syj2rO00Rmq9g0P+PwuLig33DR1xDR8pTWmovH1pUjwnncrFk++q9mmOex8fUQ7oW80gPpPDaw7V1MMw=="],
+
+    "@piano-practice/midi-to-musicxml": ["@piano-practice/midi-to-musicxml@workspace:packages/midi-to-musicxml"],
+
+    "@piano-practice/sheet-music-core": ["@piano-practice/sheet-music-core@workspace:packages/sheet-music-core"],
+
+    "@piano-practice/sheet-music-display": ["@piano-practice/sheet-music-display@workspace:packages/sheet-music-display"],
 
     "@playwright/test": ["@playwright/test@1.60.0", "", { "dependencies": { "playwright": "1.60.0" }, "bin": { "playwright": "cli.js" } }, "sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag=="],
 

@@ -1,4 +1,4 @@
-import type { PlaybackNote } from "./midi-to-musicxml";
+import type { PlaybackNote } from "@piano-practice/sheet-music-core";
 
 // How far ahead (seconds) to schedule notes in each scheduler tick.
 const SCHEDULE_AHEAD = 0.3;

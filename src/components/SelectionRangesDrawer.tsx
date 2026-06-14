@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import type { RepeatSection } from "../../lib/musicxml/musicxml-playback";
+import type { RepeatSection } from "@piano-practice/sheet-music-core";
 import {
   type CustomRange,
   type PlayalongAttempt,

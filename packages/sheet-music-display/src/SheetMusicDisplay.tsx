@@ -7,11 +7,27 @@ import {
   useState,
 } from "preact/hooks";
 import {
+  computeMeasureStartBeats,
   diatonicIndex,
   isRest,
   parseScore,
-} from "../../lib/musicxml/musicxml-parser";
-import { computeMeasureStartBeats } from "../../lib/musicxml/musicxml-playback";
+} from "@piano-practice/sheet-music-core";
+import type {
+  AccidentalKind,
+  ChordGroup,
+  GraceGroup,
+  LayoutConfig,
+  MeasureEvent,
+  NoteType,
+  ParsedMeasure,
+  ParsedNote,
+  ParsedPart,
+  ParsedRest,
+  ParsedScore,
+  Pitch,
+  ResolvedLayout,
+} from "@piano-practice/sheet-music-core";
+import type { NoteHighlight } from "./highlights";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
@@ -31,24 +47,16 @@ import {
   noteY,
   resolveLayout,
   stemDirection,
-} from "../../lib/musicxml/sheet-music-layout";
-import type {
-  AccidentalKind,
-  ChordGroup,
-  GraceGroup,
-  LayoutConfig,
-  MeasureEvent,
-  NoteType,
-  ParsedMeasure,
-  ParsedNote,
-  ParsedPart,
-  ParsedRest,
-  ParsedScore,
-  Pitch,
-  ResolvedLayout,
-} from "../../lib/musicxml/sheet-music-types";
-import type { NoteHighlight } from "../modes/mode-control";
-import { FONT_BRAVURA, FONT_SANS } from "../theme";
+} from "./sheet-music-layout";
+
+// Default font families. The bundling app overrides these via the
+// `glyphFontFamily` / `textFontFamily` props so its theme stays the single
+// source of truth; the defaults keep the component usable standalone.
+// `glyphFontFamily` must be a SMuFL font (e.g. Bravura) for the notation
+// glyphs to render correctly.
+const DEFAULT_GLYPH_FONT_FAMILY = "Bravura, serif";
+const DEFAULT_TEXT_FONT_FAMILY =
+  "'Geist', ui-sans-serif, system-ui, sans-serif";
 
 // SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
 // meaningful when rendered with a SMuFL font such as Bravura.  Each glyph is
@@ -476,7 +484,7 @@ function computeNoteRenderInfos(
 }
 
 // Sharps-preferring MIDI → diatonic pitch mapping. Mirrors noteNumberToPitch
-// in lib/midi/midi-to-musicxml.ts; duplicated here to keep this component free
+// in the midi-to-musicxml package; duplicated here to keep this component free
 // of MIDI imports.
 const PITCH_TABLE: ReadonlyArray<{ step: Pitch["step"]; alter: number }> = [
   { step: "C", alter: 0 },
@@ -631,6 +639,12 @@ interface SheetMusicDisplayProps {
   accentColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
+  /** Font family for the notation glyphs. Must be a SMuFL font (e.g. Bravura).
+   *  Defaults to "Bravura, serif". */
+  glyphFontFamily?: string;
+  /** Font family for plain text such as measure numbers. Defaults to a Geist
+   *  sans-serif stack. */
+  textFontFamily?: string;
   /** Color for staff lines, barlines, stems, and noteheads. Defaults to "black". */
   inkColor?: string;
   /** Extra style applied to the scroll container div. */
@@ -676,6 +690,8 @@ export function SheetMusicDisplay({
   visibleParts,
   accentColor = "#1976d2",
   glyphFontSize,
+  glyphFontFamily = DEFAULT_GLYPH_FONT_FAMILY,
+  textFontFamily = DEFAULT_TEXT_FONT_FAMILY,
   inkColor = "black",
   containerStyle,
   focusRange,
@@ -1116,7 +1132,7 @@ export function SheetMusicDisplay({
           overflow="visible"
           style={{
             display: "block",
-            fontFamily: FONT_BRAVURA,
+            fontFamily: glyphFontFamily,
             fontSize: fontSize,
           }}
           role="img"
@@ -1142,6 +1158,7 @@ export function SheetMusicDisplay({
               staffBottomY={layout.staffBottomYs[p]}
               visible={visibleParts ? visibleParts.has(part.id) : true}
               inkColor={inkColor}
+              textFontFamily={textFontFamily}
             />
           ))}
           <NoteColorOverlay infos={noteInfos} entries={scoreEntries} />
@@ -1291,6 +1308,7 @@ interface StaffProps {
   staffBottomY: number;
   visible: boolean;
   inkColor: string;
+  textFontFamily: string;
 }
 
 const Staff = memo(function Staff({
@@ -1300,6 +1318,7 @@ const Staff = memo(function Staff({
   staffBottomY,
   visible,
   inkColor,
+  textFontFamily,
 }: StaffProps) {
   const { staffSpace, totalWidth, measureXs, measureWidths } = layout;
   const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
@@ -1324,6 +1343,7 @@ const Staff = memo(function Staff({
           staffBottomY={staffBottomY}
           layout={layout}
           inkColor={inkColor}
+          textFontFamily={textFontFamily}
         />
       ))}
       {/* Final barline at right edge of last measure */}
@@ -1410,6 +1430,7 @@ interface MeasureProps {
   staffBottomY: number;
   layout: ResolvedLayout;
   inkColor: string;
+  textFontFamily: string;
 }
 
 function Measure({
@@ -1423,6 +1444,7 @@ function Measure({
   staffBottomY,
   layout,
   inkColor,
+  textFontFamily,
 }: MeasureProps) {
   const { staffSpace } = layout;
   const spine = layout.measureSpines[measureIndex];
@@ -1461,7 +1483,7 @@ function Measure({
           x={x + 4}
           y={staffBottomY - 4 * staffSpace - 5}
           font-size={staffSpace * 0.85}
-          font-family={FONT_SANS}
+          font-family={textFontFamily}
           fill={inkColor}
           fill-opacity={0.38}
         >
@@ -1772,7 +1794,6 @@ function GraceNoteGroupEl({
                 fill={inkColor}
                 text-anchor="middle"
                 font-size={fontSize}
-                font-family={FONT_BRAVURA}
               >
                 {ACCIDENTAL_GLYPH[note.accidental]}
               </text>
@@ -1785,7 +1806,6 @@ function GraceNoteGroupEl({
               fill={inkColor}
               text-anchor="middle"
               font-size={fontSize}
-              font-family={FONT_BRAVURA}
             >
               {G.noteheadBlack}
             </text>
@@ -1820,7 +1840,6 @@ function GraceNoteGroupEl({
                 text-anchor="start"
                 fill={inkColor}
                 font-size={fontSize}
-                font-family={FONT_BRAVURA}
               >
                 {G.flag8thUp}
               </text>

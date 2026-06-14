@@ -5,11 +5,10 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
+import type { TrackInfo } from "@piano-practice/midi-to-musicxml";
+import type { ScoreConversion } from "@piano-practice/sheet-music-core";
+import { SheetMusicDisplay } from "@piano-practice/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
-import type {
-  ScoreConversion,
-  TrackInfo,
-} from "../../../lib/midi/midi-to-musicxml";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { useBluetooth } from "../../hooks/use-bluetooth";
 import { useCustomRanges } from "../../hooks/use-custom-ranges";
@@ -26,6 +25,7 @@ import {
   chipToggleButtonStyle,
   cornerButtonStyle,
   dimBackdrop,
+  FONT_BRAVURA,
   FONT_SANS,
   glassPanel,
   hexA,
@@ -38,7 +38,6 @@ import { HelpBadge } from "../HelpBadge";
 import { RangeNameModal } from "../RangeNameModal";
 import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
-import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import {
   GearIcon,
   OpenFileIcon,
@@ -452,6 +451,8 @@ export function PracticeScreen({
           musicxml={musicxml.musicxml}
           noteHighlights={active.noteHighlights}
           accentColor={accent}
+          glyphFontFamily={FONT_BRAVURA}
+          textFontFamily={FONT_SANS}
           inkColor={theme.ink}
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}

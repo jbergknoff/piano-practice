@@ -1,11 +1,11 @@
 import type { MidiData, MidiEvent } from "midi-file";
-import { musicXmlToConversion } from "../musicxml/musicxml-playback";
-import type { ScoreConversion } from "../musicxml/musicxml-playback";
+import { musicXmlToConversion } from "@piano-practice/sheet-music-core";
+import type { ScoreConversion } from "@piano-practice/sheet-music-core";
 
 export type {
   PlaybackNote,
   ScoreConversion,
-} from "../musicxml/musicxml-playback";
+} from "@piano-practice/sheet-music-core";
 
 // MusicXML divisions per quarter note (1 division = one 16th note)
 const DIVISIONS = 4;

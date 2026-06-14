@@ -27,8 +27,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
+import { musicXmlToConversion } from "@piano-practice/sheet-music-core";
 import { getMidiTracks, midiToMusicXmlWithTracks } from "./midi-to-musicxml";
-import { musicXmlToConversion } from "../musicxml/musicxml-playback";
 
 // ---------------------------------------------------------------------------
 // Helpers
