@@ -43,7 +43,7 @@ IDs are deterministic from the MusicXML structure. To highlight a note, pass `no
 - **We own the rendering code.** Musical edge cases (grace notes, multi-voice, tie slurs, complex accidental rules) need to be added explicitly. The current scope covers what the MIDI-to-MusicXML generator actually produces.
 - **Beaming is implemented.** Consecutive eighth/16th notes within a beat are grouped under beams (`groupBeamableEvents` + `beamStemOverrides`), with stem directions and beam angles resolved per group.
 - **Ties are parsed but not rendered.** Tie information is preserved in the data model (and drives playback duration), but no tie slur is drawn yet.
-- **The Bravura music font is bundled.** All notation — noteheads, accidentals, clefs, rests — is drawn with SMuFL glyphs from Bravura (`@fontsource/bravura`, OFL license), so rendering is consistent across platforms instead of depending on whatever music font the OS provides.
+- **The Bravura music font is bundled.** All notation — noteheads, accidentals, clefs, rests — is drawn with SMuFL glyphs from Bravura (OFL license), so rendering is consistent across platforms instead of depending on whatever music font the OS provides. The `sheet-music-display` package ships its own subset of the font (a base64 woff2 with only the ~27 glyphs the renderer uses) and injects an `@font-face` at runtime, so notation renders with zero setup and the app needs no Bravura `@font-face` of its own. See "Glyph font bundling" in `AGENTS.md`.
 
 ## Cursor and scroll
 

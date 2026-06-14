@@ -12,5 +12,9 @@
   },
   "peerDependencies": {
     "preact": "^10.25.4"
+  },
+  "devDependencies": {
+    "@fontsource/bravura": "^5.2.5",
+    "subset-font": "^2.4.0"
   }
 }

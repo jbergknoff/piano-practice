@@ -25,7 +25,6 @@ import {
   chipToggleButtonStyle,
   cornerButtonStyle,
   dimBackdrop,
-  FONT_BRAVURA,
   FONT_SANS,
   glassPanel,
   hexA,
@@ -451,7 +450,6 @@ export function PracticeScreen({
           musicxml={musicxml.musicxml}
           noteHighlights={active.noteHighlights}
           accentColor={accent}
-          glyphFontFamily={FONT_BRAVURA}
           textFontFamily={FONT_SANS}
           inkColor={theme.ink}
           focusRange={measureRange}

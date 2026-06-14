@@ -48,49 +48,36 @@ import {
   resolveLayout,
   stemDirection,
 } from "./sheet-music-layout";
+import {
+  EMBEDDED_GLYPH_FONT_BASE64,
+  GLYPH_FONT_FAMILY,
+} from "./embedded-glyph-font";
+import { G, timeSigGlyphs } from "./glyphs";
 
-// Default font families. The bundling app overrides these via the
-// `glyphFontFamily` / `textFontFamily` props so its theme stays the single
-// source of truth; the defaults keep the component usable standalone.
-// `glyphFontFamily` must be a SMuFL font (e.g. Bravura) for the notation
-// glyphs to render correctly.
-const DEFAULT_GLYPH_FONT_FAMILY = "Bravura, serif";
+// The notation glyphs are SMuFL codepoints that only render correctly in a
+// SMuFL font, so the package bundles its own Bravura subset and registers it
+// here — consumers get working notation with zero font setup. Injected once per
+// document at module load (guarded for SSR + idempotency) so the @font-face is
+// in place before first paint. `font-display: block` avoids a flash of tofu.
+function injectGlyphFont(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const elementId = "sheet-music-glyph-font";
+  if (document.getElementById(elementId)) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = elementId;
+  style.textContent = `@font-face{font-family:'${GLYPH_FONT_FAMILY}';src:url(data:font/woff2;base64,${EMBEDDED_GLYPH_FONT_BASE64}) format('woff2');font-display:block;}`;
+  document.head.appendChild(style);
+}
+injectGlyphFont();
+
+// Default family for plain text (measure numbers). Unlike the glyph font this is
+// a free choice, so it stays an optional `textFontFamily` prop.
 const DEFAULT_TEXT_FONT_FAMILY =
   "'Geist', ui-sans-serif, system-ui, sans-serif";
-
-// SMuFL glyphs live in Unicode's Private Use Area (U+E000–U+F8FF) and are only
-// meaningful when rendered with a SMuFL font such as Bravura.  Each glyph is
-// designed for font-size = 4 × staff-space, with its baseline at the bottom
-// staff line (y = staffBottomY in our SVG coordinate system).
-const G = {
-  gClef: "\uE050",
-  fClef: "\uE062",
-  accSharp: "\uE262",
-  accFlat: "\uE260",
-  accNatural: "\uE261",
-  noteheadWhole: "\uE0A2",
-  noteheadHalf: "\uE0A3",
-  noteheadBlack: "\uE0A4",
-  restWhole: "\uE4E3",
-  restHalf: "\uE4E4",
-  restQuarter: "\uE4E5",
-  rest8th: "\uE4E6",
-  rest16th: "\uE4E7",
-  flag8thUp: "\uE240",
-  flag8thDown: "\uE241",
-  flag16thUp: "\uE242",
-  flag16thDown: "\uE243",
-} as const;
-
-// SMuFL time-signature digits are U+E080 (0) \u2026 U+E089 (9). Mapping each decimal
-// digit to its glyph lets multi-digit values (e.g. 12) render as adjacent
-// figures using the same Bravura font the rest of the staff uses.
-function timeSigGlyphs(value: number): string {
-  return String(value)
-    .split("")
-    .map((digit) => String.fromCharCode(0xe080 + Number(digit)))
-    .join("");
-}
 
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
@@ -639,9 +626,6 @@ interface SheetMusicDisplayProps {
   accentColor?: string;
   /** Override the SMuFL glyph font-size. Defaults to 4 × the layout staff-space. */
   glyphFontSize?: number;
-  /** Font family for the notation glyphs. Must be a SMuFL font (e.g. Bravura).
-   *  Defaults to "Bravura, serif". */
-  glyphFontFamily?: string;
   /** Font family for plain text such as measure numbers. Defaults to a Geist
    *  sans-serif stack. */
   textFontFamily?: string;
@@ -690,7 +674,6 @@ export function SheetMusicDisplay({
   visibleParts,
   accentColor = "#1976d2",
   glyphFontSize,
-  glyphFontFamily = DEFAULT_GLYPH_FONT_FAMILY,
   textFontFamily = DEFAULT_TEXT_FONT_FAMILY,
   inkColor = "black",
   containerStyle,
@@ -1132,7 +1115,7 @@ export function SheetMusicDisplay({
           overflow="visible"
           style={{
             display: "block",
-            fontFamily: glyphFontFamily,
+            fontFamily: GLYPH_FONT_FAMILY,
             fontSize: fontSize,
           }}
           role="img"

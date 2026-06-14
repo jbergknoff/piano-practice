@@ -14,7 +14,7 @@ Packages (wired together via `node_modules` symlinks created by `bun install`):
 
 - `packages/sheet-music-core/` (`@piano-practice/sheet-music-core`) — the shared MusicXML domain, no Preact, no `midi-file`: `sheet-music-types.ts` (types), `musicxml-parser.ts` (`parseScore`), `expand-repeats.ts`, `musicxml-playback.ts` (`musicXmlToConversion`, `computeMeasureStartBeats`, and the `ScoreConversion`/`PlaybackNote`/`RepeatSection` types), `mxl.ts` (unzips `.mxl` containers). Public surface is `src/index.ts`.
 - `packages/midi-to-musicxml/` (`@piano-practice/midi-to-musicxml`) — `midi-to-musicxml.ts`; depends on core + `midi-file`. Re-exports `ScoreConversion`/`PlaybackNote`.
-- `packages/sheet-music-display/` (`@piano-practice/sheet-music-display`) — the Preact renderer `SheetMusicDisplay.tsx` + `sheet-music-layout.ts` + `highlights.ts` (the `NoteHighlight` public type); depends on core, `preact` is a peer dep. Takes glyph/text font families as props (no app-theme import).
+- `packages/sheet-music-display/` (`@piano-practice/sheet-music-display`) — the Preact renderer `SheetMusicDisplay.tsx` + `sheet-music-layout.ts` + `highlights.ts` (the `NoteHighlight` public type) + `glyphs.ts` (the SMuFL glyph map / codepoints) + `embedded-glyph-font.ts` (a generated base64 Bravura subset); depends on core, `preact` is a peer dep. **Self-contained fonts:** the package bundles its own SMuFL glyph font (see "Glyph font bundling" below) so notation renders with zero setup — only the plain-text font is a prop (`textFontFamily`). No app-theme import.
 
 App-internal code that is **not** (yet) its own package:
 
@@ -59,7 +59,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `packages/midi-to-musicxml/src/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string; derives the `ScoreConversion` via `@piano-practice/sheet-music-core` |
 | `packages/sheet-music-core/src/musicxml-playback.ts` | Derives the `ScoreConversion` (playback notes, timing) from a MusicXML string — shared by the MIDI and direct-load paths |
 | `packages/sheet-music-core/src/mxl.ts` | Unzips `.mxl` containers (native `DecompressionStream`) and returns the root MusicXML string |
-| `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click. Glyph/text fonts come in via `glyphFontFamily`/`textFontFamily` props (the app passes its theme constants); highlight types live in the sibling `highlights.ts` |
+| `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click. Injects the bundled SMuFL `@font-face` at module load; plain text uses the `textFontFamily` prop (the app passes its theme constant); highlight types live in the sibling `highlights.ts`, glyph codepoints in `glyphs.ts` |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
@@ -117,6 +117,15 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 - **Top-left** — back button, piece title (opens info modal on click)
 - **Bottom-left** — Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
+
+### Glyph font bundling
+
+The notation is drawn with SMuFL glyphs (Unicode Private-Use-Area codepoints) that only render in a SMuFL font, so `sheet-music-display` ships its own. There is **no `glyphFontFamily` prop** — the package fully owns the glyph font; a consumer gets working notation with zero setup.
+
+- `glyphs.ts` is the single source of truth for the glyph set: the `G` map (named glyph → char), `timeSigGlyphs`, and `RENDERED_GLYPH_CODEPOINTS` (every codepoint the renderer can emit). The renderer imports `G`/`timeSigGlyphs` from here.
+- `embedded-glyph-font.ts` is **generated, committed code**: a Bravura subset (only the ~27 glyphs in `RENDERED_GLYPH_CODEPOINTS`) as a base64 woff2, plus `GLYPH_FONT_FAMILY` (`"BravuraEmbedded"`, namespaced to avoid colliding with a host page's own `Bravura`). `SheetMusicDisplay.tsx` injects it once per document via an `@font-face` `<style>` at module load (SSR- and idempotency-guarded), so it is in place before first paint.
+- Regenerate with `make generate-glyph-font` (script: `packages/sheet-music-display/scripts/generate-glyph-font.ts`, using `subset-font` + `@fontsource/bravura`, both **devDependencies** of the package — never needed at runtime/install). Run it whenever the glyph set in `glyphs.ts` changes; the drift-guard test `embedded-glyph-font.test.ts` fails if the committed subset is missing a codepoint the renderer emits.
+- Because the font is embedded in the JS bundle, the **app no longer loads Bravura at all** — there is no Bravura `@font-face`/preload in `index.html`, no `cp …bravura…` in the Makefile, and no `@fontsource/bravura` app dependency. (The plain-text font is still supplied by the app via the `textFontFamily` prop.)
 
 
 
