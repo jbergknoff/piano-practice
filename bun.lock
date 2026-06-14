@@ -9,7 +9,6 @@
         "@fontsource/geist-mono": "^5.2.8",
         "@fontsource/instrument-serif": "^5.2.8",
         "@jbergknoff/midi-to-musicxml": "workspace:*",
-        "@jbergknoff/sheet-music-core": "workspace:*",
         "@jbergknoff/sheet-music-display": "workspace:*",
         "midi-file": "^1.2.4",
         "preact": "^10.25.4",
@@ -28,20 +27,12 @@
       "name": "@jbergknoff/midi-to-musicxml",
       "version": "0.0.0",
       "dependencies": {
-        "@jbergknoff/sheet-music-core": "workspace:*",
         "midi-file": "^1.2.4",
       },
-    },
-    "packages/sheet-music-core": {
-      "name": "@jbergknoff/sheet-music-core",
-      "version": "0.0.0",
     },
     "packages/sheet-music-display": {
       "name": "@jbergknoff/sheet-music-display",
       "version": "0.0.0",
-      "dependencies": {
-        "@jbergknoff/sheet-music-core": "workspace:*",
-      },
       "devDependencies": {
         "@fontsource/bravura": "^5.2.5",
         "subset-font": "^2.4.0",
@@ -79,8 +70,6 @@
     "@fontsource/instrument-serif": ["@fontsource/instrument-serif@5.2.8", "", {}, "sha512-s+bkz+syj2rO00Rmq9g0P+PwuLig33DR1xDR8pTWmovH1pUjwnncrFk++q9mmOex8fUQ7oW80gPpPDaw7V1MMw=="],
 
     "@jbergknoff/midi-to-musicxml": ["@jbergknoff/midi-to-musicxml@workspace:packages/midi-to-musicxml"],
-
-    "@jbergknoff/sheet-music-core": ["@jbergknoff/sheet-music-core@workspace:packages/sheet-music-core"],
 
     "@jbergknoff/sheet-music-display": ["@jbergknoff/sheet-music-display@workspace:packages/sheet-music-display"],
 

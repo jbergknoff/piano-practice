@@ -6,12 +6,8 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import {
-  computeMeasureStartBeats,
-  diatonicIndex,
-  isRest,
-  parseScore,
-} from "@jbergknoff/sheet-music-core";
+import { computeMeasureStartBeats } from "./measure-beats";
+import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 import type {
   AccidentalKind,
   ChordGroup,
@@ -26,7 +22,7 @@ import type {
   ParsedScore,
   Pitch,
   ResolvedLayout,
-} from "@jbergknoff/sheet-music-core";
+} from "./sheet-music-types";
 import type { NoteHighlight } from "./highlights";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,

@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { PlaybackNote } from "@jbergknoff/sheet-music-core";
+import type { PlaybackNote } from "../../lib/musicxml/musicxml-playback";
 import {
   formatDate,
   ResultModal,

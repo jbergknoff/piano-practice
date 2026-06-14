@@ -1,10 +1,29 @@
-// Public surface of the MusicXML display package: the Preact renderer, the
-// beat→x cursor helper, the layout primitives, and the highlight entry types.
+// Public surface of the MusicXML display package: parsing a MusicXML string
+// into a structured score, the Preact renderer, the beat→x cursor helper, the
+// layout primitives, and the highlight entry types.
 export type {
   MarkerHighlight,
   NoteHighlight,
   ScoreHighlight,
 } from "./highlights";
+export { computeMeasureStartBeats } from "./measure-beats";
+export { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
+export type {
+  AccidentalKind,
+  ChordGroup,
+  GraceGroup,
+  LayoutConfig,
+  MeasureEvent,
+  MeasureSpine,
+  NoteType,
+  ParsedMeasure,
+  ParsedNote,
+  ParsedPart,
+  ParsedRest,
+  ParsedScore,
+  Pitch,
+  ResolvedLayout,
+} from "./sheet-music-types";
 export {
   ACCIDENTAL_BASE_OFFSET_FACTOR,
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,

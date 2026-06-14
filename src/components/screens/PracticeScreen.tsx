@@ -6,7 +6,7 @@ import {
   useState,
 } from "preact/hooks";
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
-import type { ScoreConversion } from "@jbergknoff/sheet-music-core";
+import type { ScoreConversion } from "../../../lib/musicxml/musicxml-playback";
 import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../../debug-log";

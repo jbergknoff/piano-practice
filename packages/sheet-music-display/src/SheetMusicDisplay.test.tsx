@@ -6,16 +6,14 @@ import { describe, expect, test } from "bun:test";
  * decisions actually reach the rendered glyphs and geometry — note positions,
  * stem direction, ledger lines, chord spacing, accidentals, beams, staccato.
  */
-import {
-  computeMeasureStartBeats,
-  parseScore,
-} from "@jbergknoff/sheet-music-core";
 import { readFileSync, writeFileSync } from "node:fs";
 import { render } from "preact";
 import {
   EMBEDDED_GLYPH_FONT_BASE64,
   GLYPH_FONT_FAMILY,
 } from "./embedded-glyph-font";
+import { computeMeasureStartBeats } from "./measure-beats";
+import { parseScore } from "./musicxml-parser";
 import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
 import { resolveLayout } from "./sheet-music-layout";
 

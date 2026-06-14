@@ -4,7 +4,7 @@ import {
   expandRepeatsMusicXml,
   extractRepeatSections,
 } from "./expand-repeats";
-import { parseScore } from "./musicxml-parser";
+import { parseScore } from "@jbergknoff/sheet-music-display";
 
 // ---------------------------------------------------------------------------
 // computeExpansion unit tests

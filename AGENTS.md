@@ -8,16 +8,16 @@
 
 ### Repository layout
 
-The repo is a **Bun workspace**. Three framework-agnostic-or-renderer libraries live under `packages/*` (each its own `package.json`, scoped `@jbergknoff/*`, source-as-entry — `exports`/`types` point straight at the `.ts`, no per-package build step); the app itself stays at the repo root under `src/` (plus the still-app-internal `lib/`). Tests are colocated next to their subject, except shared MIDI/MusicXML fixtures, which live in `tests/fixtures/` (referenced via repo-root-relative paths, since `bun test` runs from the repo root; integration tests use the `FIXTURES` helper in `tests/integration/helpers.ts`).
+The repo is a **Bun workspace**. Two dependency-light libraries live under `packages/*` (each its own `package.json`, scoped `@jbergknoff/*`, source-as-entry — `exports`/`types` point straight at the `.ts`, no per-package build step); the app itself stays at the repo root under `src/` and `lib/`. Tests are colocated next to their subject, except shared MIDI/MusicXML fixtures, which live in `tests/fixtures/` (referenced via repo-root-relative paths, since `bun test` runs from the repo root; integration tests use the `FIXTURES` helper in `tests/integration/helpers.ts`).
 
-Packages (wired together via `node_modules` symlinks created by `bun install`):
+Neither package imports app code — the app depends on the packages, not the other way around. Packages (wired together via `node_modules` symlinks created by `bun install`):
 
-- `packages/sheet-music-core/` (`@jbergknoff/sheet-music-core`) — the shared MusicXML domain, no Preact, no `midi-file`: `sheet-music-types.ts` (types), `musicxml-parser.ts` (`parseScore`), `expand-repeats.ts`, `musicxml-playback.ts` (`musicXmlToConversion`, `computeMeasureStartBeats`, and the `ScoreConversion`/`PlaybackNote`/`RepeatSection` types), `mxl.ts` (unzips `.mxl` containers). Public surface is `src/index.ts`.
-- `packages/midi-to-musicxml/` (`@jbergknoff/midi-to-musicxml`) — `midi-to-musicxml.ts`; depends on core + `midi-file`. Re-exports `ScoreConversion`/`PlaybackNote`.
-- `packages/sheet-music-display/` (`@jbergknoff/sheet-music-display`) — the Preact renderer `SheetMusicDisplay.tsx` + `sheet-music-layout.ts` + `highlights.ts` (the `NoteHighlight` public type) + `glyphs.ts` (the SMuFL glyph map / codepoints) + `embedded-glyph-font.ts` (a generated base64 Bravura subset); depends on core, `preact` is a peer dep. **Self-contained fonts:** the package bundles its own SMuFL glyph font (see "Glyph font bundling" below) so notation renders with zero setup — only the plain-text font is a prop (`textFontFamily`). No app-theme import.
+- `packages/midi-to-musicxml/` (`@jbergknoff/midi-to-musicxml`) — `midi-to-musicxml.ts`; **only dependency is `midi-file`**. `midiToMusicXmlWithTracks` takes a parsed MIDI file and returns a MusicXML **string** (the app derives the `ScoreConversion` from it). Also exports `getMidiTempo`/`getMidiTracks`/`TrackInfo`.
+- `packages/sheet-music-display/` (`@jbergknoff/sheet-music-display`) — the self-contained "sheet music" library: it **parses and draws** MusicXML. `musicxml-parser.ts` (`parseScore`, `diatonicIndex`, `isRest`) + `sheet-music-types.ts` (the `Parsed*`/`Pitch`/layout types) + `measure-beats.ts` (`computeMeasureStartBeats`) + `sheet-music-layout.ts` + the Preact renderer `SheetMusicDisplay.tsx` + `highlights.ts` (the `NoteHighlight` public type) + `glyphs.ts` (the SMuFL glyph map / codepoints) + `embedded-glyph-font.ts` (a generated base64 Bravura subset). `preact` is a peer dep; no other runtime deps. **Self-contained fonts:** the package bundles its own SMuFL glyph font (see "Glyph font bundling" below) so notation renders with zero setup — only the plain-text font is a prop (`textFontFamily`). No app-theme import.
 
-App-internal code that is **not** (yet) its own package:
+App-internal code (under `lib/` and `src/`):
 
+- `lib/musicxml/` — the **playback-derivation layer**: `musicxml-playback.ts` (`musicXmlToConversion` + the `ScoreConversion`/`PlaybackNote`/`RepeatSection` types, `pitchToMidiNumber`, `getMusicXmlTempo`), `expand-repeats.ts`, `mxl.ts` (unzips `.mxl`). Imports the parser + notation types from `@jbergknoff/sheet-music-display`.
 - `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts`
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `globals.d.ts`
@@ -37,7 +37,7 @@ The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practi
 The MusicXML string is the single source of playback metadata. Conversion and
 playback derivation are separate steps:
 
-- **MIDI source**: MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` (`@jbergknoff/midi-to-musicxml`) builds a MusicXML string → `musicXmlToConversion` (in `@jbergknoff/sheet-music-core`'s `musicxml-playback.ts`) derives the playback notes.
+- **MIDI source**: MIDI file → `parseMidi` (midi-file) → `midiToMusicXmlWithTracks` (`@jbergknoff/midi-to-musicxml`) returns a MusicXML string → `musicXmlToConversion` (in `lib/musicxml/musicxml-playback.ts`) derives the playback notes. `App.tsx` composes the two.
 - **MusicXML source**: `.musicxml`/`.xml` read as text (or `.mxl` unzipped via `extractMusicXmlFromMxl`) → `musicXmlToConversion`.
 
 Both paths produce a `ScoreConversion` (`musicxml` string, `notes`, `totalBeats`, `timeSigNum`/`timeSigDen`). `musicXmlToConversion` parses the score with the same `parseScore` the renderer uses, so each `PlaybackNote`'s ID (`p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}`) matches the renderer's by construction. Standard MusicXML has no per-note velocity, so playback uses a constant default velocity and notation-derived durations (staccato shortens the sounding length). The `ScoreConversion` is fed into `MidiPlayer` for playback and into each mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) via the shared `ModeControl`.
@@ -55,10 +55,10 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/modes/use-wait-mode.tsx` | Mode hook: wait-point matching, scoring, result modal; receives `ModeControl` |
 | `src/modes/use-playalong-mode.tsx` | Mode hook: count-in, audio-to-piano routing, F1 scoring, count-in overlay + result modal |
 | `src/modes/use-listen-mode.ts` | Mode hook: thin wrapper over `MidiPlayer` for play/pause/reset/seek + sounding-note highlights |
-| `lib/midi/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping, count-in scheduling (app-internal; imports `PlaybackNote` from `@jbergknoff/sheet-music-core`) |
-| `packages/midi-to-musicxml/src/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string; derives the `ScoreConversion` via `@jbergknoff/sheet-music-core` |
-| `packages/sheet-music-core/src/musicxml-playback.ts` | Derives the `ScoreConversion` (playback notes, timing) from a MusicXML string — shared by the MIDI and direct-load paths |
-| `packages/sheet-music-core/src/mxl.ts` | Unzips `.mxl` containers (native `DecompressionStream`) and returns the root MusicXML string |
+| `lib/midi/midi-player.ts` | Class: Web Audio / MIDI playback, seek, BPM, focus-range looping, count-in scheduling (app-internal; imports `PlaybackNote` from `lib/musicxml/musicxml-playback`) |
+| `lib/musicxml/musicxml-playback.ts` | Derives the `ScoreConversion` (playback notes, timing) from a MusicXML string — shared by the MIDI and direct-load paths; owns the `ScoreConversion`/`PlaybackNote` types. Imports `parseScore`/types from `@jbergknoff/sheet-music-display` |
+| `lib/musicxml/mxl.ts` | Unzips `.mxl` containers (native `DecompressionStream`) and returns the root MusicXML string |
+| `packages/midi-to-musicxml/src/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string (returns the string; the app derives the `ScoreConversion`) |
 | `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click. Injects the bundled SMuFL `@font-face` at module load; plain text uses the `textFontFamily` prop (the app passes its theme constant); highlight types live in the sibling `highlights.ts`, glyph codepoints in `glyphs.ts` |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |

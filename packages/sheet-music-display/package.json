@@ -7,9 +7,6 @@
     ".": "./src/index.ts"
   },
   "types": "./src/index.ts",
-  "dependencies": {
-    "@jbergknoff/sheet-music-core": "workspace:*"
-  },
   "peerDependencies": {
     "preact": "^10.25.4"
   },

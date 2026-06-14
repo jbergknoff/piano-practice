@@ -7,13 +7,13 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
+import { parseScore } from "@jbergknoff/sheet-music-display";
+import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import {
   type ScoreConversion,
-  extractMusicXmlFromMxl,
   getMusicXmlTempo,
   musicXmlToConversion,
-  parseScore,
-} from "@jbergknoff/sheet-music-core";
+} from "../lib/musicxml/musicxml-playback";
 import {
   type TrackInfo,
   getMidiTempo,
@@ -99,7 +99,9 @@ export function App() {
     if (!midiData || selectedTracks.length === 0) {
       return null;
     }
-    return midiToMusicXmlWithTracks(midiData, selectedTracks);
+    return musicXmlToConversion(
+      midiToMusicXmlWithTracks(midiData, selectedTracks),
+    );
   }, [loadedXml, midiData, selectedTracks]);
 
   // ── Debug log ────────────────────────────────────────────────────────────

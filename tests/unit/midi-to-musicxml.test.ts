@@ -27,8 +27,16 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { MidiData, MidiEvent } from "midi-file";
 import { parseMidi } from "midi-file";
-import { musicXmlToConversion } from "@jbergknoff/sheet-music-core";
-import { getMidiTracks, midiToMusicXmlWithTracks } from "./midi-to-musicxml";
+import {
+  getMidiTracks,
+  midiToMusicXmlWithTracks,
+} from "@jbergknoff/midi-to-musicxml";
+import { musicXmlToConversion } from "../../lib/musicxml/musicxml-playback";
+
+// midiToMusicXmlWithTracks now returns a MusicXML string; these tests want
+// the derived ScoreConversion, so wrap it the way the app does.
+const midiConversion = (...args: Parameters<typeof midiToMusicXmlWithTracks>) =>
+  musicXmlToConversion(midiToMusicXmlWithTracks(...args));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -124,7 +132,7 @@ function parseMeasureNotes(
 // Convenience helper: run one-track programmatic MIDI through the app's
 // converter and return the MusicXML string.
 function convert(events: MidiEvent[], tpb = TPB): string {
-  return midiToMusicXmlWithTracks(makeMidi(events, tpb), [0]).musicxml;
+  return midiConversion(makeMidi(events, tpb), [0]).musicxml;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,7 +478,7 @@ describe("midiToMusicXmlWithTracks – programmatic fixtures", () => {
 
   // ── Empty MIDI (no notes) ───────────────────────────────────────────────
   test("MIDI with no notes produces a valid empty-measure score", () => {
-    const { musicxml: xml } = midiToMusicXmlWithTracks(
+    const { musicxml: xml } = midiConversion(
       makeMidi([{ deltaTime: 0, type: "endOfTrack", meta: true }]),
       [0],
     );
@@ -595,18 +603,12 @@ describe("key signature changes", () => {
     // Regression: the converter used to keep the last keySignature event, so a
     // piece that opens in C and modulates would wrongly show the later key at
     // measure 1. Measure 1 must reflect the initial (tick-0) key.
-    const { musicxml: xml } = midiToMusicXmlWithTracks(
-      fourMeasuresWithKeyChange(),
-      [0],
-    );
+    const { musicxml: xml } = midiConversion(fourMeasuresWithKeyChange(), [0]);
     expect(keyByMeasure(xml)[1]).toBe(0);
   });
 
   test("a mid-piece key change is emitted at the measure it begins", () => {
-    const { musicxml: xml } = midiToMusicXmlWithTracks(
-      fourMeasuresWithKeyChange(),
-      [0],
-    );
+    const { musicxml: xml } = midiConversion(fourMeasuresWithKeyChange(), [0]);
     const keys = keyByMeasure(xml);
     expect(keys[1]).toBe(0);
     expect(keys[3]).toBe(2); // change at tick 3840 = start of measure 3
@@ -616,10 +618,7 @@ describe("key signature changes", () => {
   });
 
   test("the track-based path also emits per-measure key changes", () => {
-    const { musicxml } = midiToMusicXmlWithTracks(
-      fourMeasuresWithKeyChange(),
-      [0],
-    );
+    const { musicxml } = midiConversion(fourMeasuresWithKeyChange(), [0]);
     const keys = keyByMeasure(musicxml);
     expect(keys[1]).toBe(0);
     expect(keys[3]).toBe(2);
@@ -660,10 +659,7 @@ describe("midiToMusicXmlWithTracks – staccato", () => {
       [4 * TPB, { type: "noteOff", channel: 0, noteNumber: 62, velocity: 0 }],
     ];
 
-    const { musicxml } = midiToMusicXmlWithTracks(
-      makeMidi(withDeltas(pairs)),
-      [0],
-    );
+    const { musicxml } = midiConversion(makeMidi(withDeltas(pairs)), [0]);
 
     // Exactly one staccato — the clipped C4, not the sustained D4.
     expect([...musicxml.matchAll(/<staccato\/>/g)]).toHaveLength(1);
@@ -695,10 +691,7 @@ describe("midiToMusicXmlWithTracks – staccato", () => {
       ]);
     }
 
-    const { musicxml } = midiToMusicXmlWithTracks(
-      makeMidi(withDeltas(pairs)),
-      [0],
-    );
+    const { musicxml } = midiConversion(makeMidi(withDeltas(pairs)), [0]);
 
     expect(musicxml).not.toContain("<staccato/>");
   });
@@ -761,7 +754,7 @@ describe("midiToMusicXmlWithTracks – multi-track durationBeats", () => {
     };
 
     const trackIndices = getMidiTracks(midiData).map((track) => track.index);
-    const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
+    const { musicxml } = midiConversion(midiData, trackIndices);
     const { notes } = musicXmlToConversion(musicxml);
 
     const treble = notes.filter((note) => note.partIndex === 0);
@@ -796,7 +789,7 @@ describe("midiToMusicXmlWithTracks – multi-track durationBeats", () => {
 
 describe("midiToMusicXmlWithTracks – g-major-melody.mid fixture", () => {
   const midiData = parseMidi(readFileSync("tests/fixtures/g-major-melody.mid"));
-  const { musicxml: xml } = midiToMusicXmlWithTracks(
+  const { musicxml: xml } = midiConversion(
     midiData,
     getMidiTracks(midiData).map((track) => track.index),
   );
@@ -874,7 +867,7 @@ describe("midiToMusicXmlWithTracks – g-major-melody.mid fixture", () => {
 
 describe("midiToMusicXmlWithTracks – partitura test_basic_midi fixture", () => {
   const midiData = parseMidi(readFileSync("tests/fixtures/c-major-melody.mid"));
-  const { musicxml: xml } = midiToMusicXmlWithTracks(
+  const { musicxml: xml } = midiConversion(
     midiData,
     getMidiTracks(midiData).map((track) => track.index),
   );
@@ -936,7 +929,7 @@ describe("midiToMusicXmlWithTracks – partitura mozart_k265_var1 fixture", () =
   const midiData = parseMidi(
     readFileSync("tests/fixtures/mozart-k265-var1.mid"),
   );
-  const { musicxml: xml } = midiToMusicXmlWithTracks(
+  const { musicxml: xml } = midiConversion(
     midiData,
     getMidiTracks(midiData).map((track) => track.index),
   );
@@ -995,7 +988,7 @@ describe("midiToMusicXmlWithTracks – partitura mozart_k265_var1 fixture", () =
 
 describe("fixture comparison – c-major-melody.mid vs hand-written expected", () => {
   const midiData = parseMidi(readFileSync("tests/fixtures/c-major-melody.mid"));
-  const { musicxml: ourXml } = midiToMusicXmlWithTracks(
+  const { musicxml: ourXml } = midiConversion(
     midiData,
     getMidiTracks(midiData).map((track) => track.index),
   );
@@ -1037,7 +1030,7 @@ describe("fixture comparison – simple-grand-piano MIDI vs. reference MusicXML"
   const midiData = parseMidi(
     readFileSync("tests/fixtures/simple-grand-piano.mid"),
   );
-  const { musicxml: ourXml } = midiToMusicXmlWithTracks(
+  const { musicxml: ourXml } = midiConversion(
     midiData,
     getMidiTracks(midiData).map((track) => track.index),
   );
@@ -1110,7 +1103,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       ],
     ];
 
-    const { musicxml, notes } = midiToMusicXmlWithTracks(
+    const { musicxml, notes } = midiConversion(
       makeMidi(withDeltas(pairs)),
       [0],
     );
@@ -1149,10 +1142,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       ],
     ];
 
-    const { musicxml } = midiToMusicXmlWithTracks(
-      makeMidi(withDeltas(pairs)),
-      [0],
-    );
+    const { musicxml } = midiConversion(makeMidi(withDeltas(pairs)), [0]);
 
     expect(musicxml).toContain('<grace slash="yes"/>');
   });
@@ -1171,10 +1161,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       ],
     ];
 
-    const { musicxml } = midiToMusicXmlWithTracks(
-      makeMidi(withDeltas(pairs)),
-      [0],
-    );
+    const { musicxml } = midiConversion(makeMidi(withDeltas(pairs)), [0]);
 
     // Grace note present but without slash (appoggiatura).
     expect(musicxml).toContain("<grace/>");
@@ -1190,7 +1177,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       [graceLen, { type: "noteOff", channel: 0, noteNumber: 64, velocity: 0 }],
     ];
 
-    const { musicxml, notes } = midiToMusicXmlWithTracks(
+    const { musicxml, notes } = midiConversion(
       makeMidi(withDeltas(pairs)),
       [0],
     );
@@ -1225,10 +1212,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       ],
     ];
 
-    const { notes } = midiToMusicXmlWithTracks(
-      makeMidi(withDeltas(pairs)),
-      [0],
-    );
+    const { notes } = midiConversion(makeMidi(withDeltas(pairs)), [0]);
 
     const graceNote = notes.find((note) => note.isGrace);
     const mainNote = notes.find(
@@ -1267,7 +1251,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       ],
     ];
 
-    const { musicxml, notes } = midiToMusicXmlWithTracks(
+    const { musicxml, notes } = midiConversion(
       makeMidi(withDeltas(pairs)),
       [0],
     );
@@ -1324,7 +1308,7 @@ describe("midiToMusicXmlWithTracks – grace notes", () => {
       ],
     ];
 
-    const { musicxml, notes } = midiToMusicXmlWithTracks(
+    const { musicxml, notes } = midiConversion(
       makeMidi(withDeltas(pairs)),
       [0],
     );

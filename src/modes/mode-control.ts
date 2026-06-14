@@ -1,4 +1,4 @@
-import type { ScoreConversion } from "@jbergknoff/sheet-music-core";
+import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
 import type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 import type { VNode } from "preact";
 import type { MidiPlayer } from "../../lib/midi/midi-player";
