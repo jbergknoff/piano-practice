@@ -1,5 +1,5 @@
 {
-  "name": "@piano-practice/midi-to-musicxml",
+  "name": "@jbergknoff/midi-to-musicxml",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
   },
   "types": "./src/index.ts",
   "dependencies": {
-    "@piano-practice/sheet-music-core": "workspace:*",
+    "@jbergknoff/sheet-music-core": "workspace:*",
     "midi-file": "^1.2.4"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@piano-practice/sheet-music-core",
+  "name": "@jbergknoff/sheet-music-core",
   "version": "0.0.0",
   "private": true,
   "type": "module",

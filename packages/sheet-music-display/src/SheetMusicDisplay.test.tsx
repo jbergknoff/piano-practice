@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import {
   computeMeasureStartBeats,
   parseScore,
-} from "@piano-practice/sheet-music-core";
+} from "@jbergknoff/sheet-music-core";
 import { readFileSync, writeFileSync } from "node:fs";
 import { render } from "preact";
 import {

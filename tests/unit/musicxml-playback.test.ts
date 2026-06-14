@@ -4,14 +4,14 @@ import { parseMidi } from "midi-file";
 import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "@piano-practice/midi-to-musicxml";
+} from "@jbergknoff/midi-to-musicxml";
 import {
   GRACE_NOTE_BEATS,
   isRest,
   musicXmlToConversion,
   parseScore,
   pitchToMidiNumber,
-} from "@piano-practice/sheet-music-core";
+} from "@jbergknoff/sheet-music-core";
 
 // The set of note IDs the renderer assigns from a parsed score, built exactly
 // as SheetMusicDisplay does: chords and their preceding grace groups, keyed by

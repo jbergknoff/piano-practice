@@ -5,9 +5,9 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { TrackInfo } from "@piano-practice/midi-to-musicxml";
-import type { ScoreConversion } from "@piano-practice/sheet-music-core";
-import { SheetMusicDisplay } from "@piano-practice/sheet-music-display";
+import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
+import type { ScoreConversion } from "@jbergknoff/sheet-music-core";
+import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { useBluetooth } from "../../hooks/use-bluetooth";

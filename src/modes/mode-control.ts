@@ -1,5 +1,5 @@
-import type { ScoreConversion } from "@piano-practice/sheet-music-core";
-import type { NoteHighlight } from "@piano-practice/sheet-music-display";
+import type { ScoreConversion } from "@jbergknoff/sheet-music-core";
+import type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 import type { VNode } from "preact";
 import type { MidiPlayer } from "../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../debug-log";
@@ -7,7 +7,7 @@ import type { BtStatus } from "../hooks/use-bluetooth";
 
 // Re-exported from the display package (its public API) so the rest of the app
 // can keep importing the highlight type from mode-control.
-export type { NoteHighlight } from "@piano-practice/sheet-music-display";
+export type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 
 export interface PlayerHandle {
   play(): Promise<void>;

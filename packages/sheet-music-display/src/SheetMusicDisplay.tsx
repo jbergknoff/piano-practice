@@ -11,7 +11,7 @@ import {
   diatonicIndex,
   isRest,
   parseScore,
-} from "@piano-practice/sheet-music-core";
+} from "@jbergknoff/sheet-music-core";
 import type {
   AccidentalKind,
   ChordGroup,
@@ -26,7 +26,7 @@ import type {
   ParsedScore,
   Pitch,
   ResolvedLayout,
-} from "@piano-practice/sheet-music-core";
+} from "@jbergknoff/sheet-music-core";
 import type { NoteHighlight } from "./highlights";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,

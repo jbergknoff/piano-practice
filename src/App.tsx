@@ -13,13 +13,13 @@ import {
   getMusicXmlTempo,
   musicXmlToConversion,
   parseScore,
-} from "@piano-practice/sheet-music-core";
+} from "@jbergknoff/sheet-music-core";
 import {
   type TrackInfo,
   getMidiTempo,
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "@piano-practice/midi-to-musicxml";
+} from "@jbergknoff/midi-to-musicxml";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
