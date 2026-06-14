@@ -1,7 +1,6 @@
 // Public surface of the shared MusicXML domain: parsing a MusicXML string into
 // a structured score, and deriving playback timing/notes from it. Used by both
 // the MIDI→MusicXML conversion package and the sheet-music display package.
-export * from "./sheet-music-types";
 export { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
 export {
   DEFAULT_VELOCITY,
@@ -17,3 +16,19 @@ export type {
   ScoreConversion,
 } from "./musicxml-playback";
 export { extractMusicXmlFromMxl } from "./mxl";
+export type {
+  AccidentalKind,
+  ChordGroup,
+  GraceGroup,
+  LayoutConfig,
+  MeasureEvent,
+  MeasureSpine,
+  NoteType,
+  ParsedMeasure,
+  ParsedNote,
+  ParsedPart,
+  ParsedRest,
+  ParsedScore,
+  Pitch,
+  ResolvedLayout,
+} from "./sheet-music-types";
