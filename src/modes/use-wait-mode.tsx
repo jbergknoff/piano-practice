@@ -6,10 +6,10 @@ import {
   useState,
 } from "preact/hooks";
 import {
-  formatDate,
   ResultModal,
   type ResultRow,
   ScoreChip,
+  formatDate,
 } from "../components/ResultModal";
 import type { WaitModeDebugEvent } from "../debug-log";
 import {
@@ -28,6 +28,7 @@ export type { DebugBeatEvent } from "../debug-log";
 interface WaitPoint {
   beat: number;
   noteNumbers: Set<number>;
+  isGrace: boolean;
 }
 
 export interface WaitModeSettings {
@@ -106,21 +107,34 @@ export function useWaitMode(
     if (!musicxml) {
       return [];
     }
-    const beatMap = new Map<number, Set<number>>();
+    const beatMap = new Map<
+      number,
+      { noteNumbers: Set<number>; isGrace: boolean }
+    >();
     for (const note of musicxml.notes) {
       if (note.tieStop) {
         continue;
       }
       const existing = beatMap.get(note.startBeat);
       if (existing) {
-        existing.add(note.noteNumber);
+        existing.noteNumbers.add(note.noteNumber);
+        if (!note.isGrace) {
+          existing.isGrace = false;
+        }
       } else {
-        beatMap.set(note.startBeat, new Set([note.noteNumber]));
+        beatMap.set(note.startBeat, {
+          noteNumbers: new Set([note.noteNumber]),
+          isGrace: note.isGrace ?? false,
+        });
       }
     }
     return Array.from(beatMap.entries())
       .sort(([a], [b]) => a - b)
-      .map(([beat, noteNumbers]) => ({ beat, noteNumbers }));
+      .map(([beat, { noteNumbers, isGrace }]) => ({
+        beat,
+        noteNumbers,
+        isGrace,
+      }));
   }, [control.musicxml]);
 
   const waitPointsRef = useRef(waitPoints);
@@ -429,6 +443,14 @@ export function useWaitMode(
         } else {
           break;
         }
+      }
+      // The cursor-based loop above finds the last wait point at or before the
+      // cursor, which is typically the main chord. If that chord is preceded by
+      // grace-note wait points, they would also have beat <= cursor but get
+      // overwritten by the main chord. Walk back to include them so the user
+      // always starts at the first grace note, not the main chord.
+      while (startIdx > 0 && points[startIdx - 1].isGrace) {
+        startIdx -= 1;
       }
     }
 
