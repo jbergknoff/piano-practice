@@ -46,6 +46,22 @@ function formatTime(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Returns the 1-based measure number containing `beat`. */
+function beatToMeasureNumber(
+  beat: number,
+  measureStartBeats: number[],
+): number {
+  let measure = 1;
+  for (let i = 0; i < measureStartBeats.length; i++) {
+    if (measureStartBeats[i] <= beat) {
+      measure = i + 1;
+    } else {
+      break;
+    }
+  }
+  return measure;
+}
+
 /** Returns the first wait-point index inside the range and the exclusive end index. */
 function rangeBounds(
   points: WaitPoint[],
@@ -62,6 +78,13 @@ function rangeBounds(
   let first = points.findIndex((p) => p.beat >= startBeat);
   if (first === -1) {
     first = points.length;
+  }
+  // Grace notes for the first chord in the range are placed at beats just
+  // before the measure boundary (mainBeat - N * GRACE_NOTE_BEATS), so they
+  // fall outside the raw startBeat cutoff. Walk back through any immediately
+  // preceding grace-note wait points so they are included in the loop.
+  while (first > 0 && points[first - 1].isGrace) {
+    first -= 1;
   }
   let end = points.findIndex((p) => p.beat >= endBeat);
   if (end === -1) {
@@ -224,7 +247,6 @@ export function useWaitMode(
       return;
     }
     const ctrl = controlRef.current;
-    const tSig = ctrl.musicxml?.timeSigNum ?? 4; // used only for approximate debug-log measure numbers
     const measureStartBeats = ctrl.measureStartBeats;
     const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const sensitivityMs = settingsRef.current.noteSensitivityMilliseconds;
@@ -256,7 +278,8 @@ export function useWaitMode(
         note: noteNumber,
         kind: "off",
         pointIndex: idx,
-        measure: offBeat >= 0 ? Math.floor(offBeat / tSig) + 1 : -1,
+        measure:
+          offBeat >= 0 ? beatToMeasureNumber(offBeat, measureStartBeats) : -1,
         beat: offBeat,
         expected: wp ? [...wp.noteNumbers] : [],
         held: [...held],
@@ -282,7 +305,7 @@ export function useWaitMode(
     const wp = points[idx];
     const expected = wp.noteNumbers;
     const beat = wp.beat;
-    const measure = Math.floor(beat / tSig) + 1;
+    const measure = beatToMeasureNumber(beat, measureStartBeats);
     const heldSnapshot = [...held];
     const expectedSnapshot = [...expected];
     const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
