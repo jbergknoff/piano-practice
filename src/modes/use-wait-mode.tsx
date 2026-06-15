@@ -6,10 +6,10 @@ import {
   useState,
 } from "preact/hooks";
 import {
-  formatDate,
   ResultModal,
   type ResultRow,
   ScoreChip,
+  formatDate,
 } from "../components/ResultModal";
 import type { WaitModeDebugEvent } from "../debug-log";
 import {
@@ -28,6 +28,16 @@ export type { DebugBeatEvent } from "../debug-log";
 interface WaitPoint {
   beat: number;
   noteNumbers: Set<number>;
+  isGrace: boolean;
+  /**
+   * Rendered measure this wait point belongs to (1-based, matching the focus
+   * range numbering). Grace notes are tagged with their main note's measure,
+   * even though the playback layer places them at beats just before the
+   * barline (mainBeat - k * GRACE_NOTE_BEATS), which would otherwise put them
+   * in the previous measure's beat span. Membership and ordering use this, not
+   * the raw beat, so grace notes stay with the measure they render in.
+   */
+  measure: number;
 }
 
 export interface WaitModeSettings {
@@ -45,24 +55,25 @@ function formatTime(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Returns the first wait-point index inside the range and the exclusive end index. */
+/**
+ * Returns the first wait-point index inside the range and the exclusive end
+ * index. Wait points are sorted by (measure, beat), so each measure occupies a
+ * contiguous slice; membership is by rendered measure number, which keeps
+ * grace notes attached to the measure they render in rather than the previous
+ * measure their pre-barline beats fall into.
+ */
 function rangeBounds(
   points: WaitPoint[],
   range: { from: number; to: number } | null,
-  measureStartBeats: number[],
-  totalBeats: number,
 ): { first: number; end: number } {
   if (!range) {
     return { first: 0, end: points.length };
   }
-  const startBeat = measureStartBeats[range.from - 1] ?? 0;
-  const endBeat = measureStartBeats[range.to] ?? totalBeats;
-
-  let first = points.findIndex((p) => p.beat >= startBeat);
+  let first = points.findIndex((p) => p.measure >= range.from);
   if (first === -1) {
     first = points.length;
   }
-  let end = points.findIndex((p) => p.beat >= endBeat);
+  let end = points.findIndex((p) => p.measure > range.to);
   if (end === -1) {
     end = points.length;
   }
@@ -106,21 +117,46 @@ export function useWaitMode(
     if (!musicxml) {
       return [];
     }
-    const beatMap = new Map<number, Set<number>>();
+    const beatMap = new Map<
+      number,
+      { noteNumbers: Set<number>; isGrace: boolean; measure: number }
+    >();
     for (const note of musicxml.notes) {
       if (note.tieStop) {
         continue;
       }
       const existing = beatMap.get(note.startBeat);
       if (existing) {
-        existing.add(note.noteNumber);
+        existing.noteNumbers.add(note.noteNumber);
+        if (!note.isGrace) {
+          // A real note defines the measure; once any non-grace note joins the
+          // group, treat it as that note's (real) measure rather than a grace's.
+          if (existing.isGrace) {
+            existing.measure = note.measureNumber;
+          }
+          existing.isGrace = false;
+        }
       } else {
-        beatMap.set(note.startBeat, new Set([note.noteNumber]));
+        beatMap.set(note.startBeat, {
+          noteNumbers: new Set([note.noteNumber]),
+          isGrace: note.isGrace ?? false,
+          measure: note.measureNumber,
+        });
       }
     }
-    return Array.from(beatMap.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([beat, noteNumbers]) => ({ beat, noteNumbers }));
+    return (
+      Array.from(beatMap.entries())
+        .map(([beat, { noteNumbers, isGrace, measure }]) => ({
+          beat,
+          noteNumbers,
+          isGrace,
+          measure,
+        }))
+        // Sort by measure first so grace notes — whose beats fall just before the
+        // barline, inside the previous measure's beat span — stay grouped with
+        // the measure they belong to. Within a measure, order by beat.
+        .sort((a, b) => a.measure - b.measure || a.beat - b.beat)
+    );
   }, [control.musicxml]);
 
   const waitPointsRef = useRef(waitPoints);
@@ -153,14 +189,8 @@ export function useWaitMode(
     }
     const ctrl = controlRef.current;
     const measureStartBeats = ctrl.measureStartBeats;
-    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const points = waitPointsRef.current;
-    const { first } = rangeBounds(
-      points,
-      control.measureRange,
-      measureStartBeats,
-      totalBeats,
-    );
+    const { first } = rangeBounds(points, control.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
@@ -210,9 +240,6 @@ export function useWaitMode(
       return;
     }
     const ctrl = controlRef.current;
-    const tSig = ctrl.musicxml?.timeSigNum ?? 4; // used only for approximate debug-log measure numbers
-    const measureStartBeats = ctrl.measureStartBeats;
-    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const sensitivityMs = settingsRef.current.noteSensitivityMilliseconds;
 
     const held = heldNotesRef.current;
@@ -228,12 +255,7 @@ export function useWaitMode(
       held.delete(noteNumber);
       const points = waitPointsRef.current;
       const idx = pointIndexRef.current;
-      const { end } = rangeBounds(
-        points,
-        ctrl.measureRange,
-        measureStartBeats,
-        totalBeats,
-      );
+      const { end } = rangeBounds(points, ctrl.measureRange);
       const wp = idx < end ? points[idx] : null;
       const offBeat = wp?.beat ?? -1;
       ctrl.appendToDebugLog({
@@ -242,7 +264,7 @@ export function useWaitMode(
         note: noteNumber,
         kind: "off",
         pointIndex: idx,
-        measure: offBeat >= 0 ? Math.floor(offBeat / tSig) + 1 : -1,
+        measure: wp?.measure ?? -1,
         beat: offBeat,
         expected: wp ? [...wp.noteNumbers] : [],
         held: [...held],
@@ -254,12 +276,7 @@ export function useWaitMode(
 
     const points = waitPointsRef.current;
     const idx = pointIndexRef.current;
-    const { first, end } = rangeBounds(
-      points,
-      ctrl.measureRange,
-      measureStartBeats,
-      totalBeats,
-    );
+    const { first, end } = rangeBounds(points, ctrl.measureRange);
 
     if (idx >= end) {
       return;
@@ -268,7 +285,7 @@ export function useWaitMode(
     const wp = points[idx];
     const expected = wp.noteNumbers;
     const beat = wp.beat;
-    const measure = Math.floor(beat / tSig) + 1;
+    const measure = wp.measure;
     const heldSnapshot = [...held];
     const expectedSnapshot = [...expected];
     const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
@@ -412,8 +429,7 @@ export function useWaitMode(
     const points = waitPointsRef.current;
     const range = ctrl.measureRange;
     const measureStartBeats = ctrl.measureStartBeats;
-    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
-    const { first } = rangeBounds(points, range, measureStartBeats, totalBeats);
+    const { first } = rangeBounds(points, range);
 
     // Pick start point: range start if a range is active, else nearest wait
     // point at or before the current cursor.
@@ -429,6 +445,14 @@ export function useWaitMode(
         } else {
           break;
         }
+      }
+      // The cursor-based loop above lands on the main chord nearest the cursor.
+      // Walk back to the first grace note for that chord so the user starts
+      // from the grace notes, not the main chord. Grace notes are sorted
+      // immediately before their main chord (same measure), so they form a
+      // contiguous run here.
+      while (startIdx > 0 && points[startIdx - 1].isGrace) {
+        startIdx -= 1;
       }
     }
 
@@ -474,14 +498,7 @@ export function useWaitMode(
 
   const handleReset = useCallback(() => {
     const ctrl = controlRef.current;
-    const measureStartBeats = ctrl.measureStartBeats;
-    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
-    const { first } = rangeBounds(
-      waitPointsRef.current,
-      ctrl.measureRange,
-      measureStartBeats,
-      totalBeats,
-    );
+    const { first } = rangeBounds(waitPointsRef.current, ctrl.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
@@ -498,15 +515,8 @@ export function useWaitMode(
 
   const handleSeek = useCallback((beat: number) => {
     const ctrl = controlRef.current;
-    const measureStartBeats = ctrl.measureStartBeats;
-    const totalBeats = ctrl.musicxml?.totalBeats ?? 0;
     const points = waitPointsRef.current;
-    const { first, end } = rangeBounds(
-      points,
-      ctrl.measureRange,
-      measureStartBeats,
-      totalBeats,
-    );
+    const { first, end } = rangeBounds(points, ctrl.measureRange);
     let idx = first;
     for (let i = first; i < end; i++) {
       if (points[i].beat > beat) {
