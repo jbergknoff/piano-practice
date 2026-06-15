@@ -62,6 +62,32 @@ function beatToMeasureNumber(
   return measure;
 }
 
+/**
+ * Returns the index of the first grace-note wait point that belongs to the
+ * chord at `chordIndex`. Grace notes for a chord are placed at beats just
+ * before the chord's beat (mainBeat - k * GRACE_NOTE_BEATS). In multi-staff
+ * scores, notes from other parts may be interleaved at similar beat positions;
+ * this scan skips over them rather than stopping, collecting only grace-note
+ * entries within a 0.5-beat window of the chord. Returns `chordIndex` when
+ * there are no preceding grace notes.
+ */
+function firstGraceFor(points: WaitPoint[], chordIndex: number): number {
+  if (chordIndex >= points.length) {
+    return chordIndex;
+  }
+  const chordBeat = points[chordIndex].beat;
+  let result = chordIndex;
+  for (let i = chordIndex - 1; i >= 0; i--) {
+    if (points[i].beat < chordBeat - 0.5) {
+      break;
+    }
+    if (points[i].isGrace) {
+      result = i;
+    }
+  }
+  return result;
+}
+
 /** Returns the first wait-point index inside the range and the exclusive end index. */
 function rangeBounds(
   points: WaitPoint[],
@@ -79,17 +105,25 @@ function rangeBounds(
   if (first === -1) {
     first = points.length;
   }
-  // Grace notes for the first chord in the range are placed at beats just
-  // before the measure boundary (mainBeat - N * GRACE_NOTE_BEATS), so they
-  // fall outside the raw startBeat cutoff. Walk back through any immediately
-  // preceding grace-note wait points so they are included in the loop.
-  while (first > 0 && points[first - 1].isGrace) {
-    first -= 1;
-  }
+  // Include grace notes for the first chord in the range. They are placed at
+  // beats just before the measure boundary, so they fall outside the raw
+  // startBeat cutoff. firstGraceFor skips over interleaved non-grace notes
+  // from other parts that sit between the grace notes.
+  first = firstGraceFor(points, first);
+
   let end = points.findIndex((p) => p.beat >= endBeat);
   if (end === -1) {
     end = points.length;
   }
+  // Exclude grace notes for the first chord of the next section. They are
+  // placed just before the range-end boundary, so they would otherwise be
+  // pulled inside the range. Only shrink `end` if the result stays above
+  // `first` (keeps the range non-empty).
+  const adjustedEnd = firstGraceFor(points, end);
+  if (adjustedEnd > first) {
+    end = adjustedEnd;
+  }
+
   return { first, end };
 }
 
@@ -468,13 +502,11 @@ export function useWaitMode(
         }
       }
       // The cursor-based loop above finds the last wait point at or before the
-      // cursor, which is typically the main chord. If that chord is preceded by
-      // grace-note wait points, they would also have beat <= cursor but get
-      // overwritten by the main chord. Walk back to include them so the user
-      // always starts at the first grace note, not the main chord.
-      while (startIdx > 0 && points[startIdx - 1].isGrace) {
-        startIdx -= 1;
-      }
+      // cursor, which is typically the main chord. Walk back to the first
+      // grace note for that chord so the user starts from the grace notes,
+      // not the main chord. firstGraceFor skips over interleaved non-grace
+      // notes from other parts that may sit between the grace notes.
+      startIdx = firstGraceFor(points, startIdx);
     }
 
     // Stop playback, snap cursor / player to the start point.
