@@ -1,11 +1,4 @@
 import type { MidiData, MidiEvent } from "midi-file";
-import { musicXmlToConversion } from "../musicxml/musicxml-playback";
-import type { ScoreConversion } from "../musicxml/musicxml-playback";
-
-export type {
-  PlaybackNote,
-  ScoreConversion,
-} from "../musicxml/musicxml-playback";
 
 // MusicXML divisions per quarter note (1 division = one 16th note)
 const DIVISIONS = 4;
@@ -662,7 +655,7 @@ function buildPartMeasuresXml(
 export function midiToMusicXmlWithTracks(
   midiData: MidiData,
   trackIndices: number[],
-): ScoreConversion {
+): string {
   const tpb = midiData.header.ticksPerBeat ?? 480;
 
   let timeSigNum = 4;
@@ -707,8 +700,11 @@ export function midiToMusicXmlWithTracks(
 
   const allNotes = trackNotes.flat();
   if (allNotes.length === 0) {
-    return musicXmlToConversion(
-      emptyScore(initialKey.fifths, initialKey.mode, timeSigNum, timeSigDen),
+    return emptyScore(
+      initialKey.fifths,
+      initialKey.mode,
+      timeSigNum,
+      timeSigDen,
     );
   }
 
@@ -761,7 +757,7 @@ ${partList}
 ${parts}
 </score-partwise>`;
 
-  return musicXmlToConversion(musicxml);
+  return musicxml;
 }
 
 function emptyScore(

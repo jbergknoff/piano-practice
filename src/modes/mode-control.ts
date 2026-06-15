@@ -1,8 +1,13 @@
+import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
+import type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 import type { VNode } from "preact";
 import type { MidiPlayer } from "../../lib/midi/midi-player";
-import type { ScoreConversion } from "../../lib/midi/midi-to-musicxml";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
+
+// Re-exported from the display package (its public API) so the rest of the app
+// can keep importing the highlight type from mode-control.
+export type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 
 export interface PlayerHandle {
   play(): Promise<void>;
@@ -144,17 +149,6 @@ export interface ModeControl {
   fileHash: string | null;
   appendToDebugLog: (event: DebugBeatEvent) => void;
 }
-
-/**
- * One coloured element drawn on the staff. Two flavours:
- * - `score` recolours an existing notehead identified by its score `id`
- *   (`p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}`).
- * - `marker` draws a new circle at an arbitrary (beat, pitch) — used by
- *   playalong to show where the user actually pressed keys.
- */
-export type NoteHighlight =
-  | { kind: "score"; id: string; color: string }
-  | { kind: "marker"; noteNumber: number; beat: number; color: string };
 
 export interface ModeHandle {
   noteHighlights: ReadonlyArray<NoteHighlight>;

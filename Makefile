@@ -23,6 +23,10 @@ node_modules: package.json
 	mkdir -p node_modules
 	$(bun) install
 
+generate-glyph-font: node_modules
+	$(bun) packages/sheet-music-display/scripts/generate-glyph-font.ts
+	$(biome) format --write packages/sheet-music-display/src/embedded-glyph-font.ts
+
 format: node_modules
 	$(biome) format --write .
 
@@ -33,12 +37,11 @@ typecheck: node_modules
 	$(tsc) --noEmit
 
 unit-test: node_modules
-	$(bun) test src lib
+	$(bun) test src lib packages tests/unit
 
 build: node_modules
 	mkdir -p dist
 	$(bun) build src/main.tsx --outdir dist --minify $(sourcemap) --define 'GIT_COMMIT="$(shell git rev-parse --short HEAD)"'
-	cp node_modules/@fontsource/bravura/files/bravura-latin-400-normal.woff2 dist/bravura.woff2
 	cp node_modules/@fontsource/geist/files/geist-latin-400-normal.woff2 dist/geist-400.woff2
 	cp node_modules/@fontsource/geist/files/geist-latin-500-normal.woff2 dist/geist-500.woff2
 	cp node_modules/@fontsource/geist/files/geist-latin-600-normal.woff2 dist/geist-600.woff2

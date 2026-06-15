@@ -1,5 +1,4 @@
-import { diatonicIndex } from "./musicxml-parser";
-import { isRest } from "./musicxml-parser";
+import { diatonicIndex, isRest } from "./musicxml-parser";
 import type {
   ChordGroup,
   LayoutConfig,

@@ -7,19 +7,19 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
+import { parseScore } from "@jbergknoff/sheet-music-display";
+import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import {
   type ScoreConversion,
+  getMusicXmlTempo,
+  musicXmlToConversion,
+} from "../lib/musicxml/musicxml-playback";
+import {
   type TrackInfo,
   getMidiTempo,
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "../lib/midi/midi-to-musicxml";
-import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
-import { parseScore } from "../lib/musicxml/musicxml-parser";
-import {
-  getMusicXmlTempo,
-  musicXmlToConversion,
-} from "../lib/musicxml/musicxml-playback";
+} from "@jbergknoff/midi-to-musicxml";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
@@ -99,7 +99,9 @@ export function App() {
     if (!midiData || selectedTracks.length === 0) {
       return null;
     }
-    return midiToMusicXmlWithTracks(midiData, selectedTracks);
+    return musicXmlToConversion(
+      midiToMusicXmlWithTracks(midiData, selectedTracks),
+    );
   }, [loadedXml, midiData, selectedTracks]);
 
   // ── Debug log ────────────────────────────────────────────────────────────

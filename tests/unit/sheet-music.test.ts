@@ -5,29 +5,35 @@ import { parseMidi } from "midi-file";
 import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "../midi/midi-to-musicxml";
-import { diatonicIndex, isRest, parseScore } from "./musicxml-parser";
+} from "@jbergknoff/midi-to-musicxml";
 import {
+  type ChordGroup,
+  type MeasureEvent,
+  type ParsedMeasure,
+  type ParsedRest,
+  type Pitch,
   DIVISIONS,
   beamStemDirection,
   buildMeasureSpine,
+  diatonicIndex,
   eventXsFromSpine,
   groupBeamableEvents,
   headerWidth,
+  isRest,
   keyChangeGlyphs,
   keyChangeWidth,
   ledgerLineYs,
   noteY,
+  parseScore,
   resolveLayout,
   stemDirection,
-} from "./sheet-music-layout";
-import type {
-  ChordGroup,
-  MeasureEvent,
-  ParsedMeasure,
-  ParsedRest,
-  Pitch,
-} from "./sheet-music-types";
+} from "@jbergknoff/sheet-music-display";
+import { musicXmlToConversion } from "../../lib/musicxml/musicxml-playback";
+
+// midiToMusicXmlWithTracks now returns a MusicXML string; these tests want
+// the derived ScoreConversion, so wrap it the way the app does.
+const midiConversion = (...args: Parameters<typeof midiToMusicXmlWithTracks>) =>
+  musicXmlToConversion(midiToMusicXmlWithTracks(...args));
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -36,7 +42,7 @@ import type {
 // Full pipeline: MIDI file → MusicXML string → ParsedScore
 function parseMidiFixture(filename: string, trackIndices: number[]) {
   const midiData = parseMidi(readFileSync(`tests/fixtures/${filename}`));
-  const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
+  const { musicxml } = midiConversion(midiData, trackIndices);
   return parseScore(musicxml);
 }
 
@@ -316,7 +322,7 @@ describe("parseScore (simple-grand-piano via MIDI pipeline)", () => {
     readFileSync("tests/fixtures/simple-grand-piano.mid"),
   );
   const trackIndices = getMidiTracks(midiData).map((t) => t.index);
-  const { musicxml } = midiToMusicXmlWithTracks(midiData, trackIndices);
+  const { musicxml } = midiConversion(midiData, trackIndices);
   const score = parseScore(musicxml);
 
   const allNotes = score.parts.flatMap((part) =>
@@ -488,7 +494,7 @@ describe("Rondo Alla Turca opening excerpt (K.331 III)", () => {
   }
 
   const midi = excerptMidi();
-  const { musicxml } = midiToMusicXmlWithTracks(
+  const { musicxml } = midiConversion(
     midi,
     getMidiTracks(midi).map((t) => t.index),
   );

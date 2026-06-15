@@ -8,10 +8,14 @@ import { describe, expect, test } from "bun:test";
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { render } from "preact";
-import { parseScore } from "../../lib/musicxml/musicxml-parser";
-import { resolveLayout } from "../../lib/musicxml/sheet-music-layout";
-import { computeMeasureStartBeats } from "../../lib/musicxml/musicxml-playback";
+import {
+  EMBEDDED_GLYPH_FONT_BASE64,
+  GLYPH_FONT_FAMILY,
+} from "./embedded-glyph-font";
+import { computeMeasureStartBeats } from "./measure-beats";
+import { parseScore } from "./musicxml-parser";
 import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
+import { resolveLayout } from "./sheet-music-layout";
 
 // SMuFL glyphs we assert on (must match the G map in SheetMusicDisplay.tsx).
 const SHARP = "";
@@ -386,19 +390,13 @@ describe("SheetMusicDisplay geometry", () => {
 // with:  UPDATE_SVG=1 bun test src/components/SheetMusicDisplay.test.tsx
 
 const SVG_DIR = "tests/fixtures/svg";
-// Bravura subset (clefs, noteheads, accidentals, rests, flags) embedded so the
-// committed SVGs render real glyphs standalone. The default layout uses a
-// 10px staff space → 40px glyphs.
-const FONT_B64 = readFileSync(`${SVG_DIR}/bravura-subset.woff2`).toString(
-  "base64",
-);
 
 function standaloneSvg(svg: Element): string {
   const w = svg.getAttribute("width");
   const h = svg.getAttribute("height");
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="font-family:Bravura,serif;font-size:40px">`,
-    `<defs><style>@font-face{font-family:'Bravura';src:url(data:font/woff2;base64,${FONT_B64}) format('woff2');}</style></defs>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="font-family:${GLYPH_FONT_FAMILY},serif;font-size:40px">`,
+    `<defs><style>@font-face{font-family:'${GLYPH_FONT_FAMILY}';src:url(data:font/woff2;base64,${EMBEDDED_GLYPH_FONT_BASE64}) format('woff2');}</style></defs>`,
     `<rect width="${w}" height="${h}" fill="#faf6e9"/>`,
     svg.innerHTML,
     "</svg>",

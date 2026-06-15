@@ -4,13 +4,18 @@ import { parseMidi } from "midi-file";
 import {
   getMidiTracks,
   midiToMusicXmlWithTracks,
-} from "../midi/midi-to-musicxml";
-import { isRest, parseScore } from "./musicxml-parser";
+} from "@jbergknoff/midi-to-musicxml";
+import { isRest, parseScore } from "@jbergknoff/sheet-music-display";
 import {
   GRACE_NOTE_BEATS,
   musicXmlToConversion,
   pitchToMidiNumber,
-} from "./musicxml-playback";
+} from "../../lib/musicxml/musicxml-playback";
+
+// midiToMusicXmlWithTracks now returns a MusicXML string; these tests want
+// the derived ScoreConversion, so wrap it the way the app does.
+const midiConversion = (...args: Parameters<typeof midiToMusicXmlWithTracks>) =>
+  musicXmlToConversion(midiToMusicXmlWithTracks(...args));
 
 // The set of note IDs the renderer assigns from a parsed score, built exactly
 // as SheetMusicDisplay does: chords and their preceding grace groups, keyed by
@@ -50,10 +55,7 @@ describe("musicXmlToConversion – playback/render ID contract", () => {
     test(`${fixture}: every derived playback note matches a rendered note`, () => {
       const midiData = parseMidi(readFileSync(`tests/fixtures/${fixture}`));
       const trackIndices = getMidiTracks(midiData).map((t) => t.index);
-      const { musicxml, notes } = midiToMusicXmlWithTracks(
-        midiData,
-        trackIndices,
-      );
+      const { musicxml, notes } = midiConversion(midiData, trackIndices);
 
       const rendered = renderedNoteIds(musicxml);
       // Re-deriving straight from the XML must reproduce the same notes that

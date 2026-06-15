@@ -1,4 +1,4 @@
-import type { PlaybackNote } from "./midi-to-musicxml";
+import type { PlaybackNote } from "../musicxml/musicxml-playback";
 
 // How far ahead (seconds) to schedule notes in each scheduler tick.
 const SCHEDULE_AHEAD = 0.3;

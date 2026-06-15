@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { extractMusicXmlFromMxl } from "./mxl";
-import { parseScore } from "./musicxml-parser";
+import { parseScore } from "@jbergknoff/sheet-music-display";
 import { musicXmlToConversion } from "./musicxml-playback";
 
 describe("extractMusicXmlFromMxl", () => {
