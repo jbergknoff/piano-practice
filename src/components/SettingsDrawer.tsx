@@ -1,4 +1,4 @@
-import type { TrackInfo } from "../../lib/midi/midi-to-musicxml";
+import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
 import {
   type ThemeTokens,
   chipToggleButtonStyle,

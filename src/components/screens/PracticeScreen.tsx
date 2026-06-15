@@ -5,11 +5,10 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
+import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
+import type { ScoreConversion } from "../../../lib/musicxml/musicxml-playback";
+import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
-import type {
-  ScoreConversion,
-  TrackInfo,
-} from "../../../lib/midi/midi-to-musicxml";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { useBluetooth } from "../../hooks/use-bluetooth";
 import { useCustomRanges } from "../../hooks/use-custom-ranges";
@@ -38,7 +37,6 @@ import { HelpBadge } from "../HelpBadge";
 import { RangeNameModal } from "../RangeNameModal";
 import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
-import { SheetMusicDisplay } from "../SheetMusicDisplay";
 import {
   GearIcon,
   OpenFileIcon,
@@ -452,6 +450,7 @@ export function PracticeScreen({
           musicxml={musicxml.musicxml}
           noteHighlights={active.noteHighlights}
           accentColor={accent}
+          textFontFamily={FONT_SANS}
           inkColor={theme.ink}
           focusRange={measureRange}
           focusColor={hexA(accent, 0.09)}

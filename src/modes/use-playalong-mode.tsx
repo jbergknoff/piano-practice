@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { PlaybackNote } from "../../lib/midi/midi-to-musicxml";
+import type { PlaybackNote } from "../../lib/musicxml/musicxml-playback";
 import {
   formatDate,
   ResultModal,

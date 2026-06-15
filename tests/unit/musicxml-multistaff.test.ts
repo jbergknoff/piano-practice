@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { isRest, parseScore } from "./musicxml-parser";
-import { musicXmlToConversion } from "./musicxml-playback";
-import type { ChordGroup } from "./sheet-music-types";
+import {
+  type ChordGroup,
+  isRest,
+  parseScore,
+} from "@jbergknoff/sheet-music-display";
+import { musicXmlToConversion } from "../../lib/musicxml/musicxml-playback";
 
 // A minimal two-staff piano part: treble (staff 1) over bass (staff 2), written
 // with <backup> the way real exporters do. divisions=8 exercises the
