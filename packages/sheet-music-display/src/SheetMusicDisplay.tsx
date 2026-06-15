@@ -335,6 +335,12 @@ interface NoteRenderInfo {
   accidentalX: number;
   dot: boolean;
   staffSpace: number;
+  /**
+   * Glyph font-size override. Set for grace noteheads (which render smaller
+   * than full notes); left undefined for regular notes, which inherit the
+   * document's default glyph font-size.
+   */
+  fontSize?: number;
 }
 
 // Resolve the per-event beam stem overrides (direction + tip Y) for a measure.
@@ -417,6 +423,53 @@ function chordNoteGeometry(
   }));
 }
 
+// Notehead placement for the grace-note groups preceding a chord. Mirrors the
+// geometry in ChordGroupEl/GraceNoteGroupEl (grace x cascade, smaller scale, and
+// the leftward shift past the main chord's accidentals) so the NoteColorOverlay
+// can recolor grace noteheads — e.g. when a grace note is the active wait point.
+function graceNoteGeometry(
+  group: ChordGroup,
+  ex: number,
+  partIndex: number,
+  measureNumber: number,
+  clef: { sign: "G" | "F"; line: number },
+  staffBottomY: number,
+  staffSpace: number,
+): NoteRenderInfo[] {
+  const gracesBefore = group.gracesBefore ?? [];
+  const N = gracesBefore.length;
+  if (N === 0) {
+    return [];
+  }
+  const graceScale = GRACE_FONT_FACTOR / 4;
+  const graceNrx = staffSpace * 0.55 * graceScale;
+  const graceFontSize = staffSpace * GRACE_FONT_FACTOR;
+  const mainAccWidth = group.notes.some((n) => n.accidental !== "none")
+    ? staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR
+    : 0;
+  const infos: NoteRenderInfo[] = [];
+  gracesBefore.forEach((graceGroup, gi) => {
+    const graceX = ex - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE;
+    graceGroup.notes.forEach((note, v) => {
+      const nx = graceX + v * graceNrx * 0.3;
+      infos.push({
+        id: `p${partIndex}-m${measureNumber}-n${graceGroup.noteIndex}-v${v}`,
+        nx,
+        ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
+        // Grace notes always draw a filled (black) notehead.
+        type: "quarter",
+        accidental: note.accidental,
+        accidentalX:
+          nx - staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR * graceScale,
+        dot: false,
+        staffSpace,
+        fontSize: graceFontSize,
+      });
+    });
+  });
+  return infos;
+}
+
 function computeNoteRenderInfos(
   score: ParsedScore,
   layout: ResolvedLayout,
@@ -456,6 +509,17 @@ function computeNoteRenderInfos(
           staffBottomY,
           staffSpace,
           stemDir,
+        )) {
+          infos.set(info.id, info);
+        }
+        for (const info of graceNoteGeometry(
+          group,
+          eventXs[ei],
+          p,
+          measure.number,
+          clef,
+          staffBottomY,
+          staffSpace,
         )) {
           infos.set(info.id, info);
         }
@@ -588,7 +652,10 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
         }
         const nrx = info.staffSpace * 0.55;
         return (
-          <g key={id} data-color-id={id}>
+          // Grace noteheads carry a font-size override so the recolored glyph
+          // matches the smaller ink note; regular notes inherit the document
+          // default and leave fontSize undefined.
+          <g key={id} data-color-id={id} font-size={info.fontSize}>
             <Notehead
               x={info.nx}
               y={info.ny}

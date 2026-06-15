@@ -93,10 +93,16 @@ interface NoteSpec {
   chord?: boolean;
   dot?: boolean;
   staccato?: boolean;
+  /** Emit a <grace/> (no <duration>); true = plain, {slash} = acciaccatura. */
+  grace?: boolean | { slash: boolean };
 }
 
 function noteXml(n: NoteSpec): string {
   const parts = ["<note>"];
+  if (n.grace) {
+    const slash = typeof n.grace === "object" && n.grace.slash;
+    parts.push(slash ? '<grace slash="yes"/>' : "<grace/>");
+  }
   if (n.chord) {
     parts.push("<chord/>");
   }
@@ -105,7 +111,10 @@ function noteXml(n: NoteSpec): string {
     parts.push(`<alter>${n.alter}</alter>`);
   }
   parts.push(`<octave>${n.octave}</octave></pitch>`);
-  parts.push(`<duration>${n.duration}</duration>`);
+  // Grace notes carry no rhythmic duration.
+  if (!n.grace) {
+    parts.push(`<duration>${n.duration}</duration>`);
+  }
   parts.push(`<type>${n.type}</type>`);
   if (n.dot) {
     parts.push("<dot/>");
@@ -378,6 +387,44 @@ describe("SheetMusicDisplay geometry", () => {
     for (const n of textsWith(NATURAL)) {
       expect(Number(n.getAttribute("x"))).toBeGreaterThan(measure2BarlineX);
     }
+  });
+});
+
+// ── Grace note highlighting ───────────────────────────────────────────────────
+
+describe("grace note highlighting", () => {
+  // E5 quarter, then a grace D5 ornamenting a C5 quarter. assignNoteIndices
+  // numbers the grace group n1 (between the two quarters n0 and n2), so its
+  // notehead id is p0-m1-n1-v0.
+  const graceScore = scoreXml([
+    QUARTER("E", 5),
+    { step: "D", octave: 5, duration: 0, type: "eighth", grace: true },
+    QUARTER("C", 5),
+  ]);
+
+  test("a score highlight on a grace note recolors its (smaller) notehead", () => {
+    const { svg } = renderSheetMusic(graceScore, {
+      noteHighlights: [{ kind: "score", id: "p0-m1-n1-v0", color: "#ff0000" }],
+    });
+    const group = svg.querySelector('[data-color-id="p0-m1-n1-v0"]');
+    expect(group).not.toBeNull();
+    // The recolored glyph is a black notehead drawn at the grace glyph size
+    // (staffSpace 10 × GRACE_FONT_FACTOR 2.4 = 24), not the full-note size.
+    const head = group?.querySelector("text");
+    expect(head?.textContent).toContain(NOTEHEAD_BLACK);
+    expect(head?.getAttribute("fill")).toBe("#ff0000");
+    expect(group?.getAttribute("font-size")).toBe("24");
+  });
+
+  test("a regular notehead highlight carries no grace font-size override", () => {
+    // Contrast case: highlighting the main C5 (n2) uses the document default
+    // glyph size, so its overlay group has no font-size attribute.
+    const { svg } = renderSheetMusic(graceScore, {
+      noteHighlights: [{ kind: "score", id: "p0-m1-n2-v0", color: "#ff0000" }],
+    });
+    const group = svg.querySelector('[data-color-id="p0-m1-n2-v0"]');
+    expect(group).not.toBeNull();
+    expect(group?.getAttribute("font-size")).toBeNull();
   });
 });
 
