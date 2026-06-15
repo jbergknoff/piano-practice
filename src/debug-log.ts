@@ -29,6 +29,7 @@ export interface WaitModeDebugEvent extends DebugEventBase {
     | "wrong" // note not in expected chord (outside grace period)
     | "grace" // wrong note silently ignored within grace period
     | "incomplete" // correct note pressed but not all expected notes held yet
+    | "extra" // chord complete but wrong notes still held → advance blocked
     | "debounce" // within 100 ms anti-race window after last advance
     | "off"; // note-off event (no matching logic runs)
 }

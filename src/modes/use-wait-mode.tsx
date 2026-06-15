@@ -99,6 +99,14 @@ export function useWaitMode(
   completionModalRef.current = completionModal;
   const pointIndexRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
+  // Subset of heldNotesRef: notes the user is currently holding that are NOT
+  // part of the expected chord (they each fired the wrong-note path). While any
+  // of these is held the chord is not considered cleanly played, so advancing
+  // is blocked — this is what stops "mash a fistful of keys" from sliding past
+  // a wait point. Legato/sustained notes carried over from a previous chord
+  // never enter this set (they generate no fresh Note On), and grace-window
+  // forgiven notes are deliberately excluded too.
+  const wrongHeldNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
   const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrongNoteCountRef = useRef(0);
@@ -173,6 +181,7 @@ export function useWaitMode(
     pointIndexRef.current = 0;
     setCompletionModal(null);
     heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -194,6 +203,7 @@ export function useWaitMode(
     setPointIndex(first);
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -253,6 +263,7 @@ export function useWaitMode(
       }
     } else {
       held.delete(noteNumber);
+      wrongHeldNotesRef.current.delete(noteNumber);
       const points = waitPointsRef.current;
       const idx = pointIndexRef.current;
       const { end } = rangeBounds(points, ctrl.measureRange);
@@ -301,12 +312,19 @@ export function useWaitMode(
       msSinceAdvance,
     };
 
-    if (!expected.has(noteNumber) && msSinceAdvance < sensitivityMs) {
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "grace" });
-      return;
-    }
-
     if (!expected.has(noteNumber)) {
+      // Any non-expected note the user is holding blocks the advance (see the
+      // wrongHeldNotesRef check below) — this is what makes mashing fail. We
+      // record it even inside the grace window, because otherwise a wrong key
+      // mashed within `sensitivityMs` of the previous advance would be
+      // forgiven and the correct key alongside it would slide straight past.
+      // The grace window only suppresses the *audible* wrong-note feedback, so
+      // a near-simultaneous fumble around a transition isn't punished twice.
+      wrongHeldNotesRef.current.add(noteNumber);
+      if (msSinceAdvance < sensitivityMs) {
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "grace" });
+        return;
+      }
       wrongNoteCountRef.current += 1;
       // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
       ctrl.bluetooth.sendNote(42, 55, 80, 9);
@@ -330,6 +348,16 @@ export function useWaitMode(
 
     if (!chordComplete && msSinceAdvance < 50) {
       ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });
+      return;
+    }
+
+    // Even with every expected note down, refuse to advance while the user is
+    // also holding wrong notes. Without this, mashing a handful of keys that
+    // happens to include the right ones would slide past the wait point. The
+    // user must release the extra keys (the chord then advances on the next
+    // press of the expected notes).
+    if (chordComplete && wrongHeldNotesRef.current.size > 0) {
+      ctrl.appendToDebugLog({ ...debugBase, outcome: "extra" });
       return;
     }
 
@@ -471,6 +499,7 @@ export function useWaitMode(
     setPointIndex(startIdx);
     pointIndexRef.current = startIdx;
     heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -502,6 +531,7 @@ export function useWaitMode(
     setPointIndex(first);
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -527,6 +557,7 @@ export function useWaitMode(
     setPointIndex(idx);
     pointIndexRef.current = idx;
     heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     ctrl.setCursor(beat, "jump");
   }, []);
