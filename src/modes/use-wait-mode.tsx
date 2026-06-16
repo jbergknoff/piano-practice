@@ -158,7 +158,7 @@ export function useWaitMode(
           // A real note defines the measure; once any non-grace note joins the
           // group, treat it as that note's (real) measure rather than a grace's.
           if (existing.isGrace) {
-            existing.measure = note.measureNumber;
+            existing.measure = note.measureIndex + 1;
           }
           existing.isGrace = false;
         }
@@ -166,7 +166,7 @@ export function useWaitMode(
         beatMap.set(note.startBeat, {
           noteNumbers: new Set([note.noteNumber]),
           isGrace: note.isGrace ?? false,
-          measure: note.measureNumber,
+          measure: note.measureIndex + 1,
         });
       }
     }

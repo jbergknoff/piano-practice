@@ -26,6 +26,8 @@ export interface PlaybackNote {
   tieStop: boolean;
   partIndex: number;
   measureNumber: number;
+  /** 0-based positional index of this measure in the score (same across all parts). */
+  measureIndex: number;
   noteIndex: number; // chord index within measure (matches display noteIndex)
   voiceIndex: number; // note index within chord (0 = lowest pitch)
   /** True when this note is a grace note (appoggiatura or acciaccatura). */
@@ -92,6 +94,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
 
   score.parts.forEach((part, partIndex) => {
     let beatCursor = 0;
+    let measureIndex = 0;
     for (const measure of part.measures) {
       const divisions = measure.divisions || 4;
       for (const event of measure.events) {
@@ -118,6 +121,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
               tieStop: false,
               partIndex,
               measureNumber: measure.number,
+              measureIndex,
               noteIndex: graceGroup.noteIndex,
               voiceIndex,
               isGrace: true,
@@ -149,12 +153,14 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
             tieStop: note.tieStop,
             partIndex,
             measureNumber: measure.number,
+            measureIndex,
             noteIndex: event.noteIndex,
             voiceIndex,
           });
         });
         beatCursor += displayBeats;
       }
+      measureIndex++;
     }
   });
 
