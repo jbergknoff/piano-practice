@@ -60,6 +60,7 @@ modes.
 | `ADVANCE` | All expected notes were held — cursor moved to the next beat |
 | `INCOMPLETE` | The pressed note is in the expected chord but not all expected notes are held yet |
 | `WRONG` | The pressed note is not in the expected chord; wrong-note feedback fired |
+| `EXTRA` | Every expected note was held, but the advance was blocked because the user is also holding wrong notes (e.g. mashing extra keys). Release the extra keys and re-press the chord |
 | `GRACE` | Wrong note, but ignored because it arrived within the grace period after the previous advance (`msSinceAdvance < noteSensitivityMilliseconds`) |
 | `DEBOUNCE` | A correct note that would have triggered an advance, but arrived within 100 ms of the last advance and was ignored to prevent double-advancing on the same chord |
 | `OFF` | Note-release event — no matching logic runs, logged for timeline completeness |

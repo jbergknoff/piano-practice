@@ -250,8 +250,6 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
-// ── Cursor position helper ────────────────────────────────────────────────────
-
 export function computeCursorX(
   beat: number,
   score: ParsedScore,
@@ -335,6 +333,12 @@ interface NoteRenderInfo {
   accidentalX: number;
   dot: boolean;
   staffSpace: number;
+  /**
+   * Glyph font-size override. Set for grace noteheads (which render smaller
+   * than full notes); left undefined for regular notes, which inherit the
+   * document's default glyph font-size.
+   */
+  fontSize?: number;
 }
 
 // Resolve the per-event beam stem overrides (direction + tip Y) for a measure.
@@ -417,6 +421,53 @@ function chordNoteGeometry(
   }));
 }
 
+// Notehead placement for the grace-note groups preceding a chord. Mirrors the
+// geometry in ChordGroupEl/GraceNoteGroupEl (grace x cascade, smaller scale, and
+// the leftward shift past the main chord's accidentals) so the NoteColorOverlay
+// can recolor grace noteheads — e.g. when a grace note is the active wait point.
+function graceNoteGeometry(
+  group: ChordGroup,
+  ex: number,
+  partIndex: number,
+  measureNumber: number,
+  clef: { sign: "G" | "F"; line: number },
+  staffBottomY: number,
+  staffSpace: number,
+): NoteRenderInfo[] {
+  const gracesBefore = group.gracesBefore ?? [];
+  const N = gracesBefore.length;
+  if (N === 0) {
+    return [];
+  }
+  const graceScale = GRACE_FONT_FACTOR / 4;
+  const graceNrx = staffSpace * 0.55 * graceScale;
+  const graceFontSize = staffSpace * GRACE_FONT_FACTOR;
+  const mainAccWidth = group.notes.some((n) => n.accidental !== "none")
+    ? staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR
+    : 0;
+  const infos: NoteRenderInfo[] = [];
+  gracesBefore.forEach((graceGroup, gi) => {
+    const graceX = ex - mainAccWidth - (N - gi) * GRACE_NOTE_ADVANCE;
+    graceGroup.notes.forEach((note, v) => {
+      const nx = graceX + v * graceNrx * 0.3;
+      infos.push({
+        id: `p${partIndex}-m${measureNumber}-n${graceGroup.noteIndex}-v${v}`,
+        nx,
+        ny: noteY(note.pitch, clef, staffBottomY, staffSpace),
+        // Grace notes always draw a filled (black) notehead.
+        type: "quarter",
+        accidental: note.accidental,
+        accidentalX:
+          nx - staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR * graceScale,
+        dot: false,
+        staffSpace,
+        fontSize: graceFontSize,
+      });
+    });
+  });
+  return infos;
+}
+
 function computeNoteRenderInfos(
   score: ParsedScore,
   layout: ResolvedLayout,
@@ -456,6 +507,17 @@ function computeNoteRenderInfos(
           staffBottomY,
           staffSpace,
           stemDir,
+        )) {
+          infos.set(info.id, info);
+        }
+        for (const info of graceNoteGeometry(
+          group,
+          eventXs[ei],
+          p,
+          measure.number,
+          clef,
+          staffBottomY,
+          staffSpace,
         )) {
           infos.set(info.id, info);
         }
@@ -588,7 +650,10 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
         }
         const nrx = info.staffSpace * 0.55;
         return (
-          <g key={id} data-color-id={id}>
+          // Grace noteheads carry a font-size override so the recolored glyph
+          // matches the smaller ink note; regular notes inherit the document
+          // default and leave fontSize undefined.
+          <g key={id} data-color-id={id} font-size={info.fontSize}>
             <Notehead
               x={info.nx}
               y={info.ny}
@@ -768,6 +833,27 @@ export function SheetMusicDisplay({
     }
   }, []);
 
+  // X of the leftmost highlighted grace notehead, or null when none is
+  // highlighted. A grace shares its main note's downbeat, so the beat-driven
+  // cursor cannot tell the two apart; when a grace is the highlighted target
+  // (Wait mode's grace wait point — no other mode highlights graces) we snap
+  // the static/jump cursor onto the grace's own notehead instead. Grace
+  // render-infos are tagged by a `fontSize` override, which regular noteheads
+  // lack — that is what identifies them here.
+  const graceHighlightCursorX = useMemo<number | null>(() => {
+    let leftmost: number | null = null;
+    for (const { id } of scoreEntries) {
+      const info = noteInfos.get(id);
+      if (info?.fontSize === undefined) {
+        continue;
+      }
+      if (leftmost === null || info.nx < leftmost) {
+        leftmost = info.nx;
+      }
+    }
+    return leftmost;
+  }, [scoreEntries, noteInfos]);
+
   // While playing, run a 60fps rAF loop that moves the cursor and page-turns the
   // scroll. The loop is gated on `isPlaying`, so it does NOT run while paused or
   // stopped (the cursor is static then — see the effect below). scrollLeft is
@@ -836,12 +922,20 @@ export function SheetMusicDisplay({
       return;
     }
     const beat = getLiveBeat();
-    placeCursor(
+    const beatX =
       beat !== null
         ? computeCursorX(beat, score, layout, measureStartBeats)
-        : null,
-    );
-  }, [getLiveBeat, isPlaying, snapGeneration, score, layout, placeCursor]);
+        : null;
+    placeCursor(graceHighlightCursorX ?? beatX);
+  }, [
+    getLiveBeat,
+    isPlaying,
+    snapGeneration,
+    score,
+    layout,
+    placeCursor,
+    graceHighlightCursorX,
+  ]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
   // snapGeneration increments on every jump so this effect always fires
@@ -858,11 +952,13 @@ export function SheetMusicDisplay({
     if (!el) {
       return;
     }
-    const x = computeCursorX(beat, score, layout, measureStartBeats);
+    const x =
+      graceHighlightCursorX ??
+      computeCursorX(beat, score, layout, measureStartBeats);
     const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
     el.scrollLeft =
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.2) : 0;
-  }, [snapGeneration, score, layout]);
+  }, [snapGeneration, score, layout, graceHighlightCursorX]);
 
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -1258,6 +1354,7 @@ export function SheetMusicDisplay({
         {getLiveBeat && (
           <div
             ref={cursorDivRef}
+            data-cursor="true"
             style={{
               position: "absolute",
               top: cursorY1,

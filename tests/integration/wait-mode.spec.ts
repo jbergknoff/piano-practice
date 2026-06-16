@@ -4,6 +4,8 @@ import {
   installMocks,
   loadFile,
   mockCryptoSubtle,
+  sendChordOff,
+  sendChordOn,
   sendNoteOff,
   sendNoteOn,
   waitForHighlightedNoteIds,
@@ -80,6 +82,33 @@ test("a wrong note does not advance the wait-point highlight", async ({
   // Give the app time to (incorrectly) advance, then assert it did not.
   await page.waitForTimeout(150);
   expect(await getHighlightedNoteIds(page)).toEqual(["p0-m1-n0-v0"]);
+});
+
+test("mashing wrong keys alongside the correct one does not advance", async ({
+  page,
+}) => {
+  await loadFile(page, "c-major-melody.mid");
+  await waitForMockBluetoothConnected(page);
+  await switchToWaitMode(page);
+
+  await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]); // expects E4
+
+  // Mash a fistful of keys that includes the correct note (E4). The wrong keys
+  // are part of the held set when E4 completes the chord, so the advance must
+  // be blocked — even though E4 itself is down. (The wrong keys lead the batch
+  // so they are registered before E4 is evaluated.)
+  await sendChordOn(page, [C5, E5, B4, E4]);
+
+  await page.waitForTimeout(150);
+  expect(await getHighlightedNoteIds(page)).toEqual(["p0-m1-n0-v0"]);
+
+  // Release everything, then play E4 cleanly — now it should advance.
+  await sendChordOff(page, [C5, E5, B4, E4]);
+  await page.waitForTimeout(120);
+  await sendNoteOn(page, E4);
+  await sendNoteOff(page, E4);
+
+  await waitForHighlightedNoteIds(page, ["p0-m1-n1-v0"]);
 });
 
 test("playing the full first measure advances through every wait point", async ({

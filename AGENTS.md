@@ -177,6 +177,33 @@ Run `make pr-ready` before committing to ensure formatting, linting, type-checki
 
 The first run of any target will install dependencies into `node_modules/` (which is mounted from the host, so subsequent runs skip reinstall).
 
+### Docker IS available in the Claude Code web sandbox
+
+Do not assume the remote/web sandbox lacks Docker — it has it, and the full
+toolchain runs through `make`. The `SessionStart` hook
+(`.claude/hooks/session-start.sh`, wired up in `.claude/settings.json`) starts
+`dockerd`, points it at a Docker Hub mirror (`mirror.gcr.io`, since the blob CDN
+is blocked), pre-pulls the compose images, and pre-installs `node_modules`. It
+runs again on session *resume*, so a resumed session also has Docker ready.
+
+Practical consequences for an agent working in the sandbox:
+
+- **Use the `make` targets directly** — `make unit-test`, `make integration-test`,
+  `make update-screenshots`, `make pr-ready`, etc. all work here. There is no
+  need to fall back to running `bun`/`playwright` by hand, and you do not need
+  to invoke `docker compose` yourself; `make` does.
+- **Integration tests and screenshots run here.** `make integration-test`
+  launches the Playwright container against the built app, and
+  `make update-screenshots` regenerates baselines. Generate/refresh screenshot
+  baselines inside this environment (they are only pixel-stable in the
+  Playwright Docker image).
+- **The commit gate runs Docker too.** The `PreToolUse` hook on `git commit`
+  runs `make pr-ready`; if Docker or the toolchain isn't ready the commit is
+  blocked, so let the session-start hook finish before committing.
+- Running `bun test` directly (outside Docker) works for quick unit checks, but
+  it has no DOM — parser/render code needs the `linkedom` setup from
+  `src/test-setup.ts` (preloaded by `bun test` via `bunfig.toml`).
+
 ## Build output
 
 `dist/` is gitignored and excluded from Biome linting/formatting. `make build` must be run before `index.html` will work — it produces `dist/main.js`, which the page loads.

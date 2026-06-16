@@ -64,6 +64,13 @@ export function useListenMode(
     }
     const highlights: NoteHighlight[] = [];
     for (const note of musicxml.notes) {
+      // Skip grace notes: they sound for only ~0.1 beat and sit just before a
+      // barline, so during continuous playback they would flicker and overlap
+      // the sustained chord they ornament. (Wait mode still highlights a grace
+      // when it is the active wait point — that path emits its own highlight.)
+      if (note.isGrace) {
+        continue;
+      }
       if (
         note.startBeat <= currentBeat &&
         currentBeat < note.startBeat + note.durationBeats
