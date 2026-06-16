@@ -83,6 +83,7 @@ export function MeasureJumpModal({
         <input
           ref={inputRef}
           type="number"
+          inputMode="numeric"
           min={1}
           max={totalMeasures}
           step={1}
