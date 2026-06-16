@@ -50,6 +50,18 @@ async function focusMeasure2(
   await page.getByRole("button", { name: "Focus measure 2" }).click();
 }
 
+// Horizontal centre (screen px) of the first element matching `selector`.
+async function centerX(
+  page: import("@playwright/test").Page,
+  selector: string,
+): Promise<number> {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) {
+    throw new Error(`no bounding box for ${selector}`);
+  }
+  return box.x + box.width / 2;
+}
+
 test("focusing a middle measure highlights its leading grace note as the first wait point", async ({
   page,
 }) => {
@@ -107,4 +119,35 @@ test("wait points stay inside the focused measure and do not include the next me
   // Looped back to the focused measure's grace, never to m3.
   await waitForHighlightedNoteIds(page, ["p0-m2-n0-v0"]);
   expect(await getHighlightedNoteIds(page)).toEqual(["p0-m2-n0-v0"]);
+});
+
+test("the cursor sits on the grace wait point, then moves onto the main note", async ({
+  page,
+}) => {
+  await loadFile(page, "grace-note-focus.musicxml");
+  await waitForMockBluetoothConnected(page);
+
+  await focusMeasure2(page);
+  await page.getByRole("button", { name: "Wait" }).click();
+
+  // Grace is the wait point: the cursor must sit on the grace notehead, not on
+  // the main note to its right (the two share a downbeat, so a beat-only cursor
+  // could not tell them apart).
+  await waitForHighlightedNoteIds(page, ["p0-m2-n0-v0"]);
+  const graceNoteX = await centerX(page, '[data-color-id="p0-m2-n0-v0"]');
+  const cursorOnGraceX = await centerX(page, '[data-cursor="true"]');
+  expect(Math.abs(cursorOnGraceX - graceNoteX)).toBeLessThan(8);
+
+  // Advance past the grace: the highlighted wait point is now the main note
+  // (A4), and the cursor must follow it to the right — off the grace.
+  await playNote(page, M2_GRACE_G4);
+  await waitForHighlightedNoteIds(page, ["p0-m2-n1-v0"]);
+  const mainNoteX = await centerX(page, '[data-color-id="p0-m2-n1-v0"]');
+  const cursorOnMainX = await centerX(page, '[data-cursor="true"]');
+  expect(Math.abs(cursorOnMainX - mainNoteX)).toBeLessThan(8);
+
+  // The grace and main note are genuinely at different x positions, and the
+  // cursor tracked the highlight from one to the other.
+  expect(mainNoteX).toBeGreaterThan(graceNoteX + 8);
+  expect(cursorOnMainX).toBeGreaterThan(cursorOnGraceX);
 });

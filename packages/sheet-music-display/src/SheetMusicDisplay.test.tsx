@@ -636,42 +636,4 @@ describe("computeCursorX", () => {
     const measure2FirstNoteX = pickupLayout.measureSpines[2].xs[0];
     expect(pickupCx(5)).toBe(measure2FirstNoteX);
   });
-
-  test("the downbeat of a grace-led measure lands on the grace, left of the main note", () => {
-    // m1 is four plain quarters; m2 opens with a grace note (the beat
-    // waitPointCursorBeat produces for a grace wait point is m2's start, beat 4).
-    const graceScore = parseScore(
-      scoreXml([
-        FOUR_QUARTERS,
-        [
-          { step: "G", octave: 4, duration: 0, type: "eighth", grace: true },
-          QUARTER("A", 4),
-          QUARTER("B", 4),
-          QUARTER("C", 5),
-          QUARTER("D", 5),
-        ],
-      ]),
-    );
-    const graceLayout = resolveLayout(graceScore);
-    const graceMeasureStartBeats = computeMeasureStartBeats(graceScore);
-    const mainOnsetX = graceLayout.measureSpines[1].xs[0];
-    const cursorX = computeCursorX(
-      4,
-      graceScore,
-      graceLayout,
-      graceMeasureStartBeats,
-    );
-    // The cursor sits on the grace, to the LEFT of m2's first main note.
-    expect(cursorX).not.toBeNull();
-    expect(cursorX as number).toBeLessThan(mainOnsetX);
-
-    // A grace-less measure is unaffected: m3 added below still lands on its
-    // first main note.
-    const plainScore = parseScore(scoreXml([FOUR_QUARTERS, FOUR_QUARTERS]));
-    const plainLayout = resolveLayout(plainScore);
-    const plainStarts = computeMeasureStartBeats(plainScore);
-    expect(computeCursorX(4, plainScore, plainLayout, plainStarts)).toBe(
-      plainLayout.measureSpines[1].xs[0],
-    );
-  });
 });

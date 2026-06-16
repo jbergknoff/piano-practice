@@ -250,49 +250,6 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
-// X of the leftmost grace notehead for a measure that opens with one, or null
-// if the measure has no leading grace. Mirrors the grace x cascade in
-// ChordGroupEl/graceNoteGeometry (leftmost group, leftmost note): the grace
-// noteheads sit `mainAccWidth + N × GRACE_NOTE_ADVANCE` left of the measure's
-// first onset. Used so the cursor lands on the grace — not the main note to its
-// right — when it sits at the downbeat of a grace-led measure (e.g. a grace
-// wait point in Wait mode). Scans every part so multi-staff graces are covered.
-function leadingGraceCursorX(
-  score: ParsedScore,
-  layout: ResolvedLayout,
-  measureIndex: number,
-): number | null {
-  const spine = layout.measureSpines[measureIndex];
-  if (!spine || spine.xs.length === 0) {
-    return null;
-  }
-  const onsetX = spine.xs[0];
-  const { staffSpace } = layout;
-  let leftmost: number | null = null;
-  for (const part of score.parts) {
-    const measure = part.measures[measureIndex];
-    const firstEvent = measure?.events[0];
-    if (!firstEvent || isRest(firstEvent)) {
-      continue;
-    }
-    const group = firstEvent as ChordGroup;
-    const graceCount = group.gracesBefore?.length ?? 0;
-    if (graceCount === 0) {
-      continue;
-    }
-    const mainAccidentalWidth = group.notes.some(
-      (note) => note.accidental !== "none",
-    )
-      ? staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR
-      : 0;
-    const x = onsetX - mainAccidentalWidth - graceCount * GRACE_NOTE_ADVANCE;
-    if (leftmost === null || x < leftmost) {
-      leftmost = x;
-    }
-  }
-  return leftmost;
-}
-
 export function computeCursorX(
   beat: number,
   score: ParsedScore,
@@ -336,18 +293,6 @@ export function computeCursorX(
   const { divs, xs } = spine;
   if (divs.length === 0) {
     return barlineX;
-  }
-
-  // At the exact downbeat of a measure that opens with a grace note, sit on the
-  // grace (left of the first main note) rather than the main note itself. This
-  // is the beat `waitPointCursorBeat` produces for a grace wait point, so the
-  // Wait-mode cursor lands on the highlighted grace. Mid-measure beats and
-  // grace-less measures are unaffected.
-  if (targetDiv === 0) {
-    const graceX = leadingGraceCursorX(score, layout, measureIndex);
-    if (graceX !== null) {
-      return graceX;
-    }
   }
 
   // The cursor must land on the actual downbeat notehead (xs[0]) at the
@@ -888,6 +833,27 @@ export function SheetMusicDisplay({
     }
   }, []);
 
+  // X of the leftmost highlighted grace notehead, or null when none is
+  // highlighted. A grace shares its main note's downbeat, so the beat-driven
+  // cursor cannot tell the two apart; when a grace is the highlighted target
+  // (Wait mode's grace wait point — no other mode highlights graces) we snap
+  // the static/jump cursor onto the grace's own notehead instead. Grace
+  // render-infos are tagged by a `fontSize` override, which regular noteheads
+  // lack — that is what identifies them here.
+  const graceHighlightCursorX = useMemo<number | null>(() => {
+    let leftmost: number | null = null;
+    for (const { id } of scoreEntries) {
+      const info = noteInfos.get(id);
+      if (info?.fontSize === undefined) {
+        continue;
+      }
+      if (leftmost === null || info.nx < leftmost) {
+        leftmost = info.nx;
+      }
+    }
+    return leftmost;
+  }, [scoreEntries, noteInfos]);
+
   // While playing, run a 60fps rAF loop that moves the cursor and page-turns the
   // scroll. The loop is gated on `isPlaying`, so it does NOT run while paused or
   // stopped (the cursor is static then — see the effect below). scrollLeft is
@@ -956,12 +922,20 @@ export function SheetMusicDisplay({
       return;
     }
     const beat = getLiveBeat();
-    placeCursor(
+    const beatX =
       beat !== null
         ? computeCursorX(beat, score, layout, measureStartBeats)
-        : null,
-    );
-  }, [getLiveBeat, isPlaying, snapGeneration, score, layout, placeCursor]);
+        : null;
+    placeCursor(graceHighlightCursorX ?? beatX);
+  }, [
+    getLiveBeat,
+    isPlaying,
+    snapGeneration,
+    score,
+    layout,
+    placeCursor,
+    graceHighlightCursorX,
+  ]);
 
   // Instant-scroll effect for jumps (reset, seek, mode change, etc.).
   // snapGeneration increments on every jump so this effect always fires
@@ -978,11 +952,13 @@ export function SheetMusicDisplay({
     if (!el) {
       return;
     }
-    const x = computeCursorX(beat, score, layout, measureStartBeats);
+    const x =
+      graceHighlightCursorX ??
+      computeCursorX(beat, score, layout, measureStartBeats);
     const leftPad = Number.parseFloat(getComputedStyle(el).paddingLeft) || 0;
     el.scrollLeft =
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.2) : 0;
-  }, [snapGeneration, score, layout]);
+  }, [snapGeneration, score, layout, graceHighlightCursorX]);
 
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
@@ -1378,6 +1354,7 @@ export function SheetMusicDisplay({
         {getLiveBeat && (
           <div
             ref={cursorDivRef}
+            data-cursor="true"
             style={{
               position: "absolute",
               top: cursorY1,
