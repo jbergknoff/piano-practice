@@ -56,6 +56,24 @@ function formatTime(ms: number): string {
 }
 
 /**
+ * Returns the beat to use for cursor and player positioning when jumping to a
+ * wait point. Grace notes have a raw beat just before the barline of their
+ * rendered measure (mainBeat - k * GRACE_NOTE_BEATS), which would place the
+ * cursor in the previous measure's visual span — potentially even behind the
+ * beat we just came from. Using the rendered measure's start beat keeps the
+ * cursor co-located with the highlighted note.
+ */
+function waitPointCursorBeat(
+  waitPoint: WaitPoint,
+  measureStartBeats: number[],
+): number {
+  if (waitPoint.isGrace) {
+    return measureStartBeats[waitPoint.measure - 1] ?? waitPoint.beat;
+  }
+  return waitPoint.beat;
+}
+
+/**
  * Returns the first wait-point index inside the range and the exclusive end
  * index. Wait points are sorted by (measure, beat), so each measure occupies a
  * contiguous slice; membership is by rendered measure number, which keeps
@@ -202,7 +220,7 @@ export function useWaitMode(
     // what they are about to play.
     let targetBeat: number;
     if (points.length > 0 && first < points.length) {
-      targetBeat = points[first].beat;
+      targetBeat = waitPointCursorBeat(points[first], measureStartBeats);
     } else {
       const range = control.measureRange;
       targetBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
@@ -350,13 +368,19 @@ export function useWaitMode(
         attemptStartTimeRef.current = null;
         pointIndexRef.current = first;
         setPointIndex(first);
-        const targetBeat = points[first].beat;
+        const targetBeat = waitPointCursorBeat(
+          points[first],
+          ctrl.measureStartBeats,
+        );
         ctrl.setCursor(targetBeat, "jump");
         ctrl.player.seek(targetBeat);
       } else {
         pointIndexRef.current = nextIdx;
         setPointIndex(nextIdx);
-        const targetBeat = points[nextIdx].beat;
+        const targetBeat = waitPointCursorBeat(
+          points[nextIdx],
+          ctrl.measureStartBeats,
+        );
         ctrl.setCursor(targetBeat, "jump");
         ctrl.player.seek(targetBeat);
       }
@@ -461,7 +485,7 @@ export function useWaitMode(
     ctrl.setIsPlaying(false);
     const startBeat =
       points.length > 0
-        ? points[startIdx].beat
+        ? waitPointCursorBeat(points[startIdx], measureStartBeats)
         : range
           ? (measureStartBeats[range.from - 1] ?? 0)
           : 0;
@@ -507,7 +531,10 @@ export function useWaitMode(
     attemptStartTimeRef.current = null;
     const points = waitPointsRef.current;
     if (points.length > 0 && first < points.length) {
-      const targetBeat = points[first].beat;
+      const targetBeat = waitPointCursorBeat(
+        points[first],
+        ctrl.measureStartBeats,
+      );
       ctrl.setCursor(targetBeat, "jump");
       ctrl.player.seek(targetBeat);
     }
