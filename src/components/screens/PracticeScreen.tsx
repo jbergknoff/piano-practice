@@ -34,6 +34,7 @@ import {
 import { BpmInputModal } from "../BpmInputModal";
 import { ConnectionBadge } from "../ConnectionBadge";
 import { HelpBadge } from "../HelpBadge";
+import { MeasureJumpModal } from "../MeasureJumpModal";
 import { RangeNameModal } from "../RangeNameModal";
 import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
@@ -357,6 +358,10 @@ export function PracticeScreen({
   const [rangesDrawerOpen, setRangesDrawerOpen] = useState(false);
   const [pieceInfoOpen, setPieceInfoOpen] = useState(false);
   const [bpmInputModalOpen, setBpmInputModalOpen] = useState(false);
+  // Holds the default measure for the jump modal; null when the modal is closed.
+  const [measureJumpDefault, setMeasureJumpDefault] = useState<number | null>(
+    null,
+  );
 
   const [contextMenu, setContextMenu] = useState<{
     clientX: number;
@@ -393,12 +398,20 @@ export function PracticeScreen({
     : null;
 
   const handleContextMenuAction = (
-    action: "focus" | "seek" | "clearFocus" | "saveCustom" | "editCustom",
+    action:
+      | "focus"
+      | "seek"
+      | "jump"
+      | "clearFocus"
+      | "saveCustom"
+      | "editCustom",
     measureNumber: number,
     beat: number,
   ) => {
     if (action === "focus") {
       onMeasureRangeChange({ from: measureNumber, to: measureNumber });
+    } else if (action === "jump") {
+      setMeasureJumpDefault(measureNumber);
     } else if (action === "clearFocus") {
       onMeasureRangeChange(null);
     } else if (action === "saveCustom") {
@@ -855,6 +868,10 @@ export function PracticeScreen({
                   label: "Move cursor to here",
                   action: "seek" as const,
                 },
+                {
+                  label: "Jump to measure…",
+                  action: "jump" as const,
+                },
                 ...(measureRange
                   ? [
                       namedRange
@@ -874,6 +891,7 @@ export function PracticeScreen({
                 action:
                   | "focus"
                   | "seek"
+                  | "jump"
                   | "clearFocus"
                   | "saveCustom"
                   | "editCustom";
@@ -1042,6 +1060,21 @@ export function PracticeScreen({
             setBpmInputModalOpen(false);
           }}
           onCancel={() => setBpmInputModalOpen(false)}
+          theme={theme}
+          accent={accent}
+        />
+      )}
+
+      {/* Jump-to-measure modal — focuses the chosen measure (cursor snaps there) */}
+      {measureJumpDefault !== null && musicxml && (
+        <MeasureJumpModal
+          currentMeasure={measureJumpDefault}
+          totalMeasures={musicxml.measureStartBeats.length}
+          onConfirm={(measureNumber) => {
+            onMeasureRangeChange({ from: measureNumber, to: measureNumber });
+            setMeasureJumpDefault(null);
+          }}
+          onCancel={() => setMeasureJumpDefault(null)}
           theme={theme}
           accent={accent}
         />
