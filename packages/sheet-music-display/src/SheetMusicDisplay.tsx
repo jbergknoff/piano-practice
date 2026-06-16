@@ -250,7 +250,48 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
-// ── Cursor position helper ────────────────────────────────────────────────────
+// X of the leftmost grace notehead for a measure that opens with one, or null
+// if the measure has no leading grace. Mirrors the grace x cascade in
+// ChordGroupEl/graceNoteGeometry (leftmost group, leftmost note): the grace
+// noteheads sit `mainAccWidth + N × GRACE_NOTE_ADVANCE` left of the measure's
+// first onset. Used so the cursor lands on the grace — not the main note to its
+// right — when it sits at the downbeat of a grace-led measure (e.g. a grace
+// wait point in Wait mode). Scans every part so multi-staff graces are covered.
+function leadingGraceCursorX(
+  score: ParsedScore,
+  layout: ResolvedLayout,
+  measureIndex: number,
+): number | null {
+  const spine = layout.measureSpines[measureIndex];
+  if (!spine || spine.xs.length === 0) {
+    return null;
+  }
+  const onsetX = spine.xs[0];
+  const { staffSpace } = layout;
+  let leftmost: number | null = null;
+  for (const part of score.parts) {
+    const measure = part.measures[measureIndex];
+    const firstEvent = measure?.events[0];
+    if (!firstEvent || isRest(firstEvent)) {
+      continue;
+    }
+    const group = firstEvent as ChordGroup;
+    const graceCount = group.gracesBefore?.length ?? 0;
+    if (graceCount === 0) {
+      continue;
+    }
+    const mainAccidentalWidth = group.notes.some(
+      (note) => note.accidental !== "none",
+    )
+      ? staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR
+      : 0;
+    const x = onsetX - mainAccidentalWidth - graceCount * GRACE_NOTE_ADVANCE;
+    if (leftmost === null || x < leftmost) {
+      leftmost = x;
+    }
+  }
+  return leftmost;
+}
 
 export function computeCursorX(
   beat: number,
@@ -295,6 +336,18 @@ export function computeCursorX(
   const { divs, xs } = spine;
   if (divs.length === 0) {
     return barlineX;
+  }
+
+  // At the exact downbeat of a measure that opens with a grace note, sit on the
+  // grace (left of the first main note) rather than the main note itself. This
+  // is the beat `waitPointCursorBeat` produces for a grace wait point, so the
+  // Wait-mode cursor lands on the highlighted grace. Mid-measure beats and
+  // grace-less measures are unaffected.
+  if (targetDiv === 0) {
+    const graceX = leadingGraceCursorX(score, layout, measureIndex);
+    if (graceX !== null) {
+      return graceX;
+    }
   }
 
   // The cursor must land on the actual downbeat notehead (xs[0]) at the
