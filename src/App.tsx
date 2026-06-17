@@ -1,3 +1,10 @@
+import {
+  type TrackInfo,
+  getMidiTempo,
+  getMidiTracks,
+  midiToMusicXmlWithTracks,
+} from "@jbergknoff/midi-to-musicxml";
+import { parseScore } from "@jbergknoff/sheet-music-display";
 import type { MidiData } from "midi-file";
 import { parseMidi } from "midi-file";
 import {
@@ -7,19 +14,12 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import { parseScore } from "@jbergknoff/sheet-music-display";
-import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import {
   type ScoreConversion,
   getMusicXmlTempo,
   musicXmlToConversion,
 } from "../lib/musicxml/musicxml-playback";
-import {
-  type TrackInfo,
-  getMidiTempo,
-  getMidiTracks,
-  midiToMusicXmlWithTracks,
-} from "@jbergknoff/midi-to-musicxml";
+import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
@@ -28,8 +28,10 @@ import {
   type FileHistory,
   hashFileBytes,
   loadFileHistory,
+  loadGlobalPreferences,
   loadRecentFile,
   saveFileHistory,
+  saveGlobalPreferences,
   saveRecentFile,
 } from "./hooks/use-file-history";
 import { useWakeLock } from "./hooks/use-wake-lock";
@@ -74,9 +76,23 @@ export function App() {
     to: number;
   } | null>(null);
   const [mode, setMode] = useState<"wait" | "playalong" | "listen">("listen");
-  const [playalongPlayMusic, setPlayalongPlayMusic] = useState(true);
-  const [playalongMetronome, setPlayalongMetronome] = useState(false);
-  const [playalongCountIn, setPlayalongCountIn] = useState(true);
+  const [playalongPlayMusic, setPlayalongPlayMusic] = useState(
+    () => loadGlobalPreferences().playalongPlayMusic,
+  );
+  const [playalongMetronome, setPlayalongMetronome] = useState(
+    () => loadGlobalPreferences().playalongMetronome,
+  );
+  const [playalongCountIn, setPlayalongCountIn] = useState(
+    () => loadGlobalPreferences().playalongCountIn,
+  );
+
+  useEffect(() => {
+    saveGlobalPreferences({
+      playalongPlayMusic,
+      playalongMetronome,
+      playalongCountIn,
+    });
+  }, [playalongPlayMusic, playalongMetronome, playalongCountIn]);
 
   // Mirror of PracticeScreen's live cursor, used only for persistence. Kept in
   // a ref (not state) so the 60fps position stream during playback never
