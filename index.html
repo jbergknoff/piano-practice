@@ -76,6 +76,12 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- Hidden form for Netlify build-time detection. Submissions are sent via fetch from DebugLogTab. -->
+    <form name="debug-log" data-netlify="true" hidden>
+      <input type="hidden" name="form-name" value="debug-log" />
+      <textarea name="log"></textarea>
+      <textarea name="explanation"></textarea>
+    </form>
     <script type="module" src="dist/main.js"></script>
   </body>
 </html>
