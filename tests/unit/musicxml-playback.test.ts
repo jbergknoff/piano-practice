@@ -182,6 +182,34 @@ describe("grace note timing", () => {
     expect(grace).toBeDefined();
     expect(grace?.startBeat).toBeGreaterThanOrEqual(0);
   });
+
+  test("slashed grace note has isGraceSlash set to true", () => {
+    // E5 quarter, then slashed grace D5 (acciaccatura) before C5 quarter.
+    const xml = makeScoreXml(`
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><grace slash="yes"/><pitch><step>D</step><octave>5</octave></pitch><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+
+    const grace = notes.find((n) => n.isGrace);
+    expect(grace).toBeDefined();
+    expect(grace?.isGraceSlash).toBe(true);
+  });
+
+  test("non-slashed grace note does not have isGraceSlash set", () => {
+    // E5 quarter, then unslashed grace D5 (appoggiatura) before C5 quarter.
+    const xml = makeScoreXml(`
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><grace/><pitch><step>D</step><octave>5</octave></pitch><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+
+    const grace = notes.find((n) => n.isGrace);
+    expect(grace).toBeDefined();
+    expect(grace?.isGraceSlash).toBeFalsy();
+  });
 });
 
 describe("staccato – durationBeats uses display duration", () => {

@@ -20,14 +20,21 @@ import {
   saveAttempt,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
+import type { PlaybackNote } from "../../lib/musicxml/musicxml-playback";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
 import { useStableHighlights } from "./note-colors";
 
 export type { DebugBeatEvent } from "../debug-log";
 
-interface WaitPoint {
+export interface WaitPoint {
   beat: number;
   noteNumbers: Set<number>;
+  /**
+   * Note numbers of slashed grace notes (acciaccatura) that immediately
+   * precede this wait point. Playing them is allowed and carries no penalty,
+   * but they are not required — the chord is considered complete without them.
+   */
+  optionalNoteNumbers: Set<number>;
   isGrace: boolean;
   /**
    * Rendered measure this wait point belongs to (1-based, matching the focus
@@ -46,6 +53,127 @@ export interface WaitModeSettings {
   bpm: number;
   accent: string;
   theme: ThemeTokens;
+}
+
+/**
+ * Derive the ordered sequence of wait points from a score's playback notes.
+ *
+ * Slashed grace notes (acciaccatura) are treated as optional — they are not
+ * required to advance the wait point, and playing them carries no penalty.
+ *
+ * When a slashed grace note occupies its own beat (its start beat differs from
+ * the main note's beat), that beat is folded forward: the grace note numbers
+ * are collected as `optionalNoteNumbers` on the following non-slashed-grace
+ * wait point rather than becoming a wait point of their own.
+ *
+ * When a slashed grace note is clamped to the same beat as its main note (e.g.
+ * at the very start of the piece), it is also optional — the beat entry's
+ * `optionalNoteNumbers` holds the grace note numbers while `noteNumbers` holds
+ * only the required (non-slashed) notes.
+ */
+export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
+  // Per-beat tracking splits required vs optional note numbers so that slashed
+  // grace notes remain optional even when clamped to the same beat as their
+  // main note.
+  const beatMap = new Map<
+    number,
+    {
+      requiredNumbers: Set<number>;
+      optionalNumbers: Set<number>;
+      isGrace: boolean;
+      isAllGraceSlash: boolean;
+      measure: number;
+    }
+  >();
+
+  for (const note of notes) {
+    if (note.tieStop) {
+      continue;
+    }
+    const isSlashedGrace = (note.isGrace && note.isGraceSlash) ?? false;
+    const existing = beatMap.get(note.startBeat);
+    if (existing) {
+      if (isSlashedGrace) {
+        existing.optionalNumbers.add(note.noteNumber);
+      } else {
+        existing.requiredNumbers.add(note.noteNumber);
+        if (!note.isGrace) {
+          // A real note defines the measure; once any non-grace note joins the
+          // group, treat it as that note's (real) measure rather than a grace's.
+          if (existing.isGrace) {
+            existing.measure = note.measureIndex + 1;
+          }
+          existing.isGrace = false;
+        }
+        existing.isAllGraceSlash = false;
+      }
+    } else if (isSlashedGrace) {
+      beatMap.set(note.startBeat, {
+        requiredNumbers: new Set(),
+        optionalNumbers: new Set([note.noteNumber]),
+        isGrace: true,
+        isAllGraceSlash: true,
+        measure: note.measureIndex + 1,
+      });
+    } else {
+      beatMap.set(note.startBeat, {
+        requiredNumbers: new Set([note.noteNumber]),
+        optionalNumbers: new Set(),
+        isGrace: note.isGrace ?? false,
+        isAllGraceSlash: false,
+        measure: note.measureIndex + 1,
+      });
+    }
+  }
+
+  const sorted = Array.from(beatMap.entries())
+    .map(
+      ([
+        beat,
+        { requiredNumbers, optionalNumbers, isGrace, isAllGraceSlash, measure },
+      ]) => ({
+        beat,
+        requiredNumbers,
+        optionalNumbers,
+        isGrace,
+        isAllGraceSlash,
+        measure,
+      }),
+    )
+    // Sort by measure first so grace notes — whose beats fall just before the
+    // barline, inside the previous measure's beat span — stay grouped with
+    // the measure they belong to. Within a measure, order by beat.
+    .sort((a, b) => a.measure - b.measure || a.beat - b.beat);
+
+  // Pure slashed-grace beats (no required notes at that beat) are folded into
+  // the following wait point's optional set rather than becoming points of their
+  // own. Beats that mix slashed graces with real or non-slashed-grace notes
+  // keep the slashed graces as local optional notes.
+  const merged: WaitPoint[] = [];
+  const pendingOptional = new Set<number>();
+
+  for (const point of sorted) {
+    if (point.isAllGraceSlash) {
+      for (const noteNumber of point.optionalNumbers) {
+        pendingOptional.add(noteNumber);
+      }
+    } else {
+      const optionalNoteNumbers = new Set(pendingOptional);
+      for (const noteNumber of point.optionalNumbers) {
+        optionalNoteNumbers.add(noteNumber);
+      }
+      merged.push({
+        beat: point.beat,
+        noteNumbers: point.requiredNumbers,
+        optionalNoteNumbers,
+        isGrace: point.isGrace,
+        measure: point.measure,
+      });
+      pendingOptional.clear();
+    }
+  }
+
+  return merged;
 }
 
 function formatTime(ms: number): string {
@@ -143,46 +271,7 @@ export function useWaitMode(
     if (!musicxml) {
       return [];
     }
-    const beatMap = new Map<
-      number,
-      { noteNumbers: Set<number>; isGrace: boolean; measure: number }
-    >();
-    for (const note of musicxml.notes) {
-      if (note.tieStop) {
-        continue;
-      }
-      const existing = beatMap.get(note.startBeat);
-      if (existing) {
-        existing.noteNumbers.add(note.noteNumber);
-        if (!note.isGrace) {
-          // A real note defines the measure; once any non-grace note joins the
-          // group, treat it as that note's (real) measure rather than a grace's.
-          if (existing.isGrace) {
-            existing.measure = note.measureIndex + 1;
-          }
-          existing.isGrace = false;
-        }
-      } else {
-        beatMap.set(note.startBeat, {
-          noteNumbers: new Set([note.noteNumber]),
-          isGrace: note.isGrace ?? false,
-          measure: note.measureIndex + 1,
-        });
-      }
-    }
-    return (
-      Array.from(beatMap.entries())
-        .map(([beat, { noteNumbers, isGrace, measure }]) => ({
-          beat,
-          noteNumbers,
-          isGrace,
-          measure,
-        }))
-        // Sort by measure first so grace notes — whose beats fall just before the
-        // barline, inside the previous measure's beat span — stay grouped with
-        // the measure they belong to. Within a measure, order by beat.
-        .sort((a, b) => a.measure - b.measure || a.beat - b.beat)
-    );
+    return buildWaitPoints(musicxml.notes);
   }, [control.musicxml]);
 
   const waitPointsRef = useRef(waitPoints);
@@ -331,6 +420,12 @@ export function useWaitMode(
     };
 
     if (!expected.has(noteNumber)) {
+      // Slashed grace notes attached to this wait point are optional: playing
+      // them is permitted and carries no penalty, but they are not required.
+      if (wp.optionalNoteNumbers.has(noteNumber)) {
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
+        return;
+      }
       // Any non-expected note the user is holding blocks the advance (see the
       // wrongHeldNotesRef check below) — this is what makes mashing fail. We
       // record it even inside the grace window, because otherwise a wrong key
