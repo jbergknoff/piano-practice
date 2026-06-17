@@ -240,6 +240,47 @@ export function saveCustomRanges(hash: string, ranges: CustomRange[]): void {
   }
 }
 
+export interface GlobalPreferences {
+  playalongPlayMusic: boolean;
+  playalongMetronome: boolean;
+  playalongCountIn: boolean;
+}
+
+const GLOBAL_PREFERENCES_KEY = "piano-practice:preferences";
+
+export function loadGlobalPreferences(): GlobalPreferences {
+  try {
+    const raw = localStorage.getItem(GLOBAL_PREFERENCES_KEY);
+    if (!raw) {
+      return {
+        playalongPlayMusic: true,
+        playalongMetronome: false,
+        playalongCountIn: true,
+      };
+    }
+    const parsed = JSON.parse(raw) as Partial<GlobalPreferences>;
+    return {
+      playalongPlayMusic: parsed.playalongPlayMusic ?? true,
+      playalongMetronome: parsed.playalongMetronome ?? false,
+      playalongCountIn: parsed.playalongCountIn ?? true,
+    };
+  } catch {
+    return {
+      playalongPlayMusic: true,
+      playalongMetronome: false,
+      playalongCountIn: true,
+    };
+  }
+}
+
+export function saveGlobalPreferences(prefs: GlobalPreferences): void {
+  try {
+    localStorage.setItem(GLOBAL_PREFERENCES_KEY, JSON.stringify(prefs));
+  } catch {
+    // ignore (private mode, quota exceeded, etc.)
+  }
+}
+
 const RECENT_FILE_KEY = "piano-practice:recent-file";
 
 export function saveRecentFile(name: string, bytes: Uint8Array): void {
