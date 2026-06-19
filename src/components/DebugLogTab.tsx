@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import type { DebugBeatEvent } from "../debug-log";
+import { DEBUG_LOG_MAX, type DebugBeatEvent } from "../debug-log";
 import type { ThemeTokens } from "../theme";
 import {
   FONT_MONO,
@@ -145,9 +145,9 @@ export function DebugLogTab({
           lineHeight: 1.5,
         }}
       >
-        Rolling log of the last {50} note events in Wait mode. Use this to
-        report matching bugs — capture a snapshot right after a mis-match
-        occurs.
+        Rolling log of the last {DEBUG_LOG_MAX} note events in Wait mode. Use
+        this to report matching bugs — capture a snapshot right after a
+        mis-match occurs.
       </p>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

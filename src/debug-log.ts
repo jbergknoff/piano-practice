@@ -1,6 +1,6 @@
 import { CircularBuffer } from "../lib/circular-buffer";
 
-export const DEBUG_LOG_MAX = 50;
+export const DEBUG_LOG_MAX = 500;
 
 interface DebugEventBase {
   /** Wall-clock timestamp (Date.now()). */

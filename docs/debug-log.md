@@ -1,7 +1,7 @@
 # Using the debug log
 
 The **Debugging** tab in the Help (?) modal captures a rolling record of
-the last 50 note events processed by Wait and Playalong modes. Use it to
+the last 500 note events processed by Wait and Playalong modes. Use it to
 report cases where note matching behaves incorrectly.
 
 ## How to capture a log
