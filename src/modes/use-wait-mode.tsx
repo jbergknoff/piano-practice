@@ -363,6 +363,11 @@ export function useWaitMode(
     const now = Date.now();
     const msSinceAdvance = now - lastAdvanceTimeRef.current;
 
+    // Whether this key was already physically down before this event. A Note On
+    // for an already-held key is a duplicate event (no intervening Note Off),
+    // not a fresh key press — see the wrong-note branch below.
+    const alreadyHeld = kind === "on" && held.has(noteNumber);
+
     if (kind === "on") {
       held.add(noteNumber);
       if (attemptStartTimeRef.current === null) {
@@ -424,6 +429,18 @@ export function useWaitMode(
       // them is permitted and carries no penalty, but they are not required.
       if (wp.optionalNoteNumbers.has(noteNumber)) {
         ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
+        return;
+      }
+      // A Note On for a key that was already held is a duplicate event, not a
+      // fresh wrong key press: some instruments re-send Note On for
+      // sustained/pedalled notes, and the tail of a rolled chord re-articulates
+      // tones that are still down. Such a note must NOT enter wrongHeldNotesRef
+      // — otherwise an upper-chord tone the user is holding across consecutive
+      // wait points would block the next advance even though no new wrong key
+      // was ever pressed. (You physically cannot press an already-down key, so
+      // a fresh wrong press always arrives as a Note On while NOT already held.)
+      if (alreadyHeld) {
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "duplicate" });
         return;
       }
       // Any non-expected note the user is holding blocks the advance (see the

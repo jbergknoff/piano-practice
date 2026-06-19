@@ -63,6 +63,7 @@ modes.
 | `EXTRA` | Every expected note was held, but the advance was blocked because the user is also holding wrong notes (e.g. mashing extra keys). Release the extra keys and re-press the chord |
 | `GRACE` | Wrong note, but ignored because it arrived within the grace period after the previous advance (`msSinceAdvance < noteSensitivityMilliseconds`) |
 | `DEBOUNCE` | A correct note that would have triggered an advance, but arrived within 100 ms of the last advance and was ignored to prevent double-advancing on the same chord |
+| `DUPLICATE` | A `ON` event for a key that was already held (no intervening `OFF`) — a duplicate the instrument re-sent for a sustained/pedalled note, or the tail of a rolled chord. Ignored, and deliberately not counted as a wrong held note so it can't block the next advance |
 | `OFF` | Note-release event — no matching logic runs, logged for timeline completeness |
 
 ### Playalong mode
@@ -99,6 +100,17 @@ advanced. The outcome column will tell you why it didn't.
   100 ms of the previous one. This can happen when a single physical
   key press generates two MIDI note-on events (rare, but possible with
   some pianos/adapters). The `msSinceAdvance` value will be under 100.
+
+- **`EXTRA` on the note you meant to play** — Every expected note was
+  held, but the advance was blocked because the app thought you were
+  also holding a wrong note. Look for an earlier `WRONG`/`GRACE` `ON`
+  event whose note is still in `held` (it never got an `OFF`). A common
+  cause is a chord tone you are sustaining across consecutive wait
+  points that the instrument re-sends a `Note On` for: that duplicate
+  is now logged as `DUPLICATE` and ignored, so it no longer blocks the
+  next chord. If you still see `EXTRA`, the held note in question got a
+  genuine fresh press (a different finger) — release it and re-press
+  the expected chord.
 
 - **`GRACE`** — The note was treated as a stray leftover from the
   previous beat and silently dropped. The `msSinceAdvance` value will
