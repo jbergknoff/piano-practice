@@ -317,24 +317,20 @@ export function useWaitMode(
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  // Clear the live note-matching state: what is held, which held notes are
-  // wrong, which have been freshly struck, and the advance clock. After this
-  // the next correct chord advances from a clean slate. Stable (touches only
-  // refs) so it can sit in other callbacks' dependency lists without churn.
-  const clearMatchingState = useCallback(() => {
+  // Reset for the start of a fresh attempt: clear the live note-matching state
+  // (what is held, which held notes are wrong, which have been freshly struck,
+  // and the advance clock) and zero the per-attempt scoring tally (wrong-note
+  // count + elapsed-time clock). After this the next correct chord advances
+  // from a clean slate. Stable (touches only refs) so it can sit in other
+  // callbacks' dependency lists without churn.
+  const resetAttempt = useCallback(() => {
     heldNotesRef.current.clear();
     wrongHeldNotesRef.current.clear();
     freshlyPressedNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
-  }, []);
-
-  // Full reset for the start of a fresh attempt: clear the matching state and
-  // zero the per-attempt scoring tally (wrong-note count + elapsed-time clock).
-  const resetAttempt = useCallback(() => {
-    clearMatchingState();
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
-  }, [clearMatchingState]);
+  }, []);
 
   // Wait-point set is keyed off musicxml; rebuild when it changes.
   const waitPoints = useMemo<WaitPoint[]>(() => {
@@ -796,12 +792,12 @@ export function useWaitMode(
       }
       setPointIndex(idx);
       pointIndexRef.current = idx;
-      // Seeking mid-attempt keeps the running attempt's score (wrong-note count
-      // and elapsed-time clock); only the live matching state is reset.
-      clearMatchingState();
+      // A seek starts a fresh attempt from the new position: reset both the
+      // live matching state and the per-attempt scoring tally.
+      resetAttempt();
       ctrl.setCursor(beat, "jump");
     },
-    [clearMatchingState],
+    [resetAttempt],
   );
 
   const modal = completionModal
