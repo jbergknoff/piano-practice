@@ -120,13 +120,14 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     const existing = beatMap.get(note.startBeat);
     if (existing) {
       if (isSlashedGrace) {
+        // Always make the grace optional at the wait point whose beat it
+        // shares — so the user can play it without penalty at that point.
+        existing.optionalNumbers.add(note.noteNumber);
         if (existing.requiredNumbers.size > 0) {
-          // This grace's beat coincides with required notes from a different
-          // (earlier) event. The grace ornaments the *next* main note, so
-          // forward it rather than making it optional for the wrong chord.
+          // The grace's beat coincides with required notes from a different
+          // (earlier) event. The grace also ornaments the *next* main note,
+          // so forward it there too — it becomes optional at both points.
           existing.forwardedOptionals.add(note.noteNumber);
-        } else {
-          existing.optionalNumbers.add(note.noteNumber);
         }
       } else {
         existing.requiredNumbers.add(note.noteNumber);
