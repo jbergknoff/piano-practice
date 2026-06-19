@@ -32,6 +32,12 @@ export interface PlaybackNote {
   voiceIndex: number; // note index within chord (0 = lowest pitch)
   /** True when this note is a grace note (appoggiatura or acciaccatura). */
   isGrace?: boolean;
+  /**
+   * True when this note is a slashed grace note (acciaccatura). Only set when
+   * `isGrace` is also true. Slashed grace notes are ornamental and optional —
+   * wait mode does not require them as their own wait points.
+   */
+  isGraceSlash?: boolean;
 }
 
 export type { RepeatSection } from "./expand-repeats";
@@ -125,6 +131,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
               noteIndex: graceGroup.noteIndex,
               voiceIndex,
               isGrace: true,
+              isGraceSlash: graceGroup.slash,
             });
           });
         });
