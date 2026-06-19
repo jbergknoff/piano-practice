@@ -317,6 +317,25 @@ export function useWaitMode(
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
+  // Clear the live note-matching state: what is held, which held notes are
+  // wrong, which have been freshly struck, and the advance clock. After this
+  // the next correct chord advances from a clean slate. Stable (touches only
+  // refs) so it can sit in other callbacks' dependency lists without churn.
+  const clearMatchingState = useCallback(() => {
+    heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
+    lastAdvanceTimeRef.current = 0;
+  }, []);
+
+  // Full reset for the start of a fresh attempt: clear the matching state and
+  // zero the per-attempt scoring tally (wrong-note count + elapsed-time clock).
+  const resetAttempt = useCallback(() => {
+    clearMatchingState();
+    wrongNoteCountRef.current = 0;
+    attemptStartTimeRef.current = null;
+  }, [clearMatchingState]);
+
   // Wait-point set is keyed off musicxml; rebuild when it changes.
   const waitPoints = useMemo<WaitPoint[]>(() => {
     const musicxml = control.musicxml;
@@ -339,12 +358,7 @@ export function useWaitMode(
     setPointIndex(0);
     pointIndexRef.current = 0;
     setCompletionModal(null);
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    freshlyPressedNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
     if (wrongNoteTimerRef.current !== null) {
       clearTimeout(wrongNoteTimerRef.current);
       wrongNoteTimerRef.current = null;
@@ -362,12 +376,7 @@ export function useWaitMode(
     const { first } = rangeBounds(points, control.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    freshlyPressedNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
 
     // Move the cursor and player to the new range start so the user can see
     // what they are about to play.
@@ -380,7 +389,7 @@ export function useWaitMode(
     }
     ctrl.setCursor(targetBeat, "jump");
     ctrl.player.seek(targetBeat);
-  }, [control.measureRange]);
+  }, [control.measureRange, resetAttempt]);
 
   const computedHighlights = useMemo<ReadonlyArray<NoteHighlight>>(() => {
     if (!active || !control.musicxml || waitPoints.length === 0) {
@@ -733,12 +742,7 @@ export function useWaitMode(
 
     setPointIndex(startIdx);
     pointIndexRef.current = startIdx;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    freshlyPressedNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
 
     // Suppress any cursor updates from the player while wait mode owns the cursor.
     uninstallCallbacksRef.current?.();
@@ -748,7 +752,7 @@ export function useWaitMode(
 
     setActive(true);
     activeRef.current = true;
-  }, []);
+  }, [resetAttempt]);
 
   const deactivate = useCallback(() => {
     uninstallCallbacksRef.current?.();
@@ -766,12 +770,7 @@ export function useWaitMode(
     const { first } = rangeBounds(waitPointsRef.current, ctrl.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    freshlyPressedNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
     const points = waitPointsRef.current;
     if (points.length > 0 && first < points.length) {
       const targetBeat = waitPointCursorBeat(
@@ -781,27 +780,29 @@ export function useWaitMode(
       ctrl.setCursor(targetBeat, "jump");
       ctrl.player.seek(targetBeat);
     }
-  }, []);
+  }, [resetAttempt]);
 
-  const handleSeek = useCallback((beat: number) => {
-    const ctrl = controlRef.current;
-    const points = waitPointsRef.current;
-    const { first, end } = rangeBounds(points, ctrl.measureRange);
-    let idx = first;
-    for (let i = first; i < end; i++) {
-      if (points[i].beat > beat) {
-        break;
+  const handleSeek = useCallback(
+    (beat: number) => {
+      const ctrl = controlRef.current;
+      const points = waitPointsRef.current;
+      const { first, end } = rangeBounds(points, ctrl.measureRange);
+      let idx = first;
+      for (let i = first; i < end; i++) {
+        if (points[i].beat > beat) {
+          break;
+        }
+        idx = i;
       }
-      idx = i;
-    }
-    setPointIndex(idx);
-    pointIndexRef.current = idx;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    freshlyPressedNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    ctrl.setCursor(beat, "jump");
-  }, []);
+      setPointIndex(idx);
+      pointIndexRef.current = idx;
+      // Seeking mid-attempt keeps the running attempt's score (wrong-note count
+      // and elapsed-time clock); only the live matching state is reset.
+      clearMatchingState();
+      ctrl.setCursor(beat, "jump");
+    },
+    [clearMatchingState],
+  );
 
   const modal = completionModal
     ? (() => {
