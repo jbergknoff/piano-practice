@@ -152,7 +152,7 @@ The notation is drawn with SMuFL glyphs (Unicode Private-Use-Area codepoints) th
 
 The shared types live in `src/debug-log.ts`:
 
-- `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `debounce`, `off`).
+- `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, freshly-pressed notes (`fresh` — the subset of held that got a fresh attack since the last advance; required notes must be fresh to complete the chord), milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `stale`, `extra`, `debounce`, `optional`, `duplicate`, `off`).
 - `PlayalongDebugEvent` — captures note, kind, measure, beat, held notes, and outcome (`matched`, `extra`, `off`, `inactive`).
 - Both share the `DebugBeatEvent` discriminated union, keyed on the `mode` field.
 - `newDebugBuffer()` returns a `CircularBuffer<DebugBeatEvent>` pre-sized to `DEBUG_LOG_MAX`.

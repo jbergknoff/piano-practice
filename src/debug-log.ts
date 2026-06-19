@@ -22,13 +22,23 @@ export interface WaitModeDebugEvent extends DebugEventBase {
   pointIndex: number;
   /** Expected note numbers at the current wait point. */
   expected: number[];
+  /**
+   * Subset of `held` that received a fresh Note On (a press while not already
+   * held) since the last advance. A required note completes the chord only when
+   * it appears here — a key merely held over from a previous chord does not. So
+   * `expected ⊆ held` but an expected note missing from `fresh` is the signature
+   * of a repeated note/chord that needs to be re-struck (see the `stale`
+   * outcome). Tied notes are exempt: they may be held over without a fresh press.
+   */
+  fresh: number[];
   /** Milliseconds elapsed since the last successful advance. */
   msSinceAdvance: number;
   outcome:
-    | "advance" // all expected notes held → advanced to next point
+    | "advance" // all expected notes held and freshly struck → advanced
     | "wrong" // note not in expected chord (outside grace period)
     | "grace" // wrong note silently ignored within grace period
     | "incomplete" // correct note pressed but not all expected notes held yet
+    | "stale" // all expected notes held, but a required one was not re-struck
     | "extra" // chord complete but wrong notes still held → advance blocked
     | "debounce" // within 100 ms anti-race window after last advance
     | "optional" // slashed grace note played — not penalized, not required

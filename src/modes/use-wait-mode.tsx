@@ -296,6 +296,15 @@ export function useWaitMode(
   // never enter this set (they generate no fresh Note On), and grace-window
   // forgiven notes are deliberately excluded too.
   const wrongHeldNotesRef = useRef<Set<number>>(new Set());
+  // Subset of heldNotesRef: keys that received a *fresh* Note On (a press while
+  // the key was not already held) since the last advance. A wait point's
+  // required notes must each appear here to complete the chord — merely holding
+  // a key over from a previous chord is not enough. This is what forces a
+  // repeated note/chord to be re-struck for each occurrence rather than sliding
+  // through on a single sustained hold. Tied notes (`tiedNoteNumbers`) are the
+  // deliberate exception: they may be held over with no fresh press. Cleared on
+  // every advance so each wait point is judged on its own fresh presses.
+  const freshlyPressedNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
   const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrongNoteCountRef = useRef(0);
@@ -307,6 +316,21 @@ export function useWaitMode(
   controlRef.current = control;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+
+  // Reset for the start of a fresh attempt: clear the live note-matching state
+  // (what is held, which held notes are wrong, which have been freshly struck,
+  // and the advance clock) and zero the per-attempt scoring tally (wrong-note
+  // count + elapsed-time clock). After this the next correct chord advances
+  // from a clean slate. Stable (touches only refs) so it can sit in other
+  // callbacks' dependency lists without churn.
+  const resetAttempt = useCallback(() => {
+    heldNotesRef.current.clear();
+    wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
+    lastAdvanceTimeRef.current = 0;
+    wrongNoteCountRef.current = 0;
+    attemptStartTimeRef.current = null;
+  }, []);
 
   // Wait-point set is keyed off musicxml; rebuild when it changes.
   const waitPoints = useMemo<WaitPoint[]>(() => {
@@ -330,11 +354,7 @@ export function useWaitMode(
     setPointIndex(0);
     pointIndexRef.current = 0;
     setCompletionModal(null);
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
     if (wrongNoteTimerRef.current !== null) {
       clearTimeout(wrongNoteTimerRef.current);
       wrongNoteTimerRef.current = null;
@@ -352,11 +372,7 @@ export function useWaitMode(
     const { first } = rangeBounds(points, control.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
 
     // Move the cursor and player to the new range start so the user can see
     // what they are about to play.
@@ -369,7 +385,7 @@ export function useWaitMode(
     }
     ctrl.setCursor(targetBeat, "jump");
     ctrl.player.seek(targetBeat);
-  }, [control.measureRange]);
+  }, [control.measureRange, resetAttempt]);
 
   const computedHighlights = useMemo<ReadonlyArray<NoteHighlight>>(() => {
     if (!active || !control.musicxml || waitPoints.length === 0) {
@@ -421,12 +437,19 @@ export function useWaitMode(
 
     if (kind === "on") {
       held.add(noteNumber);
+      // A genuine fresh attack (the key was not already down). Duplicate Note
+      // Ons for an already-held key are not fresh presses, so they never make a
+      // held-over note count toward a repeated chord.
+      if (!alreadyHeld) {
+        freshlyPressedNotesRef.current.add(noteNumber);
+      }
       if (attemptStartTimeRef.current === null) {
         attemptStartTimeRef.current = now;
       }
     } else {
       held.delete(noteNumber);
       wrongHeldNotesRef.current.delete(noteNumber);
+      freshlyPressedNotesRef.current.delete(noteNumber);
       const points = waitPointsRef.current;
       const idx = pointIndexRef.current;
       const { end } = rangeBounds(points, ctrl.measureRange);
@@ -441,6 +464,7 @@ export function useWaitMode(
         measure: wp?.measure ?? -1,
         beat: offBeat,
         expected: wp ? [...wp.noteNumbers, ...wp.tiedNoteNumbers] : [],
+        fresh: [...freshlyPressedNotesRef.current],
         held: [...held],
         msSinceAdvance,
         outcome: "off",
@@ -477,6 +501,7 @@ export function useWaitMode(
       measure,
       beat,
       expected: expectedSnapshot,
+      fresh: [...freshlyPressedNotesRef.current],
       held: heldSnapshot,
       msSinceAdvance,
     };
@@ -525,15 +550,20 @@ export function useWaitMode(
       return;
     }
 
-    // Check chord completion before debounce: if every expected note is already
-    // held (e.g. a grace note pre-filled one of them), the chord is
-    // unambiguously complete and should advance immediately even within the
-    // debounce window. Only debounce when the chord is still incomplete, to
-    // prevent a leftover key from the previous chord from accidentally
-    // triggering a premature advance. Tied notes count too: the chord is
-    // complete only while they remain held (or are pressed again).
+    // Check chord completion before debounce: if every expected note has been
+    // freshly attacked (and any slashed grace that pre-fills a required note
+    // counts, since a folded grace press carries no intervening advance), the
+    // chord is unambiguously complete and should advance immediately even
+    // within the debounce window. Only debounce when the chord is still
+    // incomplete, to prevent a leftover key from the previous chord from
+    // accidentally triggering a premature advance. Required notes must be
+    // *freshly pressed* — a key merely held over from the previous chord does
+    // not satisfy a repeated note/chord, so each occurrence must be re-struck.
+    // Tied notes are the exception: they only need to remain held (or be
+    // pressed again).
+    const fresh = freshlyPressedNotesRef.current;
     const chordComplete =
-      [...expected].every((n) => held.has(n)) &&
+      [...expected].every((n) => held.has(n) && fresh.has(n)) &&
       [...tied].every((n) => held.has(n));
 
     if (!chordComplete && msSinceAdvance < 50) {
@@ -553,6 +583,9 @@ export function useWaitMode(
 
     if (chordComplete) {
       lastAdvanceTimeRef.current = now;
+      // Each wait point is judged on its own fresh presses; reset the tally so
+      // notes still held into the next chord must be struck again to count.
+      freshlyPressedNotesRef.current.clear();
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
         // Attempt complete — compute score, persist, show modal.
@@ -586,7 +619,18 @@ export function useWaitMode(
       }
       ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
     } else {
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "incomplete" });
+      // Distinguish "not all notes down yet" (incomplete) from "every note is
+      // down but a required one was held over rather than re-struck" (stale).
+      // The latter is the signature of a repeated note/chord that needs a fresh
+      // attack — without its own outcome it would read as a baffling INCOMPLETE
+      // with expected ⊆ held.
+      const heldComplete =
+        [...expected].every((n) => held.has(n)) &&
+        [...tied].every((n) => held.has(n));
+      ctrl.appendToDebugLog({
+        ...debugBase,
+        outcome: heldComplete ? "stale" : "incomplete",
+      });
     }
   }, []);
 
@@ -694,11 +738,7 @@ export function useWaitMode(
 
     setPointIndex(startIdx);
     pointIndexRef.current = startIdx;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
 
     // Suppress any cursor updates from the player while wait mode owns the cursor.
     uninstallCallbacksRef.current?.();
@@ -708,7 +748,7 @@ export function useWaitMode(
 
     setActive(true);
     activeRef.current = true;
-  }, []);
+  }, [resetAttempt]);
 
   const deactivate = useCallback(() => {
     uninstallCallbacksRef.current?.();
@@ -726,11 +766,7 @@ export function useWaitMode(
     const { first } = rangeBounds(waitPointsRef.current, ctrl.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    wrongNoteCountRef.current = 0;
-    attemptStartTimeRef.current = null;
+    resetAttempt();
     const points = waitPointsRef.current;
     if (points.length > 0 && first < points.length) {
       const targetBeat = waitPointCursorBeat(
@@ -740,26 +776,29 @@ export function useWaitMode(
       ctrl.setCursor(targetBeat, "jump");
       ctrl.player.seek(targetBeat);
     }
-  }, []);
+  }, [resetAttempt]);
 
-  const handleSeek = useCallback((beat: number) => {
-    const ctrl = controlRef.current;
-    const points = waitPointsRef.current;
-    const { first, end } = rangeBounds(points, ctrl.measureRange);
-    let idx = first;
-    for (let i = first; i < end; i++) {
-      if (points[i].beat > beat) {
-        break;
+  const handleSeek = useCallback(
+    (beat: number) => {
+      const ctrl = controlRef.current;
+      const points = waitPointsRef.current;
+      const { first, end } = rangeBounds(points, ctrl.measureRange);
+      let idx = first;
+      for (let i = first; i < end; i++) {
+        if (points[i].beat > beat) {
+          break;
+        }
+        idx = i;
       }
-      idx = i;
-    }
-    setPointIndex(idx);
-    pointIndexRef.current = idx;
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
-    ctrl.setCursor(beat, "jump");
-  }, []);
+      setPointIndex(idx);
+      pointIndexRef.current = idx;
+      // A seek starts a fresh attempt from the new position: reset both the
+      // live matching state and the per-attempt scoring tally.
+      resetAttempt();
+      ctrl.setCursor(beat, "jump");
+    },
+    [resetAttempt],
+  );
 
   const modal = completionModal
     ? (() => {
