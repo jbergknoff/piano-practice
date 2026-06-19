@@ -95,10 +95,6 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     {
       requiredNumbers: Set<number>;
       optionalNumbers: Set<number>;
-      // Slashed graces whose beat collided with required notes from a different
-      // (earlier) event. They ornament the *next* main note, so they are
-      // forwarded to the following non-grace wait point during the merge step.
-      forwardedOptionals: Set<number>;
       tiedNumbers: Set<number>;
       isGrace: boolean;
       isAllGraceSlash: boolean;
@@ -122,13 +118,9 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       if (isSlashedGrace) {
         // Always make the grace optional at the wait point whose beat it
         // shares — so the user can play it without penalty at that point.
+        // The post-processing pass below (using graceMainBeat) additionally
+        // ensures it is also optional at the main note's wait point.
         existing.optionalNumbers.add(note.noteNumber);
-        if (existing.requiredNumbers.size > 0) {
-          // The grace's beat coincides with required notes from a different
-          // (earlier) event. The grace also ornaments the *next* main note,
-          // so forward it there too — it becomes optional at both points.
-          existing.forwardedOptionals.add(note.noteNumber);
-        }
       } else {
         existing.requiredNumbers.add(note.noteNumber);
         if (!note.isGrace) {
@@ -145,7 +137,6 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       beatMap.set(note.startBeat, {
         requiredNumbers: new Set(),
         optionalNumbers: new Set([note.noteNumber]),
-        forwardedOptionals: new Set(),
         tiedNumbers: new Set(),
         isGrace: true,
         isAllGraceSlash: true,
@@ -155,7 +146,6 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       beatMap.set(note.startBeat, {
         requiredNumbers: new Set([note.noteNumber]),
         optionalNumbers: new Set(),
-        forwardedOptionals: new Set(),
         tiedNumbers: new Set(),
         isGrace: note.isGrace ?? false,
         isAllGraceSlash: false,
@@ -181,7 +171,6 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         {
           requiredNumbers,
           optionalNumbers,
-          forwardedOptionals,
           tiedNumbers,
           isGrace,
           isAllGraceSlash,
@@ -191,7 +180,6 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         beat,
         requiredNumbers,
         optionalNumbers,
-        forwardedOptionals,
         tiedNumbers,
         isGrace,
         isAllGraceSlash,
@@ -215,9 +203,6 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       for (const noteNumber of point.optionalNumbers) {
         pendingOptional.add(noteNumber);
       }
-      for (const noteNumber of point.forwardedOptionals) {
-        pendingOptional.add(noteNumber);
-      }
     } else {
       const optionalNoteNumbers = new Set(pendingOptional);
       for (const noteNumber of point.optionalNumbers) {
@@ -232,11 +217,26 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         measure: point.measure,
       });
       pendingOptional.clear();
-      // Graces that collided with this beat's required notes ornament the
-      // *next* main note — forward them so they become optional there.
-      for (const noteNumber of point.forwardedOptionals) {
-        pendingOptional.add(noteNumber);
-      }
+    }
+  }
+
+  // Post-process: ensure every slashed grace note is optional at the wait
+  // point it actually ornaments. `graceMainBeat` is the exact `beatCursor`
+  // value stored at conversion time — the same double used as the main note's
+  // beatMap key — so this lookup is immune to the floating-point rounding that
+  // occurs when computing `startBeat` as `beatCursor - k * GRACE_NOTE_BEATS`.
+  // Without this, a grace whose startBeat differs by even one ULP from a
+  // co-resident arpeggio note's accumulated beat slips into `pendingOptional`,
+  // gets consumed by the arpeggio's wait point, and never reaches the main
+  // chord it ornaments.
+  const beatToMergedIndex = new Map(merged.map((waitPoint, index) => [waitPoint.beat, index]));
+  for (const note of notes) {
+    if (note.tieStop || !(note.isGrace && note.isGraceSlash) || note.graceMainBeat === undefined) {
+      continue;
+    }
+    const index = beatToMergedIndex.get(note.graceMainBeat);
+    if (index !== undefined) {
+      merged[index].optionalNoteNumbers.add(note.noteNumber);
     }
   }
 

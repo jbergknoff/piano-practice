@@ -38,6 +38,16 @@ export interface PlaybackNote {
    * wait mode does not require them as their own wait points.
    */
   isGraceSlash?: boolean;
+  /**
+   * For slashed grace notes only: the exact `beatCursor` value at conversion
+   * time — the start beat of the main note this grace ornaments. Stored
+   * separately from `startBeat` because `startBeat` is computed via
+   * `beatCursor - k * GRACE_NOTE_BEATS` (subtraction), which may yield a
+   * slightly different IEEE 754 double than the main note's `beatCursor`
+   * (accumulated via addition). `graceMainBeat` lets wait-point building look
+   * up the main note's beat exactly without floating-point mismatches.
+   */
+  graceMainBeat?: number;
 }
 
 export type { RepeatSection } from "./expand-repeats";
@@ -132,6 +142,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
               voiceIndex,
               isGrace: true,
               isGraceSlash: graceGroup.slash,
+              graceMainBeat: beatCursor,
             });
           });
         });
