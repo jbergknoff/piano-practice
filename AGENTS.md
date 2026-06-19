@@ -128,8 +128,9 @@ multi-staff voice reduction can split a held note (e.g. a half note overlapping 
 faster voice) into two events — even across a barline — ties are tracked across
 the whole part, keyed by pitch identity, rather than per measure. The display is
 a single horizontal system (no line wrapping), so every arc is a simple
-left-to-right curve. Arc direction follows the conventional rule: a notehead at
-or above the staff middle line bulges downward, below it bulges upward. Without
+left-to-right curve. Arc direction follows the conventional rule (curve opposite
+the stem): a notehead at or above the staff middle line bulges upward (arc above
+the head), below it bulges downward. Without
 this, every held note rendered as a second unconnected notehead, reading as a
 fresh attack (the renderer draws no slurs; only ties). Tie paths carry a
 `data-tie` attribute for test selection.

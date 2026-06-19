@@ -557,8 +557,9 @@ export function computeTieArcs(
     const staffBottomY = staffBottomYs[p];
     const clef = part.clef;
     const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
-    // A tie on a notehead at or above the staff's middle line bulges downward;
-    // one below bulges upward — the conventional "curve away from the note".
+    // Ties curve opposite the stem: a notehead at or above the staff's middle
+    // line (stem down) gets an arc above it (bulges up); one below the middle
+    // (stem up) gets an arc below it (bulges down).
     const middleY = staffBottomY - 2 * staffSpace;
     // Open tie starts in this part, keyed by pitch identity (step+alter+octave).
     const openTies = new Map<string, { x: number; y: number }>();
@@ -604,7 +605,7 @@ export function computeTieArcs(
                 startX: start.x,
                 stopX: here.x,
                 y: here.y,
-                bulge: here.y <= middleY ? "down" : "up",
+                bulge: here.y <= middleY ? "up" : "down",
               });
               openTies.delete(pitchKey);
             }

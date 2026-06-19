@@ -598,7 +598,9 @@ describe("ties", () => {
     expect(arcs[0].partIndex).toBe(0);
   });
 
-  test("a high notehead's tie bulges down, a low one's bulges up", () => {
+  test("a high notehead's tie bulges up, a low one's bulges down", () => {
+    // Ties curve opposite the stem: a high note (stem down) gets the arc above
+    // it, a low note (stem up) gets it below.
     const highScore = parseScore(
       scoreXml([
         [{ ...QUARTER("A", 5), tie: "start" }, QUARTER("C", 4)],
@@ -606,7 +608,7 @@ describe("ties", () => {
       ]),
     );
     expect(computeTieArcs(highScore, resolveLayout(highScore))[0].bulge).toBe(
-      "down",
+      "up",
     );
 
     const lowScore = parseScore(
@@ -616,7 +618,7 @@ describe("ties", () => {
       ]),
     );
     expect(computeTieArcs(lowScore, resolveLayout(lowScore))[0].bulge).toBe(
-      "up",
+      "down",
     );
   });
 });
