@@ -45,6 +45,7 @@ const SLASHED_GRACE_E5 = 76;
 const SLASHED_GRACE_A5 = 81;
 const REQUIRED_C_SHARP_6 = 85;
 const REQUIRED_A3 = 57;
+const REQUIRED_E4 = 64;
 
 const HL_FIRST_CHORD = ["p0-m224-n2-v0", "p1-m224-n0-v0"];
 const HL_SECOND_BEAT = ["p1-m224-n1-v0"];
@@ -139,4 +140,44 @@ test("playing the slashed graces then the required chord advances to the next wa
   await page.waitForTimeout(120);
 
   await waitForHighlightedNoteIds(page, HL_SECOND_BEAT, 3_000);
+});
+
+test("a duplicate Note On for a sustained chord tone does not block the next advance", async ({
+  page,
+}) => {
+  // Regression: a user holding an upper chord tone across consecutive wait
+  // points (e.g. with the sustain pedal) whose instrument re-sends a Note On
+  // for that already-held key must not have the next wait point blocked. The
+  // duplicate Note On used to be recorded as a wrong held note, so the next
+  // (correct) chord scored EXTRA and never advanced.
+  await loadFile(page, "rondo-alla-turca-full.mxl");
+  await waitForMockBluetoothConnected(page);
+
+  await jumpToMeasure224(page);
+  await page.getByRole("button", { name: "Wait" }).click();
+
+  await waitForHighlightedNoteIds(page, HL_FIRST_CHORD);
+
+  // Play the downbeat chord but keep C#6 held (sustained); release only A3.
+  // This advances to the E4 wait point with C#6 still physically down.
+  await sendChordOn(page, [REQUIRED_C_SHARP_6, REQUIRED_A3]);
+  await sendNoteOff(page, REQUIRED_A3);
+  await waitForHighlightedNoteIds(page, HL_SECOND_BEAT);
+
+  // The instrument re-sends Note On for the still-held C#6 (no intervening
+  // Note Off). It must be ignored, not treated as a fresh wrong key.
+  await sendNoteOn(page, REQUIRED_C_SHARP_6);
+  await page.waitForTimeout(60);
+
+  // Playing the required E4 must advance off the E4 wait point — the sustained
+  // C#6 must not block it.
+  await sendNoteOn(page, REQUIRED_E4);
+  await page.waitForFunction(
+    (blockedId) =>
+      !Array.from(document.querySelectorAll("[data-color-id]")).some(
+        (el) => el.getAttribute("data-color-id") === blockedId,
+      ),
+    HL_SECOND_BEAT[0],
+    { timeout: 3_000 },
+  );
 });

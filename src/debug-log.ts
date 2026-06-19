@@ -1,6 +1,6 @@
 import { CircularBuffer } from "../lib/circular-buffer";
 
-export const DEBUG_LOG_MAX = 50;
+export const DEBUG_LOG_MAX = 500;
 
 interface DebugEventBase {
   /** Wall-clock timestamp (Date.now()). */
@@ -32,6 +32,7 @@ export interface WaitModeDebugEvent extends DebugEventBase {
     | "extra" // chord complete but wrong notes still held → advance blocked
     | "debounce" // within 100 ms anti-race window after last advance
     | "optional" // slashed grace note played — not penalized, not required
+    | "duplicate" // Note On for an already-held key (sustained/re-sent) — ignored
     | "off"; // note-off event (no matching logic runs)
 }
 

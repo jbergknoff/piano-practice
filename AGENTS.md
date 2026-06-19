@@ -131,7 +131,7 @@ The notation is drawn with SMuFL glyphs (Unicode Private-Use-Area codepoints) th
 
 ## Debug log
 
-`App.tsx` owns a single shared rolling buffer (last 50 events) of every note event processed by Wait and Playalong modes. The buffer is reset whenever `musicxml` changes. Each mode hook receives an `appendToDebugLog` callback through `ModeControl` and appends events as it processes them, producing a single chronological timeline.
+`App.tsx` owns a single shared rolling buffer (last 500 events) of every note event processed by Wait and Playalong modes. The buffer is reset whenever `musicxml` changes. Each mode hook receives an `appendToDebugLog` callback through `ModeControl` and appends events as it processes them, producing a single chronological timeline.
 
 The shared types live in `src/debug-log.ts`:
 
