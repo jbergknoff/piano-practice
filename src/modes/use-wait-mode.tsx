@@ -296,6 +296,15 @@ export function useWaitMode(
   // never enter this set (they generate no fresh Note On), and grace-window
   // forgiven notes are deliberately excluded too.
   const wrongHeldNotesRef = useRef<Set<number>>(new Set());
+  // Subset of heldNotesRef: keys that received a *fresh* Note On (a press while
+  // the key was not already held) since the last advance. A wait point's
+  // required notes must each appear here to complete the chord — merely holding
+  // a key over from a previous chord is not enough. This is what forces a
+  // repeated note/chord to be re-struck for each occurrence rather than sliding
+  // through on a single sustained hold. Tied notes (`tiedNoteNumbers`) are the
+  // deliberate exception: they may be held over with no fresh press. Cleared on
+  // every advance so each wait point is judged on its own fresh presses.
+  const freshlyPressedNotesRef = useRef<Set<number>>(new Set());
   const lastAdvanceTimeRef = useRef(0);
   const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrongNoteCountRef = useRef(0);
@@ -332,6 +341,7 @@ export function useWaitMode(
     setCompletionModal(null);
     heldNotesRef.current.clear();
     wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -354,6 +364,7 @@ export function useWaitMode(
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -421,12 +432,19 @@ export function useWaitMode(
 
     if (kind === "on") {
       held.add(noteNumber);
+      // A genuine fresh attack (the key was not already down). Duplicate Note
+      // Ons for an already-held key are not fresh presses, so they never make a
+      // held-over note count toward a repeated chord.
+      if (!alreadyHeld) {
+        freshlyPressedNotesRef.current.add(noteNumber);
+      }
       if (attemptStartTimeRef.current === null) {
         attemptStartTimeRef.current = now;
       }
     } else {
       held.delete(noteNumber);
       wrongHeldNotesRef.current.delete(noteNumber);
+      freshlyPressedNotesRef.current.delete(noteNumber);
       const points = waitPointsRef.current;
       const idx = pointIndexRef.current;
       const { end } = rangeBounds(points, ctrl.measureRange);
@@ -525,15 +543,20 @@ export function useWaitMode(
       return;
     }
 
-    // Check chord completion before debounce: if every expected note is already
-    // held (e.g. a grace note pre-filled one of them), the chord is
-    // unambiguously complete and should advance immediately even within the
-    // debounce window. Only debounce when the chord is still incomplete, to
-    // prevent a leftover key from the previous chord from accidentally
-    // triggering a premature advance. Tied notes count too: the chord is
-    // complete only while they remain held (or are pressed again).
+    // Check chord completion before debounce: if every expected note has been
+    // freshly attacked (and any slashed grace that pre-fills a required note
+    // counts, since a folded grace press carries no intervening advance), the
+    // chord is unambiguously complete and should advance immediately even
+    // within the debounce window. Only debounce when the chord is still
+    // incomplete, to prevent a leftover key from the previous chord from
+    // accidentally triggering a premature advance. Required notes must be
+    // *freshly pressed* — a key merely held over from the previous chord does
+    // not satisfy a repeated note/chord, so each occurrence must be re-struck.
+    // Tied notes are the exception: they only need to remain held (or be
+    // pressed again).
+    const fresh = freshlyPressedNotesRef.current;
     const chordComplete =
-      [...expected].every((n) => held.has(n)) &&
+      [...expected].every((n) => held.has(n) && fresh.has(n)) &&
       [...tied].every((n) => held.has(n));
 
     if (!chordComplete && msSinceAdvance < 50) {
@@ -553,6 +576,9 @@ export function useWaitMode(
 
     if (chordComplete) {
       lastAdvanceTimeRef.current = now;
+      // Each wait point is judged on its own fresh presses; reset the tally so
+      // notes still held into the next chord must be struck again to count.
+      freshlyPressedNotesRef.current.clear();
       const nextIdx = idx + 1;
       if (nextIdx >= end) {
         // Attempt complete — compute score, persist, show modal.
@@ -696,6 +722,7 @@ export function useWaitMode(
     pointIndexRef.current = startIdx;
     heldNotesRef.current.clear();
     wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -728,6 +755,7 @@ export function useWaitMode(
     pointIndexRef.current = first;
     heldNotesRef.current.clear();
     wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
@@ -757,6 +785,7 @@ export function useWaitMode(
     pointIndexRef.current = idx;
     heldNotesRef.current.clear();
     wrongHeldNotesRef.current.clear();
+    freshlyPressedNotesRef.current.clear();
     lastAdvanceTimeRef.current = 0;
     ctrl.setCursor(beat, "jump");
   }, []);

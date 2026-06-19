@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Repeated</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <!-- The same C5+E5 chord struck on all four quarter beats, with no ties.
+           Each occurrence is a fresh attack, so Wait mode must require the chord
+           to be re-struck four separate times rather than sliding through on a
+           single sustained hold. -->
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <chord/><pitch><step>E</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <chord/><pitch><step>E</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <chord/><pitch><step>E</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+      <note>
+        <chord/><pitch><step>E</step><octave>5</octave></pitch>
+        <duration>4</duration><type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
