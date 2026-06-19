@@ -537,6 +537,72 @@ export function useWaitMode(
         ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
         return;
       }
+      // When at a non-slashed grace wait point, notes belonging to the next
+      // wait point are "anticipated" — the player naturally presses grace and
+      // main-chord keys in one physical gesture and must not be penalised for
+      // it. If the grace chord is already complete (e.g. the grace note was
+      // debounced on an earlier tick and sits in fresh), also advance now so
+      // both wait points resolve in a single gesture.
+      if (wp.isGrace && !alreadyHeld) {
+        const anticipationIdx = idx + 1;
+        if (anticipationIdx < end) {
+          const anticipatedWp = points[anticipationIdx];
+          if (
+            anticipatedWp.noteNumbers.has(noteNumber) ||
+            anticipatedWp.optionalNoteNumbers.has(noteNumber) ||
+            anticipatedWp.tiedNoteNumbers.has(noteNumber)
+          ) {
+            const currentFresh = freshlyPressedNotesRef.current;
+            const graceComplete =
+              [...expected].every((n) => held.has(n) && currentFresh.has(n)) &&
+              [...tied].every((n) => held.has(n)) &&
+              wrongHeldNotesRef.current.size === 0;
+            if (graceComplete) {
+              lastAdvanceTimeRef.current = now;
+              const savedFresh = new Set(currentFresh);
+              freshlyPressedNotesRef.current.clear();
+              for (const nextNoteNumber of anticipatedWp.noteNumbers) {
+                if (savedFresh.has(nextNoteNumber)) {
+                  freshlyPressedNotesRef.current.add(nextNoteNumber);
+                }
+              }
+              if (anticipationIdx >= end) {
+                const startTime = attemptStartTimeRef.current;
+                if (startTime !== null) {
+                  recordCompletion({
+                    wrongNotes: wrongNoteCountRef.current,
+                    elapsedMs: now - startTime,
+                    totalPoints: end - first,
+                  });
+                }
+                wrongNoteCountRef.current = 0;
+                attemptStartTimeRef.current = null;
+                pointIndexRef.current = first;
+                setPointIndex(first);
+                const targetBeat = waitPointCursorBeat(
+                  points[first],
+                  ctrl.measureStartBeats,
+                );
+                ctrl.setCursor(targetBeat, "jump");
+                ctrl.player.seek(targetBeat);
+              } else {
+                pointIndexRef.current = anticipationIdx;
+                setPointIndex(anticipationIdx);
+                const targetBeat = waitPointCursorBeat(
+                  anticipatedWp,
+                  ctrl.measureStartBeats,
+                );
+                ctrl.setCursor(targetBeat, "jump");
+                ctrl.player.seek(targetBeat);
+              }
+              ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
+            } else {
+              ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
+            }
+            return;
+          }
+        }
+      }
       // A Note On for a key that was already held is a duplicate event, not a
       // fresh wrong key press: some instruments re-send Note On for
       // sustained/pedalled notes, and the tail of a rolled chord re-articulates
@@ -607,10 +673,27 @@ export function useWaitMode(
 
     if (chordComplete) {
       lastAdvanceTimeRef.current = now;
+      const nextIdx = idx + 1;
+      // When advancing from a non-slashed grace wait point, capture the notes
+      // pressed in this gesture before clearing so they can be retroactively
+      // credited as fresh presses for the next wait point. Players press grace
+      // and main-chord keys in one gesture; requiring a re-press of
+      // already-held main-chord notes after the grace advances is awkward.
+      const graceAnticipatedFresh =
+        wp.isGrace && nextIdx < end
+          ? new Set(freshlyPressedNotesRef.current)
+          : null;
       // Each wait point is judged on its own fresh presses; reset the tally so
       // notes still held into the next chord must be struck again to count.
       freshlyPressedNotesRef.current.clear();
-      const nextIdx = idx + 1;
+      if (graceAnticipatedFresh !== null) {
+        const nextWp = points[nextIdx];
+        for (const nextNoteNumber of nextWp.noteNumbers) {
+          if (graceAnticipatedFresh.has(nextNoteNumber)) {
+            freshlyPressedNotesRef.current.add(nextNoteNumber);
+          }
+        }
+      }
       if (nextIdx >= end) {
         // Attempt complete — compute score, persist, show modal.
         const startTime = attemptStartTimeRef.current;
