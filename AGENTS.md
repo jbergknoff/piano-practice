@@ -59,7 +59,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `lib/musicxml/musicxml-playback.ts` | Derives the `ScoreConversion` (playback notes, timing) from a MusicXML string — shared by the MIDI and direct-load paths; owns the `ScoreConversion`/`PlaybackNote` types. Imports `parseScore`/types from `@jbergknoff/sheet-music-display` |
 | `lib/musicxml/mxl.ts` | Unzips `.mxl` containers (native `DecompressionStream`) and returns the root MusicXML string |
 | `packages/midi-to-musicxml/src/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string (returns the string; the app derives the `ScoreConversion`) |
-| `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click. Injects the bundled SMuFL `@font-face` at module load; plain text uses the `textFontFamily` prop (the app passes its theme constant); highlight types live in the sibling `highlights.ts`, glyph codepoints in `glyphs.ts` |
+| `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click, and tie arcs (`computeTieArcs` + `TieLayer`, see below). Injects the bundled SMuFL `@font-face` at module load; plain text uses the `textFontFamily` prop (the app passes its theme constant); highlight types live in the sibling `highlights.ts`, glyph codepoints in `glyphs.ts` |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
@@ -117,6 +117,22 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 - **Top-left** — back button, piece title (opens info modal on click)
 - **Bottom-left** — Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
+
+### Tie rendering
+
+`computeTieArcs(score, layout)` in `SheetMusicDisplay.tsx` resolves every tie to
+a drawable `TieArc`, and `TieLayer` strokes each as a shallow quadratic curve
+between the two tied noteheads. A tie joins a note flagged `tieStart` to the next
+same-pitch note flagged `tieStop` **within the same part (staff)**; because the
+multi-staff voice reduction can split a held note (e.g. a half note overlapping a
+faster voice) into two events — even across a barline — ties are tracked across
+the whole part, keyed by pitch identity, rather than per measure. The display is
+a single horizontal system (no line wrapping), so every arc is a simple
+left-to-right curve. Arc direction follows the conventional rule: a notehead at
+or above the staff middle line bulges downward, below it bulges upward. Without
+this, every held note rendered as a second unconnected notehead, reading as a
+fresh attack (the renderer draws no slurs; only ties). Tie paths carry a
+`data-tie` attribute for test selection.
 
 ### Glyph font bundling
 

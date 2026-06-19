@@ -14,7 +14,11 @@ import {
 } from "./embedded-glyph-font";
 import { computeMeasureStartBeats } from "./measure-beats";
 import { parseScore } from "./musicxml-parser";
-import { SheetMusicDisplay, computeCursorX } from "./SheetMusicDisplay";
+import {
+  SheetMusicDisplay,
+  computeCursorX,
+  computeTieArcs,
+} from "./SheetMusicDisplay";
 import { resolveLayout } from "./sheet-music-layout";
 
 // SMuFL glyphs we assert on (must match the G map in SheetMusicDisplay.tsx).
@@ -95,6 +99,8 @@ interface NoteSpec {
   staccato?: boolean;
   /** Emit a <grace/> (no <duration>); true = plain, {slash} = acciaccatura. */
   grace?: boolean | { slash: boolean };
+  /** Emit <tie> elements: "start", "stop", or "both" (a tie chain). */
+  tie?: "start" | "stop" | "both";
 }
 
 function noteXml(n: NoteSpec): string {
@@ -118,6 +124,12 @@ function noteXml(n: NoteSpec): string {
   parts.push(`<type>${n.type}</type>`);
   if (n.dot) {
     parts.push("<dot/>");
+  }
+  if (n.tie === "start" || n.tie === "both") {
+    parts.push('<tie type="start"/>');
+  }
+  if (n.tie === "stop" || n.tie === "both") {
+    parts.push('<tie type="stop"/>');
   }
   if (n.staccato) {
     parts.push(
@@ -534,6 +546,79 @@ describe("SheetMusicDisplay SVG snapshots", () => {
       expect(out).toBe(readFileSync(path, "utf8"));
     });
   }
+});
+
+// ── Ties ──────────────────────────────────────────────────────────────────────
+
+describe("ties", () => {
+  const tiePaths = (svg: Element) =>
+    Array.from(svg.querySelectorAll("path[data-tie]"));
+
+  test("draws a tie arc between two tied noteheads in a measure", () => {
+    const { svg } = renderSheetMusic(
+      scoreXml([
+        { ...QUARTER("G", 4), tie: "start" },
+        { ...QUARTER("G", 4), tie: "stop" },
+        QUARTER("C", 4),
+        QUARTER("D", 4),
+      ]),
+    );
+    expect(tiePaths(svg)).toHaveLength(1);
+  });
+
+  test("draws no tie arc when no notes are tied", () => {
+    const { svg } = renderSheetMusic(
+      scoreXml([QUARTER("G", 4), QUARTER("G", 4)]),
+    );
+    expect(tiePaths(svg)).toHaveLength(0);
+  });
+
+  test("ties a note across a barline", () => {
+    const score = parseScore(
+      scoreXml([
+        [
+          QUARTER("C", 4),
+          QUARTER("D", 4),
+          QUARTER("E", 4),
+          { ...QUARTER("G", 4), tie: "start" },
+        ],
+        [
+          { ...QUARTER("G", 4), tie: "stop" },
+          QUARTER("C", 4),
+          QUARTER("D", 4),
+          QUARTER("E", 4),
+        ],
+      ]),
+    );
+    const arcs = computeTieArcs(score, resolveLayout(score));
+    expect(arcs).toHaveLength(1);
+    // The tie starts in measure 1 and stops in measure 2, so the stop endpoint
+    // is to the right of the start endpoint.
+    expect(arcs[0].stopX).toBeGreaterThan(arcs[0].startX);
+    expect(arcs[0].partIndex).toBe(0);
+  });
+
+  test("a high notehead's tie bulges down, a low one's bulges up", () => {
+    const highScore = parseScore(
+      scoreXml([
+        [{ ...QUARTER("A", 5), tie: "start" }, QUARTER("C", 4)],
+        [{ ...QUARTER("A", 5), tie: "stop" }, QUARTER("C", 4)],
+      ]),
+    );
+    expect(computeTieArcs(highScore, resolveLayout(highScore))[0].bulge).toBe(
+      "down",
+    );
+
+    const lowScore = parseScore(
+      scoreXml([
+        [{ ...QUARTER("C", 4), tie: "start" }, QUARTER("C", 4)],
+        [{ ...QUARTER("C", 4), tie: "stop" }, QUARTER("C", 4)],
+      ]),
+    );
+    expect(computeTieArcs(lowScore, resolveLayout(lowScore))[0].bulge).toBe(
+      "up",
+    );
+  });
 });
 
 // ── Playback cursor positioning ───────────────────────────────────────────────
