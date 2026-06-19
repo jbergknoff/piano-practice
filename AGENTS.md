@@ -69,7 +69,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 
 Three modes stored as `"wait" | "playalong" | "listen"` in `App.tsx` state and persisted in `FileHistory`.
 
-- **Wait** — score halts; `useWaitMode` listens for correct piano chords before advancing. Play/Pause and BPM controls hidden.
+- **Wait** — score halts; `useWaitMode` listens for correct piano chords before advancing. Play/Pause and BPM controls hidden. A `WaitPoint` separates `noteNumbers` (fresh attacks the user must press), `optionalNoteNumbers` (slashed graces — allowed, never required), and `tiedNoteNumbers` (the `tieStop` side of a tie — must still be *held* to complete the chord, but a still-held note needs no fresh press; re-pressing a released tie is allowed and unpenalised). A tie landing on a beat with no other onset creates no wait point.
 - **Playalong** — the app plays back while the user plays along; notes are scored as hit or missed in real time.
 - **Listen** — normal playback; sounding notes are highlighted in accent.
 

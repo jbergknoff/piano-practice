@@ -131,11 +131,12 @@ Find the `ADVANCE` event and look at its `expected` and `held` fields.
   from the previous beat). This is correct behavior, not a bug.
 
 - **`expected` is smaller than you thought** — The app may only require
-  a subset of the notes that appear on the score at that beat. Check
-  whether some of those notes are ties (a tied note is not a new
-  attack, so it doesn't appear in `expected`). The `beat` field will
-  tell you which score position was being evaluated; cross-reference
-  with the sheet music.
+  a subset of the notes that appear on the score at that beat. The `beat`
+  field tells you which score position was being evaluated; cross-reference
+  with the sheet music. Note that the `tieStop` side of a tie *is* included
+  in `expected` (it must still be held to complete the chord), but it needs
+  no fresh attack — if you kept it held from the previous beat there will be
+  no Note On for it, yet it still counts toward the chord.
 
 - **`ADVANCE` appears after several `WRONG` events** — The wrong keys
   eventually triggered the correct chord being held (e.g., you hit
