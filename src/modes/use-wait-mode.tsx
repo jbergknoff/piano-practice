@@ -35,6 +35,15 @@ export interface WaitPoint {
    * but they are not required — the chord is considered complete without them.
    */
   optionalNoteNumbers: Set<number>;
+  /**
+   * Note numbers that are tied into this wait point from an earlier note (the
+   * `tieStop` side of a tie). The note is expected to still be sounding, so the
+   * chord is complete only while these are held — but if the user let the tied
+   * note go, it must be pressed again like a required note. Re-pressing one is
+   * never penalised. Kept separate from `noteNumbers` because a still-held tie
+   * needs no fresh attack, whereas every `noteNumbers` entry does.
+   */
+  tiedNoteNumbers: Set<number>;
   isGrace: boolean;
   /**
    * Rendered measure this wait point belongs to (1-based, matching the focus
@@ -70,24 +79,37 @@ export interface WaitModeSettings {
  * at the very start of the piece), it is also optional — the beat entry's
  * `optionalNoteNumbers` holds the grace note numbers while `noteNumbers` holds
  * only the required (non-slashed) notes.
+ *
+ * The `tieStop` side of a tie is not a fresh attack, so it never creates a wait
+ * point of its own; instead it is recorded as a tied note on the existing wait
+ * point at the same beat (if any), so wait mode can require the note to still be
+ * sounding there. A tie that lands on a beat with no other onset is dropped —
+ * there is nothing to wait for.
  */
 export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
-  // Per-beat tracking splits required vs optional note numbers so that slashed
-  // grace notes remain optional even when clamped to the same beat as their
-  // main note.
+  // Per-beat tracking splits required vs optional vs tied note numbers so that
+  // slashed grace notes remain optional even when clamped to the same beat as
+  // their main note, and tied notes carry their "must still be held" status.
   const beatMap = new Map<
     number,
     {
       requiredNumbers: Set<number>;
       optionalNumbers: Set<number>;
+      tiedNumbers: Set<number>;
       isGrace: boolean;
       isAllGraceSlash: boolean;
       measure: number;
     }
   >();
 
+  // Tie stops are attached after the wait-point beats are known, so a tie that
+  // coincides with a real onset becomes a tied note on that wait point and a tie
+  // landing on an empty beat is simply ignored.
+  const tieStops: Array<{ beat: number; noteNumber: number }> = [];
+
   for (const note of notes) {
     if (note.tieStop) {
+      tieStops.push({ beat: note.startBeat, noteNumber: note.noteNumber });
       continue;
     }
     const isSlashedGrace = (note.isGrace && note.isGraceSlash) ?? false;
@@ -111,6 +133,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       beatMap.set(note.startBeat, {
         requiredNumbers: new Set(),
         optionalNumbers: new Set([note.noteNumber]),
+        tiedNumbers: new Set(),
         isGrace: true,
         isAllGraceSlash: true,
         measure: note.measureIndex + 1,
@@ -119,6 +142,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       beatMap.set(note.startBeat, {
         requiredNumbers: new Set([note.noteNumber]),
         optionalNumbers: new Set(),
+        tiedNumbers: new Set(),
         isGrace: note.isGrace ?? false,
         isAllGraceSlash: false,
         measure: note.measureIndex + 1,
@@ -126,15 +150,33 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     }
   }
 
+  // Attach each tie stop to the wait point at its beat. A note that is also
+  // freshly attacked at the same beat (already required) needs a real press, so
+  // it stays in requiredNumbers rather than becoming a held-only tied note.
+  for (const { beat, noteNumber } of tieStops) {
+    const entry = beatMap.get(beat);
+    if (entry && !entry.requiredNumbers.has(noteNumber)) {
+      entry.tiedNumbers.add(noteNumber);
+    }
+  }
+
   const sorted = Array.from(beatMap.entries())
     .map(
       ([
         beat,
-        { requiredNumbers, optionalNumbers, isGrace, isAllGraceSlash, measure },
+        {
+          requiredNumbers,
+          optionalNumbers,
+          tiedNumbers,
+          isGrace,
+          isAllGraceSlash,
+          measure,
+        },
       ]) => ({
         beat,
         requiredNumbers,
         optionalNumbers,
+        tiedNumbers,
         isGrace,
         isAllGraceSlash,
         measure,
@@ -166,6 +208,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         beat: point.beat,
         noteNumbers: point.requiredNumbers,
         optionalNoteNumbers,
+        tiedNoteNumbers: point.tiedNumbers,
         isGrace: point.isGrace,
         measure: point.measure,
       });
@@ -334,15 +377,23 @@ export function useWaitMode(
     }
     const idx = Math.min(pointIndex, waitPoints.length - 1);
     const targetBeat = waitPoints[idx].beat;
+    const tied = waitPoints[idx].tiedNoteNumbers;
     const highlights: NoteHighlight[] = [];
     for (const note of control.musicxml.notes) {
-      if (!note.tieStop && note.startBeat === targetBeat) {
-        highlights.push({
-          kind: "score",
-          id: `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
-          color: settings.accent,
-        });
+      if (note.startBeat !== targetBeat) {
+        continue;
       }
+      // Notes freshly attacked at this beat are highlighted; a tied-in note is
+      // too (so the held note the user must keep down reads as part of the
+      // chord), but any other tie continuation passing through is not.
+      if (note.tieStop && !tied.has(note.noteNumber)) {
+        continue;
+      }
+      highlights.push({
+        kind: "score",
+        id: `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
+        color: settings.accent,
+      });
     }
     return highlights;
   }, [active, control.musicxml, waitPoints, pointIndex, settings.accent]);
@@ -389,7 +440,7 @@ export function useWaitMode(
         pointIndex: idx,
         measure: wp?.measure ?? -1,
         beat: offBeat,
-        expected: wp ? [...wp.noteNumbers] : [],
+        expected: wp ? [...wp.noteNumbers, ...wp.tiedNoteNumbers] : [],
         held: [...held],
         msSinceAdvance,
         outcome: "off",
@@ -407,10 +458,16 @@ export function useWaitMode(
 
     const wp = points[idx];
     const expected = wp.noteNumbers;
+    // Tied notes must still be sounding for the chord to be complete, but a
+    // still-held one needs no fresh press. Re-pressing one (after letting it go)
+    // is allowed, so it counts as an accepted note alongside the required ones.
+    const tied = wp.tiedNoteNumbers;
     const beat = wp.beat;
     const measure = wp.measure;
     const heldSnapshot = [...held];
-    const expectedSnapshot = [...expected];
+    // Log the full requirement (fresh-attack notes plus tied-in held notes) so a
+    // chord that won't advance because a released tie is missing is diagnosable.
+    const expectedSnapshot = [...expected, ...tied];
     const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
       mode: "wait",
       t: now,
@@ -424,7 +481,7 @@ export function useWaitMode(
       msSinceAdvance,
     };
 
-    if (!expected.has(noteNumber)) {
+    if (!expected.has(noteNumber) && !tied.has(noteNumber)) {
       // Slashed grace notes attached to this wait point are optional: playing
       // them is permitted and carries no penalty, but they are not required.
       if (wp.optionalNoteNumbers.has(noteNumber)) {
@@ -473,8 +530,11 @@ export function useWaitMode(
     // unambiguously complete and should advance immediately even within the
     // debounce window. Only debounce when the chord is still incomplete, to
     // prevent a leftover key from the previous chord from accidentally
-    // triggering a premature advance.
-    const chordComplete = [...expected].every((n) => held.has(n));
+    // triggering a premature advance. Tied notes count too: the chord is
+    // complete only while they remain held (or are pressed again).
+    const chordComplete =
+      [...expected].every((n) => held.has(n)) &&
+      [...tied].every((n) => held.has(n));
 
     if (!chordComplete && msSinceAdvance < 50) {
       ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });

@@ -528,6 +528,99 @@ function computeNoteRenderInfos(
   return infos;
 }
 
+// A drawable tie: a curve joining two noteheads of the same pitch. `startX`
+// and `stopX` are the notehead-center x of the tie's two endpoints; `y` is their
+// shared notehead-center y (a tie always joins the same pitch). `bulge` is the
+// direction the arc curves away from the noteheads.
+export interface TieArc {
+  partIndex: number;
+  startX: number;
+  stopX: number;
+  y: number;
+  bulge: "up" | "down";
+}
+
+// Resolve every tie in the score to a drawable arc. A tie joins a note marked
+// `tieStart` to the next same-pitch note marked `tieStop` within the same part
+// (staff). The multi-staff reduction can place those two endpoints in different
+// events — even across a barline — so ties are tracked across the whole part
+// rather than per measure. The display is a single horizontal system (no line
+// wrapping), so each arc is a simple left-to-right curve.
+export function computeTieArcs(
+  score: ParsedScore,
+  layout: ResolvedLayout,
+): TieArc[] {
+  const arcs: TieArc[] = [];
+  const { staffSpace, measureSpines, staffBottomYs } = layout;
+
+  score.parts.forEach((part, p) => {
+    const staffBottomY = staffBottomYs[p];
+    const clef = part.clef;
+    const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
+    // Ties curve opposite the stem: a notehead at or above the staff's middle
+    // line (stem down) gets an arc above it (bulges up); one below the middle
+    // (stem up) gets an arc below it (bulges down).
+    const middleY = staffBottomY - 2 * staffSpace;
+    // Open tie starts in this part, keyed by pitch identity (step+alter+octave).
+    const openTies = new Map<string, { x: number; y: number }>();
+
+    part.measures.forEach((measure, m) => {
+      const eventXs = eventXsFromSpine(measure.events, measureSpines[m]);
+      const { beamOverrideMap } = beamStemOverrides(
+        measure.events,
+        eventXs,
+        clef,
+        staffBottomY,
+        staffSpace,
+        beatDivisions,
+      );
+
+      measure.events.forEach((event, ei) => {
+        if (isRest(event)) {
+          return;
+        }
+        const group = event as ChordGroup;
+        const stemDir =
+          beamOverrideMap.get(ei)?.stemDir ?? stemDirection(group, clef);
+        const geom = chordNoteGeometry(
+          group,
+          eventXs[ei],
+          p,
+          measure.number,
+          clef,
+          staffBottomY,
+          staffSpace,
+          stemDir,
+        );
+        group.notes.forEach((note, v) => {
+          const pitchKey = `${note.pitch.step}${note.pitch.alter}/${note.pitch.octave}`;
+          const here = { x: geom[v].nx, y: geom[v].ny };
+          // Close an open tie before opening a new one so a note that both stops
+          // and starts (a chain of ties) is handled correctly.
+          if (note.tieStop) {
+            const start = openTies.get(pitchKey);
+            if (start) {
+              arcs.push({
+                partIndex: p,
+                startX: start.x,
+                stopX: here.x,
+                y: here.y,
+                bulge: here.y <= middleY ? "up" : "down",
+              });
+              openTies.delete(pitchKey);
+            }
+          }
+          if (note.tieStart) {
+            openTies.set(pitchKey, here);
+          }
+        });
+      });
+    });
+  });
+
+  return arcs;
+}
+
 // Sharps-preferring MIDI → diatonic pitch mapping. Mirrors noteNumberToPitch
 // in the midi-to-musicxml package; duplicated here to keep this component free
 // of MIDI imports.
@@ -678,6 +771,55 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
   );
 });
 
+// Draws the tie arcs from computeTieArcs. Each tie is a shallow quadratic curve
+// anchored just inside the near edge of each notehead and bulging away from it.
+// Staves the consumer has hidden (visibleParts) are skipped. Memoized on its
+// props, all stable while the score/layout are unchanged.
+const TieLayer = memo(function TieLayer({
+  ties,
+  parts,
+  visibleParts,
+  inkColor,
+  staffSpace,
+}: {
+  ties: ReadonlyArray<TieArc>;
+  parts: ParsedPart[];
+  visibleParts?: Set<string>;
+  inkColor: string;
+  staffSpace: number;
+}) {
+  const nrx = staffSpace * 0.55; // notehead half-width
+  return (
+    <g style={{ pointerEvents: "none" }} fill="none" stroke={inkColor}>
+      {ties.map((tie) => {
+        if (visibleParts && !visibleParts.has(parts[tie.partIndex].id)) {
+          return null;
+        }
+        const dir = tie.bulge === "down" ? 1 : -1;
+        // Anchor just inside each notehead's near edge so the arc reads as
+        // joining the two heads rather than starting in empty space.
+        const x1 = tie.startX + nrx * 0.9;
+        const x2 = tie.stopX - nrx * 0.9;
+        const yEnd = tie.y + dir * staffSpace * 0.4;
+        const yControl = tie.y + dir * staffSpace * 1.1;
+        const midX = (x1 + x2) / 2;
+        // A tie is uniquely identified by its part and the two notehead
+        // positions it joins — stable across re-renders.
+        const key = `${tie.partIndex}-${tie.startX}-${tie.stopX}-${tie.y}`;
+        return (
+          <path
+            key={key}
+            data-tie={key}
+            d={`M ${x1} ${yEnd} Q ${midX} ${yControl} ${x2} ${yEnd}`}
+            stroke-width={staffSpace * 0.18}
+            stroke-linecap="round"
+          />
+        );
+      })}
+    </g>
+  );
+});
+
 interface SheetMusicDisplayProps {
   musicxml: string;
   layout?: LayoutConfig;
@@ -781,6 +923,9 @@ export function SheetMusicDisplay({
     () => computeNoteRenderInfos(score, layout),
     [score, layout],
   );
+
+  // Tie arcs, like noteInfos, depend only on score + layout.
+  const tieArcs = useMemo(() => computeTieArcs(score, layout), [score, layout]);
 
   // Split the unified highlight stream into the two render passes (notehead
   // recolouring vs. arbitrary-position circles). The intermediate arrays are
@@ -1236,6 +1381,15 @@ export function SheetMusicDisplay({
               textFontFamily={textFontFamily}
             />
           ))}
+          {tieArcs.length > 0 && (
+            <TieLayer
+              ties={tieArcs}
+              parts={score.parts}
+              visibleParts={visibleParts}
+              inkColor={inkColor}
+              staffSpace={layout.staffSpace}
+            />
+          )}
           <NoteColorOverlay infos={noteInfos} entries={scoreEntries} />
           {markerEntries.length > 0 && (
             <PlayerMarkerOverlay

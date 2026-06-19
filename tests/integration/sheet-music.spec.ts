@@ -93,3 +93,12 @@ test("Rondo alla Turca full score — around measure 60", async ({ page }) => {
 test("Rondo alla Turca full score — around measure 120", async ({ page }) => {
   await screenshotRondoAtMeasure(page, 120, "rondo-full-m120.png");
 });
+
+// The A-major coda holds the top C#6 across each bar (written as a half note
+// plus tied quarters). Ties are drawn as arcs joining the held noteheads, so a
+// held note reads as held rather than as a fresh attack — see #83.
+test("Rondo alla Turca full score — tied coda (measure 212)", async ({
+  page,
+}) => {
+  await screenshotRondoAtMeasure(page, 212, "rondo-full-m212-ties.png");
+});

@@ -108,6 +108,45 @@ describe("buildWaitPoints – slashed grace notes", () => {
     expect(c5Point?.optionalNoteNumbers.has(79)).toBe(false); // G5 is required, not optional
   });
 
+  test("a tied note is a held requirement on the wait point at its tie-stop beat", () => {
+    // Beat 0: chord C5 (tie start) + E5. Beat 1: chord C5 (tie stop) + G5.
+    // The held C5 carries across; G5 is the only fresh attack at beat 1.
+    const xml = makeScoreXml(`
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type><tie type="start"/></note>
+      <note><chord/><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type><tie type="stop"/></note>
+      <note><chord/><pitch><step>G</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+    const points = buildWaitPoints(notes);
+
+    // Beat 0: C5 and E5 are both freshly attacked (required), nothing tied.
+    expect(points[0].noteNumbers.has(72)).toBe(true); // C5
+    expect(points[0].noteNumbers.has(76)).toBe(true); // E5
+    expect(points[0].tiedNoteNumbers.size).toBe(0);
+
+    // Beat 1: G5 is the fresh attack; C5 is tied in (held requirement), not a
+    // fresh-attack requirement.
+    expect(points[1].noteNumbers.has(79)).toBe(true); // G5 required
+    expect(points[1].noteNumbers.has(72)).toBe(false); // C5 not a fresh attack
+    expect(points[1].tiedNoteNumbers.has(72)).toBe(true); // C5 tied in
+  });
+
+  test("a tie landing on a beat with no other onset creates no wait point", () => {
+    // C5 half note (tie start) tied to C5 half note (tie stop); nothing else
+    // happens at beat 2, so there is no wait point there to enforce the hold.
+    const xml = makeScoreXml(`
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>8</duration><type>half</type><tie type="start"/></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>8</duration><type>half</type><tie type="stop"/></note>
+    `);
+    const { notes } = musicXmlToConversion(xml);
+    const points = buildWaitPoints(notes);
+
+    expect(points).toHaveLength(1);
+    expect(points[0].noteNumbers.has(72)).toBe(true); // C5 struck at beat 0
+    expect(points.every((p) => p.tiedNoteNumbers.size === 0)).toBe(true);
+  });
+
   test("slashed grace clamped to same beat as its main note becomes optional on that wait point", () => {
     // Slashed grace D5 before C5 at the very start of the score. Both land at
     // beat 0 due to clamping; D5 must be optional, C5 required.
