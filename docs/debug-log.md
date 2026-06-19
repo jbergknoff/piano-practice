@@ -24,7 +24,7 @@ modes.
 ### Wait mode
 
 ```
-2026-05-17T14:23:01.091Z  [wait]      ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
+2026-05-17T14:23:01.091Z  [wait]      ON   G4(67)      waitPoint=3 measure=3 beat=9.00  expected=[C4(60),E4(64),G4(67)]  held=[C4(60),E4(64),G4(67)]  fresh=[C4(60),E4(64),G4(67)]  msSinceAdvance=5325  → ADVANCE
 ```
 
 ### Playalong mode
@@ -46,6 +46,7 @@ modes.
 | `beat=9.00` | Absolute score beat from the start of the piece |
 | `expected=[…]` | *(Wait only)* Notes required to be held simultaneously to advance |
 | `held=[…]` | All keys physically held down after this event |
+| `fresh=[…]` | *(Wait only)* Subset of `held` that received a fresh press (a Note On while not already down) since the last advance. A required note completes the chord only when it appears here — a key held over from the previous chord does not. `expected ⊆ held` but an expected note absent from `fresh` means a repeated note/chord was not re-struck (see `STALE`) |
 | `msSinceAdvance=…` | *(Wait only)* Milliseconds since the last successful advance — relevant for grace-period and debounce diagnosis |
 | `→ OUTCOME` | Decision made for this event (see below) |
 
@@ -58,7 +59,8 @@ modes.
 | Outcome | Meaning |
 |---|---|
 | `ADVANCE` | All expected notes were held — cursor moved to the next beat |
-| `INCOMPLETE` | The pressed note is in the expected chord but the chord is not yet complete — either not all expected notes are held, or an expected note is being held over from a previous chord without a fresh press. Every required note must be *freshly attacked* (a tied note is the exception: it only needs to stay held) |
+| `INCOMPLETE` | The pressed note is in the expected chord, but not all expected notes are held yet |
+| `STALE` | Every expected note *is* held (`expected ⊆ held`), but a required one was held over from a previous chord rather than freshly struck — so it is absent from `fresh`. This is what a repeated note/chord looks like when the player holds it instead of re-striking each occurrence. Release and re-press the repeated note(s). A tied note is exempt — it only needs to stay held |
 | `WRONG` | The pressed note is not in the expected chord; wrong-note feedback fired |
 | `EXTRA` | Every expected note was held, but the advance was blocked because the user is also holding wrong notes (e.g. mashing extra keys). Release the extra keys and re-press the chord |
 | `GRACE` | Wrong note, but ignored because it arrived within the grace period after the previous advance (`msSinceAdvance < noteSensitivityMilliseconds`) |
@@ -149,13 +151,14 @@ Find the `ADVANCE` event and look at its `expected` and `held` fields.
   grace window is too wide, reducing the note-sensitivity setting
   (Settings drawer) will shorten it.
 
-- **A repeated chord slid through on one hold** — A chord that repeats on
-  consecutive beats must be re-struck for each occurrence. Holding it down
-  (or an instrument re-sending `Note On` for the still-held keys) advances
-  only the first wait point; the duplicates show as `DUPLICATE`/`INCOMPLETE`
-  rather than `ADVANCE`. If a held note is genuinely meant to carry over, it
-  is a tie in the score and appears in `expected` without needing a fresh
-  press.
+- **A repeated chord won't advance past the first strike** — A chord that
+  repeats on consecutive beats must be re-struck for each occurrence. If you
+  hold it down (or the instrument re-sends `Note On` for the still-held keys),
+  the repeats show as `STALE` — `expected ⊆ held` but the required notes are
+  missing from `fresh`, because they were held over rather than freshly
+  struck. Release and re-press for each repeat. If a held note is genuinely
+  meant to carry over, it is a tie in the score and appears in `expected`
+  without needing a fresh press.
 
 ---
 

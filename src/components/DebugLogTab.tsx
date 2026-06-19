@@ -51,9 +51,10 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
     let modeFields: string;
     if (e.mode === "wait") {
       const expStr = e.expected.map((n) => `${noteName(n)}(${n})`).join(",");
+      const freshStr = e.fresh.map((n) => `${noteName(n)}(${n})`).join(",");
       modeFields =
         `  waitPoint=${e.pointIndex} ${loc}` +
-        `  expected=[${expStr}]  held=[${heldStr}]` +
+        `  expected=[${expStr}]  held=[${heldStr}]  fresh=[${freshStr}]` +
         `  msSinceAdvance=${e.msSinceAdvance}`;
     } else {
       modeFields = `  ${loc}  held=[${heldStr}]`;

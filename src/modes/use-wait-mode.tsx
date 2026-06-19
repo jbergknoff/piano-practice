@@ -459,6 +459,7 @@ export function useWaitMode(
         measure: wp?.measure ?? -1,
         beat: offBeat,
         expected: wp ? [...wp.noteNumbers, ...wp.tiedNoteNumbers] : [],
+        fresh: [...freshlyPressedNotesRef.current],
         held: [...held],
         msSinceAdvance,
         outcome: "off",
@@ -495,6 +496,7 @@ export function useWaitMode(
       measure,
       beat,
       expected: expectedSnapshot,
+      fresh: [...freshlyPressedNotesRef.current],
       held: heldSnapshot,
       msSinceAdvance,
     };
@@ -612,7 +614,18 @@ export function useWaitMode(
       }
       ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
     } else {
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "incomplete" });
+      // Distinguish "not all notes down yet" (incomplete) from "every note is
+      // down but a required one was held over rather than re-struck" (stale).
+      // The latter is the signature of a repeated note/chord that needs a fresh
+      // attack — without its own outcome it would read as a baffling INCOMPLETE
+      // with expected ⊆ held.
+      const heldComplete =
+        [...expected].every((n) => held.has(n)) &&
+        [...tied].every((n) => held.has(n));
+      ctrl.appendToDebugLog({
+        ...debugBase,
+        outcome: heldComplete ? "stale" : "incomplete",
+      });
     }
   }, []);
 
