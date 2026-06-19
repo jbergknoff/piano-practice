@@ -229,9 +229,15 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
   // co-resident arpeggio note's accumulated beat slips into `pendingOptional`,
   // gets consumed by the arpeggio's wait point, and never reaches the main
   // chord it ornaments.
-  const beatToMergedIndex = new Map(merged.map((waitPoint, index) => [waitPoint.beat, index]));
+  const beatToMergedIndex = new Map(
+    merged.map((waitPoint, index) => [waitPoint.beat, index]),
+  );
   for (const note of notes) {
-    if (note.tieStop || !(note.isGrace && note.isGraceSlash) || note.graceMainBeat === undefined) {
+    if (
+      note.tieStop ||
+      !(note.isGrace && note.isGraceSlash) ||
+      note.graceMainBeat === undefined
+    ) {
       continue;
     }
     const index = beatToMergedIndex.get(note.graceMainBeat);
