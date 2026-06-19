@@ -95,6 +95,10 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     {
       requiredNumbers: Set<number>;
       optionalNumbers: Set<number>;
+      // Slashed graces whose beat collided with required notes from a different
+      // (earlier) event. They ornament the *next* main note, so they are
+      // forwarded to the following non-grace wait point during the merge step.
+      forwardedOptionals: Set<number>;
       tiedNumbers: Set<number>;
       isGrace: boolean;
       isAllGraceSlash: boolean;
@@ -116,7 +120,14 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     const existing = beatMap.get(note.startBeat);
     if (existing) {
       if (isSlashedGrace) {
-        existing.optionalNumbers.add(note.noteNumber);
+        if (existing.requiredNumbers.size > 0) {
+          // This grace's beat coincides with required notes from a different
+          // (earlier) event. The grace ornaments the *next* main note, so
+          // forward it rather than making it optional for the wrong chord.
+          existing.forwardedOptionals.add(note.noteNumber);
+        } else {
+          existing.optionalNumbers.add(note.noteNumber);
+        }
       } else {
         existing.requiredNumbers.add(note.noteNumber);
         if (!note.isGrace) {
@@ -133,6 +144,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       beatMap.set(note.startBeat, {
         requiredNumbers: new Set(),
         optionalNumbers: new Set([note.noteNumber]),
+        forwardedOptionals: new Set(),
         tiedNumbers: new Set(),
         isGrace: true,
         isAllGraceSlash: true,
@@ -142,6 +154,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       beatMap.set(note.startBeat, {
         requiredNumbers: new Set([note.noteNumber]),
         optionalNumbers: new Set(),
+        forwardedOptionals: new Set(),
         tiedNumbers: new Set(),
         isGrace: note.isGrace ?? false,
         isAllGraceSlash: false,
@@ -167,6 +180,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         {
           requiredNumbers,
           optionalNumbers,
+          forwardedOptionals,
           tiedNumbers,
           isGrace,
           isAllGraceSlash,
@@ -176,6 +190,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         beat,
         requiredNumbers,
         optionalNumbers,
+        forwardedOptionals,
         tiedNumbers,
         isGrace,
         isAllGraceSlash,
@@ -199,6 +214,9 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       for (const noteNumber of point.optionalNumbers) {
         pendingOptional.add(noteNumber);
       }
+      for (const noteNumber of point.forwardedOptionals) {
+        pendingOptional.add(noteNumber);
+      }
     } else {
       const optionalNoteNumbers = new Set(pendingOptional);
       for (const noteNumber of point.optionalNumbers) {
@@ -213,6 +231,11 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         measure: point.measure,
       });
       pendingOptional.clear();
+      // Graces that collided with this beat's required notes ornament the
+      // *next* main note — forward them so they become optional there.
+      for (const noteNumber of point.forwardedOptionals) {
+        pendingOptional.add(noteNumber);
+      }
     }
   }
 

@@ -147,6 +147,42 @@ describe("buildWaitPoints – slashed grace notes", () => {
     expect(points.every((p) => p.tiedNoteNumbers.size === 0)).toBe(true);
   });
 
+  test("slashed grace whose beat collides with a required note from an earlier event is forwarded to the next wait point", () => {
+    // Scenario: a short note E5 occupies beat 0 (0.1 beats with divisions=10).
+    // A slashed grace D5 before C5 (at beat 0.1) gets placed at
+    // beat 0.1 - GRACE_NOTE_BEATS(0.1) = 0.0 — colliding with E5.
+    // D5 must become optional for C5's wait point, NOT for E5's.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>10</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>64th</type></note>
+      <note><grace slash="yes"/><pitch><step>D</step><octave>5</octave></pitch><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>39</duration><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const { notes } = musicXmlToConversion(xml);
+    const points = buildWaitPoints(notes);
+
+    expect(points).toHaveLength(2);
+
+    const e5Point = points.find((p) => p.noteNumbers.has(76)); // E5 = 76
+    expect(e5Point).toBeDefined();
+    expect(e5Point?.optionalNoteNumbers.size).toBe(0); // D5 must NOT appear here
+
+    const c5Point = points.find((p) => p.noteNumbers.has(72)); // C5 = 72
+    expect(c5Point).toBeDefined();
+    expect(c5Point?.optionalNoteNumbers.has(74)).toBe(true); // D5 = 74 optional for C5
+    expect(c5Point?.noteNumbers.has(74)).toBe(false); // D5 not required
+  });
+
   test("slashed grace clamped to same beat as its main note becomes optional on that wait point", () => {
     // Slashed grace D5 before C5 at the very start of the score. Both land at
     // beat 0 due to clamping; D5 must be optional, C5 required.
