@@ -9,5 +9,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src", "lib", "packages", "tests/unit"]
+  "include": ["src", "lib", "packages", "tests/unit", "editor"]
 }

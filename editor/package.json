@@ -1,0 +1,9 @@
+{
+  "name": "@jbergknoff/editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "preact": "^10.25.4"
+  }
+}

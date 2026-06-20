@@ -23,6 +23,13 @@
         "typescript": "^5.8.3",
       },
     },
+    "editor": {
+      "name": "@jbergknoff/editor",
+      "version": "0.0.0",
+      "dependencies": {
+        "preact": "^10.25.4",
+      },
+    },
     "packages/midi-to-musicxml": {
       "name": "@jbergknoff/midi-to-musicxml",
       "version": "0.0.0",
@@ -68,6 +75,8 @@
     "@fontsource/geist-mono": ["@fontsource/geist-mono@5.2.8", "", {}, "sha512-YqZUb3X42GjRaHkibUNyE8K4Rk9A6I9Ez81YpJYiuJN4ggmTW2ixoQpa9EWCPfXZtIsCQJTyrDoV9OJOZO/UcA=="],
 
     "@fontsource/instrument-serif": ["@fontsource/instrument-serif@5.2.8", "", {}, "sha512-s+bkz+syj2rO00Rmq9g0P+PwuLig33DR1xDR8pTWmovH1pUjwnncrFk++q9mmOex8fUQ7oW80gPpPDaw7V1MMw=="],
+
+    "@jbergknoff/editor": ["@jbergknoff/editor@workspace:editor"],
 
     "@jbergknoff/midi-to-musicxml": ["@jbergknoff/midi-to-musicxml@workspace:packages/midi-to-musicxml"],
 

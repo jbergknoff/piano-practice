@@ -2,7 +2,7 @@
   "name": "piano-practice",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "editor"],
   "dependencies": {
     "@fontsource/geist": "^5.2.9",
     "@fontsource/geist-mono": "^5.2.8",

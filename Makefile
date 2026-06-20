@@ -37,7 +37,7 @@ typecheck: node_modules
 	$(tsc) --noEmit
 
 unit-test: node_modules
-	$(bun) test src lib packages tests/unit
+	$(bun) test src lib packages tests/unit editor
 
 build: node_modules
 	mkdir -p dist
@@ -75,5 +75,13 @@ down:
 
 hot-reload: build
 	$(bun) build src/main.tsx --outdir dist --define 'GIT_COMMIT="$(shell git rev-parse --short HEAD)"' --watch
+
+# The WYSIWYG MusicXML editor (editor/) is a self-contained workspace member.
+build-editor: node_modules
+	mkdir -p editor/dist
+	$(bun) build editor/src/main.tsx --outdir editor/dist --minify $(sourcemap)
+
+hot-reload-editor: build-editor
+	$(bun) build editor/src/main.tsx --outdir editor/dist --watch
 
 pr-ready: format lint typecheck build test
