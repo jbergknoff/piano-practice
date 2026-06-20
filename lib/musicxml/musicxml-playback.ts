@@ -39,15 +39,17 @@ export interface PlaybackNote {
    */
   isGraceSlash?: boolean;
   /**
-   * For slashed grace notes only: the exact `beatCursor` value at conversion
-   * time — the start beat of the main note this grace ornaments. Stored
-   * separately from `startBeat` because `startBeat` is computed via
+   * Only set on grace notes: the exact `beatCursor` value of the main note
+   * this grace ornaments. Use `anchorBeat ?? startBeat` anywhere you need the
+   * beat that determines which measure or range a note belongs to.
+   *
+   * Stored separately from `startBeat` because `startBeat` is derived via
    * `beatCursor - k * GRACE_NOTE_BEATS` (subtraction), which may yield a
-   * slightly different IEEE 754 double than the main note's `beatCursor`
-   * (accumulated via addition). `graceMainBeat` lets wait-point building look
-   * up the main note's beat exactly without floating-point mismatches.
+   * slightly different IEEE 754 double than the main note's accumulated
+   * `beatCursor`. `anchorBeat` is that accumulated value directly, so measure
+   * boundary comparisons are immune to floating-point drift.
    */
-  graceMainBeat?: number;
+  anchorBeat?: number;
 }
 
 export type { RepeatSection } from "./expand-repeats";
@@ -142,7 +144,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
               voiceIndex,
               isGrace: true,
               isGraceSlash: graceGroup.slash,
-              graceMainBeat: beatCursor,
+              anchorBeat: beatCursor,
             });
           });
         });

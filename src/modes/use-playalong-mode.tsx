@@ -151,16 +151,12 @@ export function usePlayalongMode(
       if (n.tieStop) {
         return false;
       }
-      // Grace notes use graceMainBeat for range membership: their startBeat is
-      // derived by subtraction and may land just before a barline that is the
-      // range boundary, incorrectly pulling them into the adjacent measure's
-      // selection. graceMainBeat is the accumulated beat of the note they
-      // ornament and is immune to that floating-point drift.
-      const rangeBeat =
-        n.isGrace && n.graceMainBeat !== undefined
-          ? n.graceMainBeat
-          : n.startBeat;
-      return rangeBeat >= startBeat && rangeBeat < endBeat;
+      // Use anchorBeat ?? startBeat for range membership: grace notes have an
+      // anchorBeat equal to the main note's accumulated beatCursor, which lands
+      // exactly on the barline. Their startBeat is derived by subtraction and
+      // may fall just before the boundary, pulling them into the wrong measure.
+      return (n.anchorBeat ?? n.startBeat) >= startBeat &&
+        (n.anchorBeat ?? n.startBeat) < endBeat;
     });
   }, [control.musicxml, control.measureRange, control.measureStartBeats]);
 
@@ -500,11 +496,10 @@ export function usePlayalongMode(
         if (note.tieStop) {
           continue;
         }
-        const rangeBeat =
-          note.isGrace && note.graceMainBeat !== undefined
-            ? note.graceMainBeat
-            : note.startBeat;
-        if (rangeBeat < startBeat || rangeBeat >= endBeat) {
+        if (
+          (note.anchorBeat ?? note.startBeat) < startBeat ||
+          (note.anchorBeat ?? note.startBeat) >= endBeat
+        ) {
           continue;
         }
         const id = noteKey(note);
