@@ -155,8 +155,10 @@ export function usePlayalongMode(
       // graceMainBeat equal to the main note's accumulated beatCursor, which lands
       // exactly on the barline. Their startBeat is derived by subtraction and
       // may fall just before the boundary, pulling them into the wrong measure.
-      return (n.graceMainBeat ?? n.startBeat) >= startBeat &&
-        (n.graceMainBeat ?? n.startBeat) < endBeat;
+      return (
+        (n.graceMainBeat ?? n.startBeat) >= startBeat &&
+        (n.graceMainBeat ?? n.startBeat) < endBeat
+      );
     });
   }, [control.musicxml, control.measureRange, control.measureStartBeats]);
 
