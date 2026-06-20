@@ -118,7 +118,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
       if (isSlashedGrace) {
         // Always make the grace optional at the wait point whose beat it
         // shares — so the user can play it without penalty at that point.
-        // The post-processing pass below (using anchorBeat) additionally
+        // The post-processing pass below (using graceMainBeat) additionally
         // ensures it is also optional at the main note's wait point.
         existing.optionalNumbers.add(note.noteNumber);
       } else {
@@ -221,7 +221,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
   }
 
   // Post-process: ensure every slashed grace note is optional at the wait
-  // point it actually ornaments. `anchorBeat` is the exact `beatCursor` value
+  // point it actually ornaments. `graceMainBeat` is the exact `beatCursor` value
   // stored at conversion time — the same double used as the main note's beatMap
   // key — so this lookup is immune to the floating-point rounding that occurs
   // when computing `startBeat` as `beatCursor - k * GRACE_NOTE_BEATS`. Without
@@ -235,11 +235,11 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     if (
       note.tieStop ||
       !(note.isGrace && note.isGraceSlash) ||
-      note.anchorBeat === undefined
+      note.graceMainBeat === undefined
     ) {
       continue;
     }
-    const index = beatToMergedIndex.get(note.anchorBeat);
+    const index = beatToMergedIndex.get(note.graceMainBeat);
     if (index !== undefined) {
       merged[index].optionalNoteNumbers.add(note.noteNumber);
     }

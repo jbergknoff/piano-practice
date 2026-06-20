@@ -151,12 +151,12 @@ export function usePlayalongMode(
       if (n.tieStop) {
         return false;
       }
-      // Use anchorBeat ?? startBeat for range membership: grace notes have an
-      // anchorBeat equal to the main note's accumulated beatCursor, which lands
+      // Use graceMainBeat ?? startBeat for range membership: grace notes have an
+      // graceMainBeat equal to the main note's accumulated beatCursor, which lands
       // exactly on the barline. Their startBeat is derived by subtraction and
       // may fall just before the boundary, pulling them into the wrong measure.
-      return (n.anchorBeat ?? n.startBeat) >= startBeat &&
-        (n.anchorBeat ?? n.startBeat) < endBeat;
+      return (n.graceMainBeat ?? n.startBeat) >= startBeat &&
+        (n.graceMainBeat ?? n.startBeat) < endBeat;
     });
   }, [control.musicxml, control.measureRange, control.measureStartBeats]);
 
@@ -497,8 +497,8 @@ export function usePlayalongMode(
           continue;
         }
         if (
-          (note.anchorBeat ?? note.startBeat) < startBeat ||
-          (note.anchorBeat ?? note.startBeat) >= endBeat
+          (note.graceMainBeat ?? note.startBeat) < startBeat ||
+          (note.graceMainBeat ?? note.startBeat) >= endBeat
         ) {
           continue;
         }

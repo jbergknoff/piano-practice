@@ -40,16 +40,16 @@ export interface PlaybackNote {
   isGraceSlash?: boolean;
   /**
    * Only set on grace notes: the exact `beatCursor` value of the main note
-   * this grace ornaments. Use `anchorBeat ?? startBeat` anywhere you need the
+   * this grace ornaments. Use `graceMainBeat ?? startBeat` anywhere you need the
    * beat that determines which measure or range a note belongs to.
    *
    * Stored separately from `startBeat` because `startBeat` is derived via
    * `beatCursor - k * GRACE_NOTE_BEATS` (subtraction), which may yield a
    * slightly different IEEE 754 double than the main note's accumulated
-   * `beatCursor`. `anchorBeat` is that accumulated value directly, so measure
+   * `beatCursor`. `graceMainBeat` is that accumulated value directly, so measure
    * boundary comparisons are immune to floating-point drift.
    */
-  anchorBeat?: number;
+  graceMainBeat?: number;
 }
 
 export type { RepeatSection } from "./expand-repeats";
@@ -144,7 +144,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
               voiceIndex,
               isGrace: true,
               isGraceSlash: graceGroup.slash,
-              anchorBeat: beatCursor,
+              graceMainBeat: beatCursor,
             });
           });
         });
