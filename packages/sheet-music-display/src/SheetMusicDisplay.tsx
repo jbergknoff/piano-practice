@@ -1483,6 +1483,7 @@ export function SheetMusicDisplay({
               }
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
+              onContextMenu={(e) => e.preventDefault()}
             />
             <div
               style={{
@@ -1502,6 +1503,7 @@ export function SheetMusicDisplay({
               }
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
+              onContextMenu={(e) => e.preventDefault()}
             />
           </>
         )}
