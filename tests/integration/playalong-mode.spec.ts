@@ -252,6 +252,57 @@ test("player markers screenshot (visual regression for marker rendering)", async
   }
 });
 
+test("grace notes at the start of the following measure are not colored red after completing a focused playalong", async ({
+  page,
+}) => {
+  // rondo-alla-turca-clip.mxl: measures 6 and 7 (rendered labels) each open
+  // with a two-note grace flourish. Focusing measure 6 and completing playalong
+  // exposed a bug where the grace notes of measure 7 — whose startBeat falls
+  // just before the measure-7 barline and therefore within the focus range's
+  // [startBeat, endBeat) interval — were colored red as if they had been missed.
+  await loadFile(page, "rondo-alla-turca-clip.mxl");
+  await waitForMockBluetoothConnected(page);
+  await disableCountIn(page);
+
+  // Focus measure 6 via the right-click Jump-to-measure modal.
+  await page.locator("svg").first().click({ button: "right" });
+  await page.getByRole("button", { name: "Jump to measure…" }).click();
+  await page.locator('input[type="number"]').fill("6");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  await page.getByRole("button", { name: "Playalong" }).click();
+  await page.getByTitle("Play").click();
+
+  // Send any note to exit "waiting-for-note" and enter "playing". The note
+  // does not need to match anything — we just need playback to start so that
+  // advancing audio time triggers onEnd.
+  await sendNoteOn(page, 60);
+  await sendNoteOff(page, 60);
+
+  // Confirm the player is actually running before advancing time, so the
+  // onEnd callback is in place when the fake clock moves forward.
+  await expect(page.getByTitle("Stop")).toBeVisible({ timeout: 3_000 });
+
+  // Advance the fake AudioContext clock well past the end of measure 6 to
+  // trigger onEnd and transition to the "complete" phase.
+  await advanceAudioTime(page, 60);
+
+  await expect(page.getByText("Measure 6 complete")).toBeVisible({
+    timeout: 3_000,
+  });
+  await page.getByRole("button", { name: "Keep practicing" }).click();
+  await expect(page.getByText("Measure 6 complete")).not.toBeVisible({
+    timeout: 2_000,
+  });
+
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot(
+      "playalong-after-completion-grace-notes.png",
+    );
+  }
+});
+
 test("count-in overlay is visible after starting playalong with count-in enabled", async ({
   page,
 }) => {

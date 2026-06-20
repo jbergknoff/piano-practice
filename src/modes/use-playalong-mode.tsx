@@ -147,9 +147,19 @@ export function usePlayalongMode(
     const endBeat = range
       ? (measureStartBeats[range.to] ?? musicxml.totalBeats)
       : musicxml.totalBeats;
-    return musicxml.notes.filter(
-      (n) => !n.tieStop && n.startBeat >= startBeat && n.startBeat < endBeat,
-    );
+    return musicxml.notes.filter((n) => {
+      if (n.tieStop) {
+        return false;
+      }
+      // Use graceMainBeat ?? startBeat for range membership: grace notes have an
+      // graceMainBeat equal to the main note's accumulated beatCursor, which lands
+      // exactly on the barline. Their startBeat is derived by subtraction and
+      // may fall just before the boundary, pulling them into the wrong measure.
+      return (
+        (n.graceMainBeat ?? n.startBeat) >= startBeat &&
+        (n.graceMainBeat ?? n.startBeat) < endBeat
+      );
+    });
   }, [control.musicxml, control.measureRange, control.measureStartBeats]);
 
   const selectionNotesRef = useRef(selectionNotes);
@@ -488,7 +498,10 @@ export function usePlayalongMode(
         if (note.tieStop) {
           continue;
         }
-        if (note.startBeat < startBeat || note.startBeat >= endBeat) {
+        if (
+          (note.graceMainBeat ?? note.startBeat) < startBeat ||
+          (note.graceMainBeat ?? note.startBeat) >= endBeat
+        ) {
           continue;
         }
         const id = noteKey(note);

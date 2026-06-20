@@ -221,14 +221,13 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
   }
 
   // Post-process: ensure every slashed grace note is optional at the wait
-  // point it actually ornaments. `graceMainBeat` is the exact `beatCursor`
-  // value stored at conversion time — the same double used as the main note's
-  // beatMap key — so this lookup is immune to the floating-point rounding that
-  // occurs when computing `startBeat` as `beatCursor - k * GRACE_NOTE_BEATS`.
-  // Without this, a grace whose startBeat differs by even one ULP from a
-  // co-resident arpeggio note's accumulated beat slips into `pendingOptional`,
-  // gets consumed by the arpeggio's wait point, and never reaches the main
-  // chord it ornaments.
+  // point it actually ornaments. `graceMainBeat` is the exact `beatCursor` value
+  // stored at conversion time — the same double used as the main note's beatMap
+  // key — so this lookup is immune to the floating-point rounding that occurs
+  // when computing `startBeat` as `beatCursor - k * GRACE_NOTE_BEATS`. Without
+  // this, a grace whose startBeat differs by even one ULP from a co-resident
+  // arpeggio note's accumulated beat slips into `pendingOptional`, gets consumed
+  // by the arpeggio's wait point, and never reaches the main chord it ornaments.
   const beatToMergedIndex = new Map(
     merged.map((waitPoint, index) => [waitPoint.beat, index]),
   );
