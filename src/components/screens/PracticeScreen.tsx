@@ -336,8 +336,9 @@ export function PracticeScreen({
   }, [active]);
 
   const handleReset = useCallback(() => {
+    clearDebugLog();
     active.handleReset();
-  }, [active]);
+  }, [active, clearDebugLog]);
 
   const handleSeek = useCallback(
     (beat: number) => {
@@ -383,6 +384,7 @@ export function PracticeScreen({
       measureRange && musicxml
         ? (musicxml.measureStartBeats[measureRange.from - 1] ?? 0)
         : 0;
+    clearDebugLog();
     playerRef.current?.pause();
     setIsPlaying(false);
     playerRef.current?.seek(startBeat);
