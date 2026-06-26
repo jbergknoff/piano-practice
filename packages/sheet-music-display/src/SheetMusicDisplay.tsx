@@ -38,6 +38,7 @@ import {
   beamStemDirection,
   eventXsFromSpine,
   groupBeamableEvents,
+  headerWidth,
   keyChangeGlyphs,
   ledgerLineYs,
   noteY,
@@ -868,6 +869,13 @@ interface SheetMusicDisplayProps {
   getLiveBeat?: () => number | null;
   /** Whether playback is active. Drives the cursor rAF loop + scroll-follow. */
   isPlaying?: boolean;
+  /**
+   * When provided, a sticky panel showing the current clef and key signature
+   * floats at the left edge while the score is scrolled. Pass the page
+   * background color so the panel's fill matches its surroundings; without
+   * this prop the panel is not rendered.
+   */
+  stickySignatureBackground?: string;
 }
 
 export function SheetMusicDisplay({
@@ -889,6 +897,7 @@ export function SheetMusicDisplay({
   onSheetContextMenu,
   getLiveBeat,
   isPlaying = false,
+  stickySignatureBackground,
 }: SheetMusicDisplayProps) {
   const result = useMemo(() => {
     try {
@@ -1105,6 +1114,67 @@ export function SheetMusicDisplay({
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.2) : 0;
   }, [snapGeneration, score, layout, graceHighlightCursorX]);
 
+  // Sticky signature overlay: updates the overlay's translateX to keep it
+  // pinned at the left content edge, and tracks which measure is visible there
+  // so the rendered key signature stays current. The transform is applied via
+  // direct DOM mutation (same pattern as the cursor) so every scroll pixel is
+  // in sync; the measure-index state update only fires when crossing a barline.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: layout and score are stable per piece; stickySignatureBackground gates rendering
+  useEffect(() => {
+    if (!stickySignatureBackground) {
+      return;
+    }
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    let lastMeasureIndex = -1;
+    const firstFifths = score.parts[0]?.measures[0]?.activeFifths ?? 0;
+
+    const updateStickyOverlay = () => {
+      const scrollLeft = container.scrollLeft;
+      const paddingLeft =
+        Number.parseFloat(getComputedStyle(container).paddingLeft) || 0;
+      const svgX = Math.max(0, scrollLeft - paddingLeft);
+
+      let measureIndex = 0;
+      for (let i = 0; i < layout.measureXs.length; i++) {
+        if (layout.measureXs[i] <= svgX) {
+          measureIndex = i;
+        }
+      }
+      if (measureIndex !== lastMeasureIndex) {
+        lastMeasureIndex = measureIndex;
+        setStickyMeasureIndex(measureIndex);
+      }
+
+      const overlay = stickyOverlayRef.current;
+      if (!overlay) {
+        return;
+      }
+
+      // Hide the overlay while the measure-0 header is still on screen;
+      // show it once the score has scrolled far enough that the header is gone.
+      const showThreshold = paddingLeft + headerWidth(firstFifths);
+      if (scrollLeft <= showThreshold) {
+        overlay.style.display = "none";
+      } else {
+        overlay.style.display = "";
+        // translateX(scrollLeft) keeps the overlay's left edge at
+        // screen-x = paddingLeft regardless of how far the score has scrolled.
+        overlay.style.transform = `translateX(${scrollLeft}px)`;
+      }
+    };
+
+    container.addEventListener("scroll", updateStickyOverlay, {
+      passive: true,
+    });
+    return () => {
+      container.removeEventListener("scroll", updateStickyOverlay);
+    };
+  }, [layout, score, stickySignatureBackground]);
+
   // Focus handle drag state — ref tracks the live value between renders, state
   // drives visual feedback.
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1114,6 +1184,11 @@ export function SheetMusicDisplay({
     from: number;
     to: number;
   } | null>(null);
+
+  // Sticky signature overlay: index of the measure at the visible left edge.
+  // Updated by the scroll listener (rare, only when crossing a barline).
+  const [stickyMeasureIndex, setStickyMeasureIndex] = useState(0);
+  const stickyOverlayRef = useRef<HTMLDivElement>(null);
 
   const snapToMeasureStart = (svgX: number): number => {
     let best = 0;
@@ -1263,6 +1338,22 @@ export function SheetMusicDisplay({
     layout.staffBottomYs.length > 0
       ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
       : layout.totalHeight;
+
+  // Width of the sticky signature overlay: 2px lead-in + clef (32px) + key sig
+  // accidentals (10px each) + 8px right padding. Recomputed when the measure
+  // index changes (key changes are rare, so the re-render cost is negligible).
+  const stickyMaxFifths = stickySignatureBackground
+    ? score.parts.reduce((maximum, part) => {
+        if (visibleParts && !visibleParts.has(part.id)) {
+          return maximum;
+        }
+        return Math.max(
+          maximum,
+          Math.abs(part.measures[stickyMeasureIndex]?.activeFifths ?? 0),
+        );
+      }, 0)
+    : 0;
+  const stickyWidth = 2 + 32 + stickyMaxFifths * 10 + 8;
 
   // Compute focus highlight rect bounds (measure indices are 1-indexed in focusRange).
   // Use dragFocusRange during an active handle drag for live visual feedback.
@@ -1523,8 +1614,80 @@ export function SheetMusicDisplay({
               willChange: "transform",
               contain: "layout",
               display: "none",
+              zIndex: 3,
             }}
           />
+        )}
+        {/* Sticky clef + key-signature panel. Hidden at scroll=0 (the score's
+            own measure-0 header is visible then); appears once the header has
+            scrolled off the left edge. translateX(scrollLeft) keeps the panel
+            pinned at the left content edge regardless of scroll position. */}
+        {stickySignatureBackground && (
+          <div
+            ref={stickyOverlayRef}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              height: layout.totalHeight,
+              pointerEvents: "none",
+              willChange: "transform",
+              display: "none",
+              zIndex: 2,
+            }}
+          >
+            <svg
+              width={stickyWidth}
+              height={layout.totalHeight}
+              aria-hidden="true"
+              style={{
+                fontFamily: GLYPH_FONT_FAMILY,
+                fontSize,
+                display: "block",
+              }}
+            >
+              <rect
+                x={0}
+                y={0}
+                width={stickyWidth}
+                height={layout.totalHeight}
+                fill={stickySignatureBackground}
+              />
+              {score.parts.map((part, partIndex) => {
+                if (visibleParts && !visibleParts.has(part.id)) {
+                  return null;
+                }
+                const staffBottomY = layout.staffBottomYs[partIndex];
+                const activeFifths =
+                  part.measures[stickyMeasureIndex]?.activeFifths ?? 0;
+                return (
+                  <g key={part.id}>
+                    <StaffLines
+                      totalWidth={stickyWidth}
+                      staffBottomY={staffBottomY}
+                      staffSpace={layout.staffSpace}
+                      inkColor={inkColor}
+                    />
+                    <Clef
+                      clef={part.clef}
+                      x={2}
+                      staffBottomY={staffBottomY}
+                      staffSpace={layout.staffSpace}
+                      inkColor={inkColor}
+                    />
+                    <KeySig
+                      keySig={{ fifths: activeFifths }}
+                      clef={part.clef}
+                      x={34}
+                      staffBottomY={staffBottomY}
+                      staffSpace={layout.staffSpace}
+                      inkColor={inkColor}
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
         )}
       </div>
     </div>
