@@ -102,3 +102,41 @@ test("Rondo alla Turca full score — tied coda (measure 212)", async ({
 }) => {
   await screenshotRondoAtMeasure(page, 212, "rondo-full-m212-ties.png");
 });
+
+// The sticky overlay should show the key signature that is active at the
+// visible left edge — not always the original one. This test uses a D-major
+// piece (2 sharps) and scrolls past the initial header so the overlay appears
+// with the F# and C# accidentals visible.
+test("sticky key-signature overlay shows accidentals when scrolled (D major)", async ({
+  page,
+}) => {
+  await loadFile(page, "d-major-melody.musicxml");
+
+  const svg = page.locator("svg").first();
+  await expect(svg.locator("text").first()).toBeVisible();
+
+  // Set scrollLeft directly to a position well past the initial header
+  // (threshold = paddingLeft + headerWidth(2 sharps) = 60 + 80 = 140 px),
+  // then dispatch a scroll event so the sticky overlay handler fires
+  // synchronously in the same browser task.
+  await page.evaluate(() => {
+    const container = document.querySelector(
+      "[data-testid='sheet-music-scroll-container']",
+    ) as HTMLElement | null;
+    if (!container) {
+      return;
+    }
+    container.scrollLeft = 700;
+    container.dispatchEvent(new Event("scroll"));
+  });
+
+  // Wait for the overlay to become visible (the scroll handler sets display:"").
+  await page.locator("[data-testid='sticky-signature-overlay']").waitFor({
+    state: "visible",
+  });
+
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("sticky-signature-overlay-d-major.png");
+  }
+});

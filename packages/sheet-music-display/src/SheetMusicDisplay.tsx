@@ -1384,6 +1384,7 @@ export function SheetMusicDisplay({
   return (
     <div
       ref={containerRef}
+      data-testid="sheet-music-scroll-container"
       style={{
         overflowX: "auto",
         userSelect: "none",
@@ -1637,6 +1638,7 @@ export function SheetMusicDisplay({
         {stickySignatureBackground && (
           <div
             ref={stickyOverlayRef}
+            data-testid="sticky-signature-overlay"
             style={{
               position: "absolute",
               top: 0,
