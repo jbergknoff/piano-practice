@@ -478,6 +478,7 @@ export function PracticeScreen({
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
+          stickySignatureBackground={theme.bg}
           containerStyle={{
             position: "absolute",
             inset: 0,
