@@ -2243,6 +2243,7 @@ function GraceNoteGroupEl({
                   y2={ly}
                   stroke={inkColor}
                   stroke-width="0.8"
+                  stroke-opacity="0.55"
                 />
               ),
             )}
@@ -2491,6 +2492,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
                   y2={ly}
                   stroke={inkColor}
                   stroke-width="1"
+                  stroke-opacity="0.55"
                 />
               ),
             )}
