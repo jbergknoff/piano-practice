@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { useBluetooth } from "../hooks/use-bluetooth";
 import type { ThemeTokens } from "../theme";
 import {
@@ -77,6 +77,39 @@ function unsupportedBody(accent: string) {
   );
 }
 
+const IS_CHROMIUM = IS_CHROME_LIKE || IS_EDGE || IS_BRAVE;
+
+function errorBody(accent: string) {
+  const link = (
+    <a
+      href={BT_IMPL_STATUS_URL}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: accent, textDecoration: "none" }}
+    >
+      compatibility page ↗
+    </a>
+  );
+
+  return (
+    <span>
+      The browser couldn't connect to the selected device. Not every browser and
+      operating system fully supports BLE MIDI — see the {link} for what's known
+      to work.
+      {IS_CHROMIUM && (
+        <>
+          {" "}
+          On a Chromium-based browser, it often helps to open{" "}
+          <code style={{ fontSize: 11 }}>chrome://flags</code> and enable both{" "}
+          <strong>Experimental Web Platform features</strong> and{" "}
+          <strong>Use the new permissions backend for Web Bluetooth</strong>,
+          then relaunch.
+        </>
+      )}
+    </span>
+  );
+}
+
 export function ConnectionBadge({
   theme,
   accent,
@@ -91,11 +124,18 @@ export function ConnectionBadge({
   const [showUnsupportedModal, setShowUnsupportedModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const connected = bluetooth.status === "connected";
   const connecting = bluetooth.status === "connecting";
   const hasError = bluetooth.status === "error";
+
+  // A failed connection attempt surfaces the error modal automatically; the
+  // badge itself keeps its normal click behaviour (retry / show instructions).
+  useEffect(() => {
+    if (hasError) {
+      setShowErrorModal(true);
+    }
+  }, [hasError]);
 
   const dotColor = connected
     ? "#5E8C5A"
@@ -145,25 +185,7 @@ export function ConnectionBadge({
       setShowStatusModal(true);
       return;
     }
-    if (hasError) {
-      setCopied(false);
-      setShowErrorModal(true);
-      return;
-    }
     bluetooth.connect();
-  }
-
-  async function copyError() {
-    if (!bluetooth.error) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(bluetooth.error);
-      setCopied(true);
-    } catch {
-      // Clipboard unavailable (e.g. insecure context) — the text is still
-      // selectable in the modal, so the user can copy it manually.
-    }
   }
 
   const modalBaseStyle = {
@@ -376,9 +398,7 @@ export function ConnectionBadge({
                 lineHeight: 1.6,
               }}
             >
-              The browser couldn't connect to the selected device. The error
-              reported by Web Bluetooth is below — copy it into a bug report if
-              you need help.
+              {errorBody(accent)}
             </p>
             <div
               style={{
@@ -405,13 +425,6 @@ export function ConnectionBadge({
                 justifyContent: "flex-end",
               }}
             >
-              <button
-                type="button"
-                onClick={copyError}
-                style={modalActionButtonStyle(theme, "ghost")}
-              >
-                {copied ? "Copied" : "Copy error"}
-              </button>
               <button
                 type="button"
                 onClick={() => {
