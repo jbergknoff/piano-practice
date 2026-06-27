@@ -3,9 +3,11 @@ import type { useBluetooth } from "../hooks/use-bluetooth";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
+  FONT_MONO,
   FONT_SANS,
   glassPanel,
   hexA,
+  modalActionButtonStyle,
   radius,
   serifTitle,
 } from "../theme";
@@ -88,6 +90,8 @@ export function ConnectionBadge({
 }) {
   const [showUnsupportedModal, setShowUnsupportedModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const connected = bluetooth.status === "connected";
   const connecting = bluetooth.status === "connecting";
@@ -141,7 +145,25 @@ export function ConnectionBadge({
       setShowStatusModal(true);
       return;
     }
+    if (hasError) {
+      setCopied(false);
+      setShowErrorModal(true);
+      return;
+    }
     bluetooth.connect();
+  }
+
+  async function copyError() {
+    if (!bluetooth.error) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(bluetooth.error);
+      setCopied(true);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context) — the text is still
+      // selectable in the modal, so the user can copy it manually.
+    }
   }
 
   const modalBaseStyle = {
@@ -321,6 +343,86 @@ export function ConnectionBadge({
             >
               Done
             </button>
+          </div>
+        </>
+      )}
+
+      {showErrorModal && (
+        <>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
+          <div style={backdropStyle} onClick={() => setShowErrorModal(false)} />
+          <div style={modalBaseStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span style={serifTitle(theme, 20)}>Connection failed</span>
+              <button
+                type="button"
+                onClick={() => setShowErrorModal(false)}
+                style={closeButtonStyle}
+              >
+                ✕
+              </button>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: theme.inkSoft,
+                lineHeight: 1.6,
+              }}
+            >
+              The browser couldn't connect to the selected device. The error
+              reported by Web Bluetooth is below — copy it into a bug report if
+              you need help.
+            </p>
+            <div
+              style={{
+                margin: 0,
+                padding: "10px 12px",
+                fontFamily: FONT_MONO,
+                fontSize: 11.5,
+                lineHeight: 1.5,
+                color: theme.ink,
+                background: hexA(theme.inkFaint, 0.12),
+                border: `0.5px solid ${theme.border}`,
+                borderRadius: radius.md,
+                userSelect: "text",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {bluetooth.error ?? "Connection failed"}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                onClick={copyError}
+                style={modalActionButtonStyle(theme, "ghost")}
+              >
+                {copied ? "Copied" : "Copy error"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowErrorModal(false);
+                  bluetooth.connect();
+                }}
+                style={modalActionButtonStyle(theme, "accent", accent)}
+              >
+                Try again
+              </button>
+            </div>
           </div>
         </>
       )}
