@@ -1161,9 +1161,10 @@ export function SheetMusicDisplay({
         overlay.style.display = "none";
       } else {
         overlay.style.display = "";
-        // translateX(scrollLeft) keeps the overlay's left edge at
-        // screen-x = paddingLeft regardless of how far the score has scrolled.
-        overlay.style.transform = `translateX(${scrollLeft}px)`;
+        // translateX(scrollLeft - paddingLeft) keeps the overlay pinned to
+        // screen-x = 0 (the container's left edge) so it appears flush with
+        // the viewport edge regardless of how far the score has scrolled.
+        overlay.style.transform = `translateX(${scrollLeft - paddingLeft}px)`;
       }
     };
 
@@ -1189,6 +1190,13 @@ export function SheetMusicDisplay({
   // Updated by the scroll listener (rare, only when crossing a barline).
   const [stickyMeasureIndex, setStickyMeasureIndex] = useState(0);
   const stickyOverlayRef = useRef<HTMLDivElement>(null);
+  // Stable per-mount ID so multiple SheetMusicDisplay instances on the same
+  // page (e.g. in tests) don't share the same SVG <linearGradient> id.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally computed once per mount
+  const stickyGradientId = useMemo(
+    () => `smd-sg-${Math.random().toString(36).slice(2)}`,
+    [],
+  );
 
   const snapToMeasureStart = (svgX: number): number => {
     let best = 0;
@@ -1339,9 +1347,9 @@ export function SheetMusicDisplay({
       ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
       : layout.totalHeight;
 
-  // Width of the sticky signature overlay: 2px lead-in + clef (32px) + key sig
-  // accidentals (10px each) + 8px right padding. Recomputed when the measure
-  // index changes (key changes are rare, so the re-render cost is negligible).
+  // Width of the sticky signature overlay. The content portion holds the clef
+  // and key-signature accidentals; a fade zone trails it so the background
+  // dissolves into the score rather than cutting off abruptly.
   const stickyMaxFifths = stickySignatureBackground
     ? score.parts.reduce((maximum, part) => {
         if (visibleParts && !visibleParts.has(part.id)) {
@@ -1353,7 +1361,9 @@ export function SheetMusicDisplay({
         );
       }, 0)
     : 0;
-  const stickyWidth = 2 + 32 + stickyMaxFifths * 10 + 8;
+  const stickyContentWidth = 2 + 32 + stickyMaxFifths * 10 + 8;
+  const stickyFadeZone = 24;
+  const stickyWidth = stickyContentWidth + stickyFadeZone;
 
   // Compute focus highlight rect bounds (measure indices are 1-indexed in focusRange).
   // Use dragFocusRange during an active handle drag for live visual feedback.
@@ -1620,8 +1630,10 @@ export function SheetMusicDisplay({
         )}
         {/* Sticky clef + key-signature panel. Hidden at scroll=0 (the score's
             own measure-0 header is visible then); appears once the header has
-            scrolled off the left edge. translateX(scrollLeft) keeps the panel
-            pinned at the left content edge regardless of scroll position. */}
+            scrolled off the left edge. translateX(scrollLeft - paddingLeft)
+            keeps the panel flush with the container's left edge.
+            The background fades from opaque (left) to transparent (right)
+            so it reads as an overlay rather than a solid panel. */}
         {stickySignatureBackground && (
           <div
             ref={stickyOverlayRef}
@@ -1646,12 +1658,32 @@ export function SheetMusicDisplay({
                 display: "block",
               }}
             >
+              <defs>
+                <linearGradient
+                  id={stickyGradientId}
+                  x1="0"
+                  y1="0"
+                  x2="1"
+                  y2="0"
+                >
+                  <stop
+                    offset={`${Math.round((stickyContentWidth / stickyWidth) * 100)}%`}
+                    stop-color={stickySignatureBackground}
+                    stop-opacity="1"
+                  />
+                  <stop
+                    offset="100%"
+                    stop-color={stickySignatureBackground}
+                    stop-opacity="0"
+                  />
+                </linearGradient>
+              </defs>
               <rect
                 x={0}
                 y={0}
                 width={stickyWidth}
                 height={layout.totalHeight}
-                fill={stickySignatureBackground}
+                fill={`url(#${stickyGradientId})`}
               />
               {score.parts.map((part, partIndex) => {
                 if (visibleParts && !visibleParts.has(part.id)) {
