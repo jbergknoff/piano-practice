@@ -1671,7 +1671,7 @@ export function SheetMusicDisplay({
                   <stop
                     offset={`${Math.round((stickyContentWidth / stickyWidth) * 100)}%`}
                     stop-color={stickySignatureBackground}
-                    stop-opacity="1"
+                    stop-opacity="0.85"
                   />
                   <stop
                     offset="100%"
