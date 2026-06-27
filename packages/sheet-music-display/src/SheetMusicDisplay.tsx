@@ -1696,12 +1696,6 @@ export function SheetMusicDisplay({
                   part.measures[stickyMeasureIndex]?.activeFifths ?? 0;
                 return (
                   <g key={part.id}>
-                    <StaffLines
-                      totalWidth={stickyWidth}
-                      staffBottomY={staffBottomY}
-                      staffSpace={layout.staffSpace}
-                      inkColor={inkColor}
-                    />
                     <Clef
                       clef={part.clef}
                       x={2}
