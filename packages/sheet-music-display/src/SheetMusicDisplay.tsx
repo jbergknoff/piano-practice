@@ -76,6 +76,17 @@ injectGlyphFont();
 const DEFAULT_TEXT_FONT_FAMILY =
   "'Geist', ui-sans-serif, system-ui, sans-serif";
 
+// Opacity for the lines that make up the staff itself — the five staff lines,
+// barlines, and the ledger lines that extend the staff for notes above/below
+// it. They share one value so the staff reads as a single uniform colour and
+// the ink-strength noteheads/stems stand out against it.
+const STAFF_LINE_OPACITY = 0.55;
+
+// A notehead's half-width as a fraction of the staff-line spacing. Used to
+// place stems, accidentals, dots, and ledger-line overhangs relative to the
+// head; grace heads scale this down further by their own grace scale.
+const NOTEHEAD_HALF_WIDTH_FACTOR = 0.55;
+
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
 interface BeamGroupData {
@@ -108,7 +119,7 @@ function computeBeamGroups(
   const stemLength = staffSpace * 3;
   // Diagonal beams may not exceed this total rise/fall, keeping angles readable.
   const maxBeamRise = staffSpace * 1.5;
-  const nrx = staffSpace * 0.55;
+  const nrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR;
 
   return groupBeamableEvents(events, beatDivisions).map((indices) => {
     const chords = indices.map((i) => events[i] as ChordGroup);
@@ -407,7 +418,7 @@ function chordNoteGeometry(
   stemDir: "up" | "down",
 ): NoteRenderInfo[] {
   const { type, notes, noteIndex, dot } = group;
-  const nrx = staffSpace * 0.55;
+  const nrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR;
   const xOffsets = chordXOffsets(notes, stemDir, nrx);
   const accidentalXs = accidentalColumnXs(notes, ex, staffSpace);
   return notes.map((note, v) => ({
@@ -441,7 +452,7 @@ function graceNoteGeometry(
     return [];
   }
   const graceScale = GRACE_FONT_FACTOR / 4;
-  const graceNrx = staffSpace * 0.55 * graceScale;
+  const graceNrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR * graceScale;
   const graceFontSize = staffSpace * GRACE_FONT_FACTOR;
   const mainAccWidth = group.notes.some((n) => n.accidental !== "none")
     ? staffSpace * ACCIDENTAL_BASE_OFFSET_FACTOR
@@ -742,7 +753,7 @@ const NoteColorOverlay = memo(function NoteColorOverlay({
         if (!info) {
           return null;
         }
-        const nrx = info.staffSpace * 0.55;
+        const nrx = info.staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR;
         return (
           // Grace noteheads carry a font-size override so the recolored glyph
           // matches the smaller ink note; regular notes inherit the document
@@ -789,7 +800,7 @@ const TieLayer = memo(function TieLayer({
   inkColor: string;
   staffSpace: number;
 }) {
-  const nrx = staffSpace * 0.55; // notehead half-width
+  const nrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR; // notehead half-width
   return (
     <g style={{ pointerEvents: "none" }} fill="none" stroke={inkColor}>
       {ties.map((tie) => {
@@ -1811,7 +1822,7 @@ function StaffLines({
             y2={y}
             stroke={inkColor}
             stroke-width="0.8"
-            stroke-opacity="0.55"
+            stroke-opacity={STAFF_LINE_OPACITY}
           />
         );
       })}
@@ -1835,8 +1846,53 @@ function Barline({
       y2={staffBottomY}
       stroke={inkColor}
       stroke-width="0.9"
-      stroke-opacity="0.55"
+      stroke-opacity={STAFF_LINE_OPACITY}
     />
+  );
+}
+
+// ── Ledger lines ──────────────────────────────────────────────────────────────
+
+// The short line segments that extend the staff up/down to a note sitting off
+// it. Drawn at STAFF_LINE_OPACITY (like the staff lines they extend). The
+// notehead's center x and half-width plus a small overhang give each segment's
+// span; `strokeWidth` matches the caller's notehead weight (graces are lighter).
+function LedgerLines({
+  pitch,
+  clef,
+  staffBottomY,
+  staffSpace,
+  centerX,
+  halfWidth,
+  overhang,
+  strokeWidth,
+  inkColor,
+}: {
+  pitch: Pitch;
+  clef: { sign: "G" | "F"; line: number };
+  staffBottomY: number;
+  staffSpace: number;
+  centerX: number;
+  halfWidth: number;
+  overhang: number;
+  strokeWidth: string;
+  inkColor: string;
+}) {
+  return (
+    <>
+      {ledgerLineYs(pitch, clef, staffBottomY, staffSpace).map((ly) => (
+        <line
+          key={ly}
+          x1={centerX - halfWidth - overhang}
+          x2={centerX + halfWidth + overhang}
+          y1={ly}
+          y2={ly}
+          stroke={inkColor}
+          stroke-width={strokeWidth}
+          stroke-opacity={STAFF_LINE_OPACITY}
+        />
+      ))}
+    </>
   );
 }
 
@@ -2192,7 +2248,7 @@ function GraceNoteGroupEl({
   const fontSize = staffSpace * GRACE_FONT_FACTOR;
   // Scale factor relative to full size — used for geometry adjustments.
   const scale = GRACE_FONT_FACTOR / 4;
-  const nrx = staffSpace * 0.55 * scale; // notehead half-width
+  const nrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR * scale; // notehead half-width
   const stemLength = staffSpace * 2.5;
 
   return (
@@ -2233,20 +2289,17 @@ function GraceNoteGroupEl({
               {G.noteheadBlack}
             </text>
             {/* Ledger lines */}
-            {ledgerLineYs(note.pitch, clef, staffBottomY, staffSpace).map(
-              (ly) => (
-                <line
-                  key={ly}
-                  x1={nx - nrx - 3}
-                  x2={nx + nrx + 3}
-                  y1={ly}
-                  y2={ly}
-                  stroke={inkColor}
-                  stroke-width="0.8"
-                  stroke-opacity="0.55"
-                />
-              ),
-            )}
+            <LedgerLines
+              pitch={note.pitch}
+              clef={clef}
+              staffBottomY={staffBottomY}
+              staffSpace={staffSpace}
+              centerX={nx}
+              halfWidth={nrx}
+              overhang={3}
+              strokeWidth="0.8"
+              inkColor={inkColor}
+            />
             {/* Stem (upward) */}
             <line
               x1={stemX}
@@ -2358,11 +2411,11 @@ const ChordGroupEl = memo(function ChordGroupEl({
   const topY = Math.min(...noteYs);
   const bottomY = Math.max(...noteYs);
   const stemLength = staffSpace * 3;
-  const nrx = staffSpace * 0.55;
+  const nrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR;
 
   // Grace note geometry — proportional to the smaller grace scale.
   const graceScale = GRACE_FONT_FACTOR / 4;
-  const graceNrx = staffSpace * 0.55 * graceScale; // grace notehead half-width
+  const graceNrx = staffSpace * NOTEHEAD_HALF_WIDTH_FACTOR * graceScale; // grace notehead half-width
   const graceStemLength = staffSpace * 2.0;
   const isGraceBeamed = N > 1;
   // When the main chord has accidentals, push grace notes further left so
@@ -2482,20 +2535,17 @@ const ChordGroupEl = memo(function ChordGroupEl({
               accidentalX={info.accidentalX}
               staffSpace={staffSpace}
             />
-            {ledgerLineYs(notes[v].pitch, clef, staffBottomY, staffSpace).map(
-              (ly) => (
-                <line
-                  key={ly}
-                  x1={nx - nrx - 4}
-                  x2={nx + nrx + 4}
-                  y1={ly}
-                  y2={ly}
-                  stroke={inkColor}
-                  stroke-width="1"
-                  stroke-opacity="0.55"
-                />
-              ),
-            )}
+            <LedgerLines
+              pitch={notes[v].pitch}
+              clef={clef}
+              staffBottomY={staffBottomY}
+              staffSpace={staffSpace}
+              centerX={nx}
+              halfWidth={nrx}
+              overhang={4}
+              strokeWidth="1"
+              inkColor={inkColor}
+            />
             {info.dot && (
               <circle
                 cx={nx + nrx + 4}
