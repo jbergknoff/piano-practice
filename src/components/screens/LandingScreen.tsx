@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import type { useBluetooth } from "../../hooks/use-bluetooth";
+import type { PianoController } from "../../hooks/use-piano";
 import type { ThemeTokens } from "../../theme";
 import {
   blurFilter,
@@ -16,7 +16,7 @@ interface LandingScreenProps {
   theme: ThemeTokens;
   accent: string;
   fileError: string | null;
-  bluetooth: ReturnType<typeof useBluetooth>;
+  piano: PianoController;
   onFile: (e: Event) => void;
   onDrop: (e: DragEvent) => void;
 }
@@ -25,12 +25,12 @@ export function LandingScreen({
   theme,
   accent,
   fileError,
-  bluetooth,
+  piano,
   onFile,
   onDrop,
 }: LandingScreenProps) {
   const [hovering, setHovering] = useState(false);
-  const connected = bluetooth.status === "connected";
+  const connected = piano.status === "connected";
 
   return (
     <div
@@ -76,7 +76,7 @@ export function LandingScreen({
         <ConnectionBadge
           theme={theme}
           accent={accent}
-          bluetooth={bluetooth}
+          piano={piano}
           compact={true}
         />
       </div>
