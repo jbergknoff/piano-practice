@@ -13,8 +13,8 @@ interface CpuProfile {
 // Captures a Chrome CPU profile of a simulated Playalong run and writes it as a
 // test artifact. Open the .cpuprofile in Chrome DevTools → Performance → "Load
 // profile…" to see where main-thread time goes — the desktop substitute for
-// profiling on the phone. The feeder drives the real note-event path, so the
-// profile reflects production rendering (marker overlay + highlight recompute).
+// profiling on the phone. The DemoOverlay sprays through the real note-event
+// path, so the profile reflects production rendering (marker + highlight load).
 //
 // IMPORTANT — what this does and does not measure:
 //   - A CPU profile captures main-thread JS + style/layout only. It does NOT
@@ -78,9 +78,7 @@ test("capture a Playalong CPU profile as a loadable artifact", async ({
   await client.send("Profiler.setSamplingInterval", { interval: 200 });
 
   await page.getByTitle("Play").click();
-  await page
-    .getByRole("button", { name: "Play notes", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Play notes", exact: true }).click();
   await client.send("Profiler.start");
 
   // Advance the fake audio clock in small steps with short real-time waits, so

@@ -415,10 +415,12 @@ describe("grace note highlighting", () => {
   ]);
 
   test("a score highlight on a grace note recolors its (smaller) notehead", () => {
-    const { svg } = renderSheetMusic(graceScore, {
+    // Highlights live in the dynamic overlay <svg>, a sibling of the static
+    // notation <svg>, so query the container (which spans both), not `svg`.
+    const { container } = renderSheetMusic(graceScore, {
       noteHighlights: [{ kind: "score", id: "p0-m1-n1-v0", color: "#ff0000" }],
     });
-    const group = svg.querySelector('[data-color-id="p0-m1-n1-v0"]');
+    const group = container.querySelector('[data-color-id="p0-m1-n1-v0"]');
     expect(group).not.toBeNull();
     // The recolored glyph is a black notehead drawn at the grace glyph size
     // (staffSpace 10 × GRACE_FONT_FACTOR 2.4 = 24), not the full-note size.
@@ -431,10 +433,10 @@ describe("grace note highlighting", () => {
   test("a regular notehead highlight carries no grace font-size override", () => {
     // Contrast case: highlighting the main C5 (n2) uses the document default
     // glyph size, so its overlay group has no font-size attribute.
-    const { svg } = renderSheetMusic(graceScore, {
+    const { container } = renderSheetMusic(graceScore, {
       noteHighlights: [{ kind: "score", id: "p0-m1-n2-v0", color: "#ff0000" }],
     });
-    const group = svg.querySelector('[data-color-id="p0-m1-n2-v0"]');
+    const group = container.querySelector('[data-color-id="p0-m1-n2-v0"]');
     expect(group).not.toBeNull();
     expect(group?.getAttribute("font-size")).toBeNull();
   });

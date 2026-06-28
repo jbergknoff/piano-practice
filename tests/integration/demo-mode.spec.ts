@@ -33,7 +33,10 @@ test("demo mode auto-selects Playalong and the overlay sprays notes", async ({
     "true",
     { timeout: 5000 },
   );
-  const playNotes = page.getByRole("button", { name: "Play notes", exact: true });
+  const playNotes = page.getByRole("button", {
+    name: "Play notes",
+    exact: true,
+  });
   await expect(playNotes).toBeVisible();
 
   // Start the run, then spray random notes; advance the clock so playback runs.

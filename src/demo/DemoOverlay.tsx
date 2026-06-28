@@ -25,7 +25,10 @@ const NOTE_HOLD_MS = 150;
  * piano. Nothing here touches PracticeScreen; it depends only on the dispatch
  * ref. Mounted only under ?demo=1.
  */
-export function DemoOverlay({ noteEventDispatchRef, accent }: DemoOverlayProps) {
+export function DemoOverlay({
+  noteEventDispatchRef,
+  accent,
+}: DemoOverlayProps) {
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
