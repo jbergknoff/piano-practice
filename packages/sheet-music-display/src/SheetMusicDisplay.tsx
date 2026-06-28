@@ -1119,7 +1119,6 @@ export function SheetMusicDisplay({
   // so the rendered key signature stays current. The transform is applied via
   // direct DOM mutation (same pattern as the cursor) so every scroll pixel is
   // in sync; the measure-index state update only fires when crossing a barline.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: layout and score are stable per piece; stickySignatureBackground gates rendering
   useEffect(() => {
     if (!stickySignatureBackground) {
       return;
@@ -1192,7 +1191,6 @@ export function SheetMusicDisplay({
   const stickyOverlayRef = useRef<HTMLDivElement>(null);
   // Stable per-mount ID so multiple SheetMusicDisplay instances on the same
   // page (e.g. in tests) don't share the same SVG <linearGradient> id.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally computed once per mount
   const stickyGradientId = useMemo(
     () => `smd-sg-${Math.random().toString(36).slice(2)}`,
     [],
