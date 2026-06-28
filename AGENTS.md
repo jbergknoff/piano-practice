@@ -114,6 +114,50 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 - Dragging the overlay handles auto-scrolls the sheet when the pointer approaches the container edge (`SheetMusicDisplay.onHandlePointerMove`).
 - **Beat conversion**: measure number → beat offset is done via `ScoreConversion.measureStartBeats` (a `number[]` cached once on file load by `computeMeasureStartBeats`), NOT by `(measureNumber - 1) * timeSigNum`. The old formula silently breaks on any pickup measure. `measureStartBeats` is exposed directly on `ModeControl` so every mode hook can look up `ctrl.measureStartBeats[range.from - 1]` without navigating through `musicxml`.
 
+### Demo / profiling mode
+
+`?demo=1` activates a desktop-only profiling harness for Playalong (the user
+practices on a phone where a performance profile can't be captured, and can't
+get Web Bluetooth working on their laptop). It is **fully self-contained in
+`src/demo/` — no production component knows about it**:
+
+- `src/demo/fake-bluetooth.ts` exposes `isDemoMode()` + `installFakeBluetooth()`
+  (+ optional `demoFocusRange()` from `?demo=1&from=X&to=Y`). `main.tsx` installs
+  the inert fake adapter before React mounts so `useBluetooth` auto-reconnects to
+  `"connected"` (this is what gates Playalong) without hardware. It mirrors the
+  integration-test mock in `tests/integration/mocks/bluetooth.ts` but stays
+  separate (that one is a stringified init script in another browser context).
+- `App` (the only wiring) defaults the mode to Playalong once a file is loaded
+  and renders `<DemoOverlay>` when `isDemoMode()`.
+- `src/demo/DemoOverlay.tsx` is a self-contained banner + **"Play notes"** toggle.
+  While active it sprays random note-on/off events (mid-keyboard pitches) through
+  the App-owned `noteEventDispatchRef` — the exact path real BLE input takes — so
+  with Playalong playing it reproduces the marker + highlight render load to
+  profile. It depends only on the dispatch ref; `PracticeScreen` carries **zero**
+  demo code.
+
+Nothing about this is reachable without the query param.
+
+**Playalong render cost lives in paint, not script.** A DevTools trace of a real
+session showed the dominant main-thread cost during playback is **PrePaint +
+full-width Paint of the sheet SVG every frame** (the score-colour/marker overlays
+changing inside the one big SVG invalidated the whole note tree), dwarfing the JS
+work. So `SheetMusicDisplay` renders **two stacked SVG roots** inside the wrapper
+div: a **static layer** (staves, ties, focus overlay/handles — changes only on
+piece/layout/focus) and a **dynamic overlay layer** (`NoteColorOverlay` +
+`PlayerMarkerOverlay`) overlaid exactly on top with `pointer-events: none`.
+Because paint invalidation is per-SVG-root, changing the overlay re-records only
+the overlay's display items, not the huge static note tree — which is what
+removed the per-frame PrePaint + full-width Paint. Keep the two layers identical
+in size/coordinate space so they stay aligned, and keep the overlay
+`pointer-events: none` so right-click/drag still reach the static layer. **Do not
+add `will-change: transform` to either SVG** — promoting a 9920px-wide SVG with
+thousands of nodes to a compositor layer made per-frame `Layerize` cost explode
+(~30ms/frame); the plain SVG-root split is what does the work. (An
+earlier round of JS micro-optimizations — marker memoization, quantized highlight
+recompute — was reverted after profiling showed scripting was not the
+bottleneck.)
+
 ### PracticeScreen control areas
 
 - **Top-left** — back button, piece title (opens info modal on click)
