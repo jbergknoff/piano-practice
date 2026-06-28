@@ -14,7 +14,7 @@ test("jump-to-measure focuses the chosen measure", async ({ page }) => {
   await loadFile(page, "simple-grand-piano.musicxml");
 
   // Right-click the sheet music to open the context menu.
-  await page.locator("svg").first().click({ button: "right" });
+  await page.locator("svg[role='img']").click({ button: "right" });
 
   // The new "Jump to measure…" item should be present; clicking it opens the
   // numeric-input modal.
@@ -36,6 +36,6 @@ test("jump-to-measure focuses the chosen measure", async ({ page }) => {
 
   // Confirming focuses the measure: re-opening the context menu now offers the
   // focus-management items that only appear when a focus range is set.
-  await page.locator("svg").first().click({ button: "right" });
+  await page.locator("svg[role='img']").click({ button: "right" });
   await expect(page.getByRole("button", { name: "Clear focus" })).toBeVisible();
 });
