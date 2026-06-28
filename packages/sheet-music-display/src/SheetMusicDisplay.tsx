@@ -1125,11 +1125,13 @@ export function SheetMusicDisplay({
       x !== null ? Math.max(0, leftPad + x - el.clientWidth * 0.2) : 0;
   }, [snapGeneration, score, layout, graceHighlightCursorX]);
 
-  // Sticky signature overlay: updates the overlay's translateX to keep it
-  // pinned at the left content edge, and tracks which measure is visible there
-  // so the rendered key signature stays current. The transform is applied via
-  // direct DOM mutation (same pattern as the cursor) so every scroll pixel is
-  // in sync; the measure-index state update only fires when crossing a barline.
+  // Sticky signature overlay: tracks which measure is visible at the left edge
+  // so the rendered key signature stays current. The overlay uses CSS
+  // position:sticky (left:0) for pinning — no JS transform needed — so the
+  // browser compositor keeps it flush on every frame, including during Android's
+  // async/off-thread scrolling where a JS-driven translateX lags visibly behind
+  // the scroll position. The measure-index state update only fires when crossing
+  // a barline.
   useEffect(() => {
     if (!stickySignatureBackground) {
       return;
@@ -1138,6 +1140,18 @@ export function SheetMusicDisplay({
     if (!container) {
       return;
     }
+
+    // Detect flex container to adjust the sticky left offset. In flex
+    // containers, position:sticky left:0 anchors at the content edge
+    // (x = paddingLeft), not at the scrollport outer edge (x = 0). Negating
+    // paddingLeft corrects the anchor point to the outer left edge.
+    const computedStyle = getComputedStyle(container);
+    const containerDisplay = computedStyle.display;
+    const containerPaddingLeft =
+      Number.parseFloat(computedStyle.paddingLeft) || 0;
+    const isFlex =
+      containerDisplay === "flex" || containerDisplay === "inline-flex";
+    setStickyLeft(isFlex ? -containerPaddingLeft : 0);
 
     let lastMeasureIndex = -1;
     const firstFifths = score.parts[0]?.measures[0]?.activeFifths ?? 0;
@@ -1170,11 +1184,7 @@ export function SheetMusicDisplay({
       if (scrollLeft <= showThreshold) {
         overlay.style.display = "none";
       } else {
-        overlay.style.display = "";
-        // translateX(scrollLeft - paddingLeft) keeps the overlay pinned to
-        // screen-x = 0 (the container's left edge) so it appears flush with
-        // the viewport edge regardless of how far the score has scrolled.
-        overlay.style.transform = `translateX(${scrollLeft - paddingLeft}px)`;
+        overlay.style.display = "inline-block";
       }
     };
 
@@ -1199,6 +1209,10 @@ export function SheetMusicDisplay({
   // Sticky signature overlay: index of the measure at the visible left edge.
   // Updated by the scroll listener (rare, only when crossing a barline).
   const [stickyMeasureIndex, setStickyMeasureIndex] = useState(0);
+  // CSS sticky `left` offset. In a flex container, `left: 0` sticks at the
+  // content edge (x = paddingLeft), not the scrollport outer edge (x = 0).
+  // We negate the container's paddingLeft so the overlay always appears at x=0.
+  const [stickyLeft, setStickyLeft] = useState(0);
   const stickyOverlayRef = useRef<HTMLDivElement>(null);
   // Stable per-mount ID so multiple SheetMusicDisplay instances on the same
   // page (e.g. in tests) don't share the same SVG <linearGradient> id.
@@ -1447,6 +1461,93 @@ export function SheetMusicDisplay({
         });
       }}
     >
+      {/* Sticky clef + key-signature panel. Hidden at scroll=0 (the score's
+          own measure-0 header is visible then); appears once the header has
+          scrolled off the left edge. CSS position:sticky keeps it at the
+          container's left edge; a negative right margin equal to its own
+          width cancels its flow space so the score div that follows starts
+          at x=0. The background fades from opaque (left) to transparent
+          (right) so it reads as an overlay rather than a solid panel. */}
+      {stickySignatureBackground && (
+        <div
+          ref={stickyOverlayRef}
+          data-testid="sticky-signature-overlay"
+          style={{
+            position: "sticky",
+            left: stickyLeft,
+            width: stickyWidth,
+            // Negative right margin cancels the horizontal space this element
+            // takes in the inline-block flow so the score div that follows
+            // starts at the same x as if this overlay weren't there.
+            marginRight: -stickyWidth,
+            height: layout.totalHeight,
+            verticalAlign: "top",
+            pointerEvents: "none",
+            display: "none",
+            zIndex: 2,
+          }}
+        >
+          <svg
+            width={stickyWidth}
+            height={layout.totalHeight}
+            aria-hidden="true"
+            style={{
+              fontFamily: GLYPH_FONT_FAMILY,
+              fontSize,
+              display: "block",
+            }}
+          >
+            <defs>
+              <linearGradient id={stickyGradientId} x1="0" y1="0" x2="1" y2="0">
+                <stop
+                  offset={`${Math.round((stickyContentWidth / stickyWidth) * 100)}%`}
+                  stop-color={stickySignatureBackground}
+                  stop-opacity="0.85"
+                />
+                <stop
+                  offset="100%"
+                  stop-color={stickySignatureBackground}
+                  stop-opacity="0"
+                />
+              </linearGradient>
+            </defs>
+            <rect
+              x={0}
+              y={0}
+              width={stickyWidth}
+              height={layout.totalHeight}
+              fill={`url(#${stickyGradientId})`}
+            />
+            {score.parts.map((part, partIndex) => {
+              if (visibleParts && !visibleParts.has(part.id)) {
+                return null;
+              }
+              const staffBottomY = layout.staffBottomYs[partIndex];
+              const activeFifths =
+                part.measures[stickyMeasureIndex]?.activeFifths ?? 0;
+              return (
+                <g key={part.id}>
+                  <Clef
+                    clef={part.clef}
+                    x={2}
+                    staffBottomY={staffBottomY}
+                    staffSpace={layout.staffSpace}
+                    inkColor={inkColor}
+                  />
+                  <KeySig
+                    keySig={{ fifths: activeFifths }}
+                    clef={part.clef}
+                    x={34}
+                    staffBottomY={staffBottomY}
+                    staffSpace={layout.staffSpace}
+                    inkColor={inkColor}
+                  />
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
       {/*
         Wrapper gives a positioning context for the HTML handle overlays.
         Set font-family and font-size once here so every <text> element inside
@@ -1674,94 +1775,6 @@ export function SheetMusicDisplay({
               zIndex: 3,
             }}
           />
-        )}
-        {/* Sticky clef + key-signature panel. Hidden at scroll=0 (the score's
-            own measure-0 header is visible then); appears once the header has
-            scrolled off the left edge. translateX(scrollLeft - paddingLeft)
-            keeps the panel flush with the container's left edge.
-            The background fades from opaque (left) to transparent (right)
-            so it reads as an overlay rather than a solid panel. */}
-        {stickySignatureBackground && (
-          <div
-            ref={stickyOverlayRef}
-            data-testid="sticky-signature-overlay"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              height: layout.totalHeight,
-              pointerEvents: "none",
-              willChange: "transform",
-              display: "none",
-              zIndex: 2,
-            }}
-          >
-            <svg
-              width={stickyWidth}
-              height={layout.totalHeight}
-              aria-hidden="true"
-              style={{
-                fontFamily: GLYPH_FONT_FAMILY,
-                fontSize,
-                display: "block",
-              }}
-            >
-              <defs>
-                <linearGradient
-                  id={stickyGradientId}
-                  x1="0"
-                  y1="0"
-                  x2="1"
-                  y2="0"
-                >
-                  <stop
-                    offset={`${Math.round((stickyContentWidth / stickyWidth) * 100)}%`}
-                    stop-color={stickySignatureBackground}
-                    stop-opacity="0.85"
-                  />
-                  <stop
-                    offset="100%"
-                    stop-color={stickySignatureBackground}
-                    stop-opacity="0"
-                  />
-                </linearGradient>
-              </defs>
-              <rect
-                x={0}
-                y={0}
-                width={stickyWidth}
-                height={layout.totalHeight}
-                fill={`url(#${stickyGradientId})`}
-              />
-              {score.parts.map((part, partIndex) => {
-                if (visibleParts && !visibleParts.has(part.id)) {
-                  return null;
-                }
-                const staffBottomY = layout.staffBottomYs[partIndex];
-                const activeFifths =
-                  part.measures[stickyMeasureIndex]?.activeFifths ?? 0;
-                return (
-                  <g key={part.id}>
-                    <Clef
-                      clef={part.clef}
-                      x={2}
-                      staffBottomY={staffBottomY}
-                      staffSpace={layout.staffSpace}
-                      inkColor={inkColor}
-                    />
-                    <KeySig
-                      keySig={{ fifths: activeFifths }}
-                      clef={part.clef}
-                      x={34}
-                      staffBottomY={staffBottomY}
-                      staffSpace={layout.staffSpace}
-                      inkColor={inkColor}
-                    />
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
         )}
       </div>
     </div>

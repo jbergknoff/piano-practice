@@ -17,7 +17,7 @@ test("renders sheet music from a MusicXML file", async ({ page }) => {
   await loadFile(page, "simple-grand-piano.musicxml");
 
   // At least one SMuFL text element (notehead, clef, etc.) should be present
-  const svg = page.locator("svg").first();
+  const svg = page.locator("svg[role='img']");
   await expect(svg).toBeVisible();
   await expect(svg.locator("text").first()).toBeVisible();
 
@@ -30,7 +30,7 @@ test("renders sheet music from a MusicXML file", async ({ page }) => {
 test("renders sheet music from a MIDI file", async ({ page }) => {
   await loadFile(page, "c-major-melody.mid");
 
-  const svg = page.locator("svg").first();
+  const svg = page.locator("svg[role='img']");
   await expect(svg).toBeVisible();
   await expect(svg.locator("text").first()).toBeVisible();
 
@@ -47,7 +47,7 @@ test("renders beamed 16th-note runs (Rondo alla Turca clip)", async ({
 }) => {
   await loadFile(page, "rondo-alla-turca-clip.mxl");
 
-  const svg = page.locator("svg").first();
+  const svg = page.locator("svg[role='img']");
   await expect(svg).toBeVisible();
   await expect(svg.locator("text").first()).toBeVisible();
 
@@ -68,7 +68,7 @@ async function screenshotRondoAtMeasure(
   await loadFile(page, "rondo-alla-turca-full.mxl");
 
   // Wait for the SVG to contain at least one note element.
-  const svg = page.locator("svg").first();
+  const svg = page.locator("svg[role='img']");
   await expect(svg.locator("text").first()).toBeVisible();
 
   // Scroll the first note of the target measure into view.  Note IDs have the
@@ -112,7 +112,7 @@ test("sticky key-signature overlay shows accidentals when scrolled (D major)", a
 }) => {
   await loadFile(page, "d-major-melody.musicxml");
 
-  const svg = page.locator("svg").first();
+  const svg = page.locator("svg[role='img']");
   await expect(svg.locator("text").first()).toBeVisible();
 
   // Set scrollLeft directly to a position well past the initial header
@@ -130,7 +130,7 @@ test("sticky key-signature overlay shows accidentals when scrolled (D major)", a
     container.dispatchEvent(new Event("scroll"));
   });
 
-  // Wait for the overlay to become visible (the scroll handler sets display:"").
+  // Wait for the overlay to become visible (the scroll handler sets display:"inline-block").
   await page.locator("[data-testid='sticky-signature-overlay']").waitFor({
     state: "visible",
   });

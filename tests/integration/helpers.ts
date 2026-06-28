@@ -20,7 +20,9 @@ export async function loadFile(page: Page, filename: string): Promise<void> {
     .setInputFiles(path.join(FIXTURES, filename));
   // Wait for the first rendered glyph, not just the SVG shell — the SVG
   // element appears before notation is painted on a subsequent render tick.
-  await page.waitForSelector("svg text", { timeout: 10_000 });
+  // Scope to the score SVG (role="img") to avoid matching text inside the
+  // sticky-signature overlay's aria-hidden SVG, which starts display:none.
+  await page.waitForSelector("svg[role='img'] text", { timeout: 10_000 });
 }
 
 /** Wait for all fonts (including Bravura) to finish loading. */

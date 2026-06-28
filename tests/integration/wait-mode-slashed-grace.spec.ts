@@ -71,7 +71,7 @@ test.beforeEach(async ({ page }) => {
 async function jumpToMeasure224(
   page: import("@playwright/test").Page,
 ): Promise<void> {
-  await page.locator("svg").first().click({ button: "right" });
+  await page.locator("svg[role='img']").click({ button: "right" });
   await page.getByRole("button", { name: "Jump to measure…" }).click();
   await page.locator('input[type="number"]').fill("224");
   await page.getByRole("button", { name: "Go" }).click();

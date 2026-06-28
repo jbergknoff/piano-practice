@@ -265,7 +265,7 @@ test("grace notes at the start of the following measure are not colored red afte
   await disableCountIn(page);
 
   // Focus measure 6 via the right-click Jump-to-measure modal.
-  await page.locator("svg").first().click({ button: "right" });
+  await page.locator("svg[role='img']").click({ button: "right" });
   await page.getByRole("button", { name: "Jump to measure…" }).click();
   await page.locator('input[type="number"]').fill("6");
   await page.getByRole("button", { name: "Go" }).click();
