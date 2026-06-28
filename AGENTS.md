@@ -131,15 +131,22 @@ the true start beat lands within the match tolerance so every note scores as a
 hit, reproducing the full marker + highlight render load. Nothing about this is
 reachable without the query param.
 
-Two Playalong render costs scale with note density, so keep them in mind when
-touching that path: (1) marker overlay rendering is kept O(1) per key press by
-the memoized `PlayerMarker` child in `SheetMusicDisplay.tsx` — it relies on the
-marker `NoteHighlight` objects keeping stable identity across appends (the
-`markerEntries` split pushes them through directly rather than re-wrapping), so
-don't reintroduce per-render wrapper objects; (2) `usePlayalongMode`'s
-score-highlight recompute is driven off a **quantized** beat
-(`HIGHLIGHT_BEAT_QUANTUM`, well below the match tolerance) so the full-score loop
-runs a few times per beat instead of once per animation frame.
+**Playalong render cost lives in paint, not script.** A DevTools trace of a real
+session showed the dominant main-thread cost during playback is **PrePaint +
+full-width Paint of the sheet SVG every frame** (the score-colour/marker overlays
+changing inside the one big SVG invalidated the whole note tree), dwarfing the JS
+work. So `SheetMusicDisplay` renders **two stacked SVG layers** inside the wrapper
+div: a **static layer** (staves, ties, focus overlay/handles — changes only on
+piece/layout/focus) and a **dynamic overlay layer** (`NoteColorOverlay` +
+`PlayerMarkerOverlay`) overlaid exactly on top with `pointer-events: none`. Both
+carry `will-change: transform` so they are separate compositor layers: updating
+highlights/markers on each key press or cursor tick repaints only the small
+dynamic layer, and scrolling is a pure composite. Keep the two layers identical
+in size/coordinate space so they stay aligned, and keep the overlay
+`pointer-events: none` so right-click/drag still reach the static layer. (An
+earlier round of JS micro-optimizations — marker memoization, quantized highlight
+recompute — was reverted after profiling showed scripting was not the
+bottleneck.)
 
 ### PracticeScreen control areas
 
