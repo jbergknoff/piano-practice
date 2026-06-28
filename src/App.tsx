@@ -25,7 +25,7 @@ import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { DemoOverlay } from "./demo/DemoOverlay";
 import { demoFocusRange, isDemoMode } from "./demo/fake-bluetooth";
-import { useBluetooth } from "./hooks/use-bluetooth";
+import { usePiano } from "./hooks/use-piano";
 import {
   type FileHistory,
   hashFileBytes,
@@ -141,11 +141,11 @@ export function App() {
     debugBufferRef.current = newDebugBuffer();
   }, []);
 
-  // ── BLE MIDI ─────────────────────────────────────────────────────────────
+  // ── Piano input ──────────────────────────────────────────────────────────
   // PracticeScreen writes the active mode's onNoteEvent into this ref; the
-  // bluetooth note listener dispatches incoming events through it. Keeps the
-  // construction cycle (useBluetooth needs a handler, the handler needs
-  // bluetooth.sendNote) broken by indirection.
+  // active transport's note listener dispatches incoming events through it.
+  // Keeps the construction cycle (usePiano needs a handler, the handler needs
+  // piano.sendNote) broken by indirection.
   const noteEventDispatchRef = useRef<
     ((noteNumber: number, kind: "on" | "off") => void) | null
   >(null);
@@ -155,18 +155,18 @@ export function App() {
     },
     [],
   );
-  const bluetooth = useBluetooth(dispatchNoteEvent);
+  const piano = usePiano(dispatchNoteEvent);
 
   useWakeLock(musicxml !== null);
 
   // Force listen mode when no piano is connected — wait and playalong
   // require MIDI input. This guard covers runtime disconnects; the initial
-  // load case is handled by clampModeToBluetoothStatus() at history restore.
+  // load case is handled by clampModeToPianoStatus() at history restore.
   useEffect(() => {
-    if (bluetooth.status !== "connected") {
+    if (piano.status !== "connected") {
       setMode((m) => (m === "wait" || m === "playalong" ? "listen" : m));
     }
-  }, [bluetooth.status]);
+  }, [piano.status]);
 
   // In demo mode, default to Playalong once a file is loaded and the fake piano
   // is "connected". Done once per file (the ref is reset on musicxml change) so
@@ -180,7 +180,7 @@ export function App() {
     if (
       demo &&
       musicxml &&
-      bluetooth.status === "connected" &&
+      piano.status === "connected" &&
       !demoDefaultedRef.current
     ) {
       demoDefaultedRef.current = true;
@@ -190,15 +190,15 @@ export function App() {
         setMeasureRange(range);
       }
     }
-  }, [demo, musicxml, bluetooth.status]);
+  }, [demo, musicxml, piano.status]);
 
   // Returns the mode from history, falling back to "listen" when the saved
   // mode requires a piano connection and none is currently connected.
-  function clampModeToBluetoothStatus(
+  function clampModeToPianoStatus(
     savedMode: "wait" | "playalong" | "listen",
   ): "wait" | "playalong" | "listen" {
-    const requiresBluetooth = savedMode === "wait" || savedMode === "playalong";
-    if (requiresBluetooth && bluetooth.status !== "connected") {
+    const requiresPiano = savedMode === "wait" || savedMode === "playalong";
+    if (requiresPiano && piano.status !== "connected") {
       return "listen";
     }
     return savedMode;
@@ -261,7 +261,7 @@ export function App() {
       if (history) {
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setMode(clampModeToBluetoothStatus(history.mode));
+        setMode(clampModeToPianoStatus(history.mode));
         setInitialBeat(history.currentBeat);
       } else {
         setBpm(tempo);
@@ -302,7 +302,7 @@ export function App() {
         );
         setBpm(Math.round(tempo * history.bpmRatio));
         setMeasureRange(history.measureRange);
-        setMode(clampModeToBluetoothStatus(history.mode));
+        setMode(clampModeToPianoStatus(history.mode));
         setInitialBeat(history.currentBeat);
       } else {
         setSelectedTracks(trackList.map((t) => t.index));
@@ -431,7 +431,7 @@ export function App() {
         theme={theme}
         accent={accent}
         fileError={fileError}
-        bluetooth={bluetooth}
+        piano={piano}
         onFile={handleFileInput}
         onDrop={handleFileDrop}
       />
@@ -457,7 +457,7 @@ export function App() {
         bpm={bpm}
         baseBpm={baseBpm}
         measureRange={measureRange}
-        bluetooth={bluetooth}
+        piano={piano}
         noteEventDispatchRef={noteEventDispatchRef}
         mode={mode}
         tracks={tracks}
