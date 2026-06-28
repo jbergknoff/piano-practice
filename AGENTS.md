@@ -112,6 +112,35 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 - Dragging the overlay handles auto-scrolls the sheet when the pointer approaches the container edge (`SheetMusicDisplay.onHandlePointerMove`).
 - **Beat conversion**: measure number → beat offset is done via `ScoreConversion.measureStartBeats` (a `number[]` cached once on file load by `computeMeasureStartBeats`), NOT by `(measureNumber - 1) * timeSigNum`. The old formula silently breaks on any pickup measure. `measureStartBeats` is exposed directly on `ModeControl` so every mode hook can look up `ctrl.measureStartBeats[range.from - 1]` without navigating through `musicxml`.
 
+### Demo / profiling mode
+
+`?demo=1` activates a desktop-only profiling harness for Playalong (the user
+practices on a phone where a performance profile can't be captured, and can't
+get Web Bluetooth working on their laptop). `src/demo/fake-bluetooth.ts` exposes
+`isDemoMode()` + `installFakeBluetooth()`; `main.tsx` installs the inert fake
+adapter before React mounts so `useBluetooth` auto-reconnects to `"connected"`
+(this is what gates Playalong) without hardware. It mirrors the integration-test
+mock in `tests/integration/mocks/bluetooth.ts` but stays separate (that one is a
+stringified init script in another browser context). In demo mode `App` defaults
+the mode to Playalong once a file is loaded, and `PracticeScreen` runs a
+`requestAnimationFrame` **feeder** (gated on `demo && playalong.phase ===
+"playing"`) that emits a synthetic note-on at each note's start beat — and a
+matching note-off after its duration — through the App-owned
+`noteEventDispatchRef`, the exact path real BLE input ends up calling. Firing on
+the true start beat lands within the match tolerance so every note scores as a
+hit, reproducing the full marker + highlight render load. Nothing about this is
+reachable without the query param.
+
+Two Playalong render costs scale with note density, so keep them in mind when
+touching that path: (1) marker overlay rendering is kept O(1) per key press by
+the memoized `PlayerMarker` child in `SheetMusicDisplay.tsx` — it relies on the
+marker `NoteHighlight` objects keeping stable identity across appends (the
+`markerEntries` split pushes them through directly rather than re-wrapping), so
+don't reintroduce per-render wrapper objects; (2) `usePlayalongMode`'s
+score-highlight recompute is driven off a **quantized** beat
+(`HIGHLIGHT_BEAT_QUANTUM`, well below the match tolerance) so the full-score loop
+runs a few times per beat instead of once per animation frame.
+
 ### PracticeScreen control areas
 
 - **Top-left** — back button, piece title (opens info modal on click)

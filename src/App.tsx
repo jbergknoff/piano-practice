@@ -23,6 +23,7 @@ import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
+import { isDemoMode } from "./demo/fake-bluetooth";
 import { useBluetooth } from "./hooks/use-bluetooth";
 import {
   type FileHistory,
@@ -48,6 +49,11 @@ function isMusicXmlFile(name: string): boolean {
 }
 
 export function App() {
+  // Desktop-only profiling harness (?demo=1). The fake Bluetooth adapter is
+  // installed in main.tsx before mount; here we just prefer Playalong so a
+  // profile can be captured with one Play click.
+  const demo = isDemoMode();
+
   // ── File / MIDI state ────────────────────────────────────────────────────
   const openFileInputRef = useRef<HTMLInputElement>(null);
   const [midiData, setMidiData] = useState<MidiData | null>(null);
@@ -160,6 +166,26 @@ export function App() {
       setMode((m) => (m === "wait" || m === "playalong" ? "listen" : m));
     }
   }, [bluetooth.status]);
+
+  // In demo mode, default to Playalong once a file is loaded and the fake piano
+  // is "connected". Done once per file (the ref is reset on musicxml change) so
+  // manually switching modes afterwards to compare still sticks.
+  const demoDefaultedRef = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: musicxml change resets the once-per-file flag
+  useEffect(() => {
+    demoDefaultedRef.current = false;
+  }, [musicxml]);
+  useEffect(() => {
+    if (
+      demo &&
+      musicxml &&
+      bluetooth.status === "connected" &&
+      !demoDefaultedRef.current
+    ) {
+      demoDefaultedRef.current = true;
+      setMode("playalong");
+    }
+  }, [demo, musicxml, bluetooth.status]);
 
   // Returns the mode from history, falling back to "listen" when the saved
   // mode requires a piano connection and none is currently connected.
@@ -428,6 +454,7 @@ export function App() {
         measureRange={measureRange}
         bluetooth={bluetooth}
         noteEventDispatchRef={noteEventDispatchRef}
+        demo={demo}
         mode={mode}
         tracks={tracks}
         selectedTracks={selectedTracks}

@@ -23,7 +23,7 @@ import type {
   Pitch,
   ResolvedLayout,
 } from "./sheet-music-types";
-import type { NoteHighlight } from "./highlights";
+import type { MarkerHighlight, NoteHighlight } from "./highlights";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
@@ -646,6 +646,64 @@ function midiNumberToPitch(noteNumber: number): Pitch {
   return { step: entry.step, alter: entry.alter, octave };
 }
 
+// A single player marker. Extracted and memoized so appending a marker (which
+// happens on every key press in Playalong) only renders the new circle instead
+// of recomputing geometry for the whole, ever-growing marker list. All props
+// other than `marker` are referentially stable across appends, and each marker
+// object keeps its identity once created, so memo skips every existing marker.
+const PlayerMarker = memo(function PlayerMarker({
+  marker,
+  score,
+  layout,
+  measureStartBeats,
+  visibleIndices,
+  inkColor,
+}: {
+  marker: MarkerHighlight;
+  score: ParsedScore;
+  layout: ResolvedLayout;
+  measureStartBeats: number[];
+  visibleIndices: number[];
+  inkColor: string;
+}) {
+  const { staffSpace, staffBottomYs } = layout;
+  const x = computeCursorX(marker.beat, score, layout, measureStartBeats);
+  if (x === null) {
+    return null;
+  }
+  const pitch = midiNumberToPitch(marker.noteNumber);
+  let bestStaff = visibleIndices[0];
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const i of visibleIndices) {
+    const middleY = staffBottomYs[i] - 2 * staffSpace;
+    const y = noteY(pitch, score.parts[i].clef, staffBottomYs[i], staffSpace);
+    const distance = Math.abs(y - middleY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestStaff = i;
+    }
+  }
+  const clef = score.parts[bestStaff].clef;
+  const y = noteY(pitch, clef, staffBottomYs[bestStaff], staffSpace);
+  const radius = staffSpace * 0.5;
+  const strokeWidth = Math.max(1, staffSpace * 0.12);
+  return (
+    <circle
+      cx={x}
+      cy={y}
+      r={radius}
+      fill={marker.color}
+      fillOpacity={0.85}
+      stroke={inkColor}
+      strokeWidth={strokeWidth}
+      strokeOpacity={0.85}
+      data-player-marker="true"
+      data-marker-pitch={marker.noteNumber}
+      data-marker-beat={marker.beat}
+    />
+  );
+});
+
 // Player markers: one per user key press. x comes from the press's beat, y is
 // computed against whichever visible staff places the pitch closest to its
 // middle line (so high notes naturally land on treble, low on bass).
@@ -657,68 +715,40 @@ const PlayerMarkerOverlay = memo(function PlayerMarkerOverlay({
   visibleParts,
   inkColor,
 }: {
-  markers: ReadonlyArray<{
-    noteNumber: number;
-    beat: number;
-    color: string;
-  }>;
+  markers: ReadonlyArray<MarkerHighlight>;
   score: ParsedScore;
   layout: ResolvedLayout;
   measureStartBeats: number[];
   visibleParts: Set<string> | undefined;
   inkColor: string;
 }) {
-  const { staffSpace, staffBottomYs } = layout;
-  const visibleIndices = score.parts
-    .map((part, i) => ({ part, i }))
-    .filter(({ part }) => (visibleParts ? visibleParts.has(part.id) : true))
-    .map(({ i }) => i);
+  // Stable across marker appends (deps only change on piece/visibility change),
+  // so the memoized PlayerMarker children below don't re-render on every press.
+  const visibleIndices = useMemo(
+    () =>
+      score.parts
+        .map((part, i) => ({ part, i }))
+        .filter(({ part }) => (visibleParts ? visibleParts.has(part.id) : true))
+        .map(({ i }) => i),
+    [score, visibleParts],
+  );
   if (visibleIndices.length === 0) {
     return null;
   }
-  const radius = staffSpace * 0.5;
-  const strokeWidth = Math.max(1, staffSpace * 0.12);
   return (
     <g style={{ pointerEvents: "none" }}>
-      {markers.map((marker, index) => {
-        const x = computeCursorX(marker.beat, score, layout, measureStartBeats);
-        if (x === null) {
-          return null;
-        }
-        const pitch = midiNumberToPitch(marker.noteNumber);
-        let bestStaff = visibleIndices[0];
-        let bestDistance = Number.POSITIVE_INFINITY;
-        for (const i of visibleIndices) {
-          const clef = score.parts[i].clef;
-          const middleY = staffBottomYs[i] - 2 * staffSpace;
-          const y = noteY(pitch, clef, staffBottomYs[i], staffSpace);
-          const distance = Math.abs(y - middleY);
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            bestStaff = i;
-          }
-        }
-        const clef = score.parts[bestStaff].clef;
-        const y = noteY(pitch, clef, staffBottomYs[bestStaff], staffSpace);
-        return (
+      {markers.map((marker, index) => (
+        <PlayerMarker
           // biome-ignore lint/suspicious/noArrayIndexKey: marker list is append-only during a session
-          <g key={index}>
-            <circle
-              cx={x}
-              cy={y}
-              r={radius}
-              fill={marker.color}
-              fillOpacity={0.85}
-              stroke={inkColor}
-              strokeWidth={strokeWidth}
-              strokeOpacity={0.85}
-              data-player-marker="true"
-              data-marker-pitch={marker.noteNumber}
-              data-marker-beat={marker.beat}
-            />
-          </g>
-        );
-      })}
+          key={index}
+          marker={marker}
+          score={score}
+          layout={layout}
+          measureStartBeats={measureStartBeats}
+          visibleIndices={visibleIndices}
+          inkColor={inkColor}
+        />
+      ))}
     </g>
   );
 });
@@ -942,17 +972,16 @@ export function SheetMusicDisplay({
   // overlays still skip work when nothing changed.
   const { scoreEntries, markerEntries } = useMemo(() => {
     const scores: Array<{ id: string; color: string }> = [];
-    const markers: Array<{ noteNumber: number; beat: number; color: string }> =
-      [];
+    // Push the marker highlight objects through directly (not fresh wrappers):
+    // their identity is stable across appends upstream, which lets the memoized
+    // PlayerMarker children skip re-rendering every existing marker on each
+    // new key press.
+    const markers: MarkerHighlight[] = [];
     for (const highlight of noteHighlights ?? []) {
       if (highlight.kind === "score") {
         scores.push({ id: highlight.id, color: highlight.color });
       } else {
-        markers.push({
-          noteNumber: highlight.noteNumber,
-          beat: highlight.beat,
-          color: highlight.color,
-        });
+        markers.push(highlight);
       }
     }
     return { scoreEntries: scores, markerEntries: markers };

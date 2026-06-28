@@ -472,6 +472,16 @@ export function usePlayalongMode(
     });
   }, []);
 
+  // Quantize the cursor beat that drives the score-highlight recompute so the
+  // full-score loop runs a few times per beat instead of once per animation
+  // frame (the smooth-scroll ticks bump currentBeat ~60×/sec). The grid is far
+  // below the match tolerance, so red/green timing is visually unchanged. This
+  // is the dominant per-frame cost on dense scores in Playalong.
+  const HIGHLIGHT_BEAT_QUANTUM = 0.1;
+  const highlightBeat =
+    Math.round(control.currentBeat / HIGHLIGHT_BEAT_QUANTUM) *
+    HIGHLIGHT_BEAT_QUANTUM;
+
   // Score-note highlights: green for hits, red for missed past notes (after
   // tolerance); during idle phase, fall back to "highlight currently sounding
   // notes". The player-marker entries are appended below (they live alongside
@@ -493,7 +503,7 @@ export function usePlayalongMode(
         : musicxml.totalBeats;
       // In complete phase, treat all selection notes as past.
       const effectiveBeat =
-        phase === "complete" ? Number.POSITIVE_INFINITY : control.currentBeat;
+        phase === "complete" ? Number.POSITIVE_INFINITY : highlightBeat;
       for (const note of musicxml.notes) {
         if (note.tieStop) {
           continue;
@@ -511,14 +521,14 @@ export function usePlayalongMode(
           scoreHighlights.push({ kind: "score", id, color: "#e53935" });
         }
       }
-    } else if (control.currentBeat > 0) {
+    } else if (highlightBeat > 0) {
       // Idle / counting-in: behave like listen mode — highlight sounding notes.
       // Skip when the cursor is at the very start so the first note doesn't
       // pre-highlight before playback begins.
       for (const note of musicxml.notes) {
         if (
-          note.startBeat <= control.currentBeat &&
-          control.currentBeat < note.startBeat + note.durationBeats
+          note.startBeat <= highlightBeat &&
+          highlightBeat < note.startBeat + note.durationBeats
         ) {
           scoreHighlights.push({
             kind: "score",
@@ -534,7 +544,7 @@ export function usePlayalongMode(
     control.musicxml,
     control.measureRange,
     control.measureStartBeats,
-    control.currentBeat,
+    highlightBeat,
     phase,
     hitNoteIds,
     playerMarkers,
