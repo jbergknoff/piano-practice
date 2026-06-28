@@ -1,7 +1,28 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { buildNoteMessage, parseMidiMessage } from "../../lib/midi/web-midi";
+import {
+  buildNoteMessage,
+  isThroughPort,
+  parseMidiMessage,
+} from "../../lib/midi/web-midi";
 import type { BtStatus } from "./use-bluetooth";
 import type { PianoTransport } from "./use-piano";
+
+/**
+ * Enumerate connectable MIDI input ports, excluding the virtual "MIDI Through"
+ * loopback. Used to decide whether the Web MIDI transport has anything to
+ * connect to (drives auto transport selection in `usePiano`).
+ */
+export async function listMidiInputs(): Promise<MIDIInput[]> {
+  if (typeof navigator === "undefined" || !navigator.requestMIDIAccess) {
+    return [];
+  }
+  try {
+    const access = await navigator.requestMIDIAccess({ sysex: false });
+    return [...access.inputs.values()].filter((i) => !isThroughPort(i.name));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Web MIDI input/output transport. Sees any MIDI device Chrome exposes —
@@ -16,7 +37,10 @@ export function useWebMidi(
   const [deviceName, setDeviceName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const onNoteEventRef = useRef(onNoteEvent);
-  const inputRef = useRef<MIDIInput | null>(null);
+  // Keep the access object alive for the lifetime of the connection so its
+  // ports keep delivering events.
+  const accessRef = useRef<MIDIAccess | null>(null);
+  const inputsRef = useRef<MIDIInput[]>([]);
   const outputRef = useRef<MIDIOutput | null>(null);
 
   useEffect(() => {
@@ -33,23 +57,37 @@ export function useWebMidi(
     }
   }
 
-  function attach(access: MIDIAccess, input: MIDIInput) {
-    input.onmidimessage = handleMidiMessage;
-    inputRef.current = input;
-    // Prefer an output port from the same device for sending notes (playalong).
-    const outputs = [...access.outputs.values()];
+  function attach(access: MIDIAccess, inputs: MIDIInput[]) {
+    accessRef.current = access;
+    // Listen on every real input so it doesn't matter which port is the piano
+    // (systems often expose extra ports, e.g. the ALSA "MIDI Through" loopback).
+    for (const input of inputs) {
+      input.onmidimessage = handleMidiMessage;
+    }
+    inputsRef.current = inputs;
+    // Prefer an output port from a connected input's device for note sends.
+    const outputs = [...access.outputs.values()].filter(
+      (o) => !isThroughPort(o.name),
+    );
+    const inputNames = new Set(inputs.map((i) => i.name));
     outputRef.current =
-      outputs.find((o) => o.name === input.name) ?? outputs[0] ?? null;
-    setDeviceName(input.name ?? "MIDI Device");
+      outputs.find((o) => inputNames.has(o.name)) ?? outputs[0] ?? null;
+    setDeviceName(inputs[0]?.name ?? "MIDI Device");
     setStatus("connected");
-    access.addEventListener("statechange", () => {
-      if (inputRef.current && inputRef.current.state === "disconnected") {
-        inputRef.current = null;
+    access.onstatechange = () => {
+      const stillConnected = inputsRef.current.some(
+        (i) => i.state === "connected",
+      );
+      if (inputsRef.current.length > 0 && !stillConnected) {
+        for (const input of inputsRef.current) {
+          input.onmidimessage = null;
+        }
+        inputsRef.current = [];
         outputRef.current = null;
         setStatus("idle");
         setDeviceName(null);
       }
-    });
+    };
   }
 
   async function connect() {
@@ -62,14 +100,15 @@ export function useWebMidi(
     setError(null);
     try {
       const access = await navigator.requestMIDIAccess({ sysex: false });
-      const inputs = [...access.inputs.values()];
+      const inputs = [...access.inputs.values()].filter(
+        (i) => !isThroughPort(i.name),
+      );
       if (inputs.length === 0) {
         setError("No MIDI input devices found");
         setStatus("error");
         return;
       }
-      // Use the first available input. Pianos typically expose a single port.
-      attach(access, inputs[0]);
+      attach(access, inputs);
     } catch (err) {
       setError(String(err));
       setStatus("error");

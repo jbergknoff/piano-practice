@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildNoteMessage, parseMidiMessage } from "./web-midi";
+import { buildNoteMessage, isThroughPort, parseMidiMessage } from "./web-midi";
 
 describe("parseMidiMessage", () => {
   it("parses a Note On as on", () => {
@@ -50,5 +50,24 @@ describe("buildNoteMessage", () => {
 
   it("masks note and velocity to 7 bits", () => {
     expect(buildNoteMessage(200, 200)).toEqual([0x90, 200 & 0x7f, 200 & 0x7f]);
+  });
+});
+
+describe("isThroughPort", () => {
+  it("flags the ALSA MIDI Through loopback port", () => {
+    expect(isThroughPort("Midi Through Port-0")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isThroughPort("MIDI THROUGH")).toBe(true);
+  });
+
+  it("does not flag a real device", () => {
+    expect(isThroughPort("FRP-NUVOLA MIDI Bluetooth")).toBe(false);
+  });
+
+  it("handles null/undefined names", () => {
+    expect(isThroughPort(null)).toBe(false);
+    expect(isThroughPort(undefined)).toBe(false);
   });
 });

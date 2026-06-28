@@ -22,6 +22,13 @@ export function parseMidiMessage(data: Uint8Array): ParsedNote[] {
   return [{ note, kind: isOn ? "on" : "off" }];
 }
 
+// ALSA (and some other systems) expose a virtual "MIDI Through" loopback port
+// that carries no real device input. It's enumerated alongside real pianos, so
+// skip it when deciding which ports to listen on / send to.
+export function isThroughPort(name: string | null | undefined): boolean {
+  return !!name && /through/i.test(name);
+}
+
 // Builds a 3-byte Note On (velocity > 0) or Note Off (velocity 0) message for
 // sending through a MIDIOutput port.
 export function buildNoteMessage(

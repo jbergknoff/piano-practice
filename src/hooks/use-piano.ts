@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { type BtStatus, useBluetooth } from "./use-bluetooth";
-import { useWebMidi } from "./use-web-midi";
+import { listMidiInputs, useWebMidi } from "./use-web-midi";
 
 export type PianoSource = "bluetooth" | "midi";
 
@@ -40,6 +40,12 @@ export interface PianoController {
   source: PianoSource | null;
   bluetoothSupported: boolean;
   midiSupported: boolean;
+  /**
+   * Connect, auto-selecting the transport: if a real Web MIDI input is already
+   * present (USB piano, or a BLE piano the OS has bridged to MIDI), use it;
+   * otherwise fall back to Web Bluetooth pairing. Avoids making the user pick.
+   */
+  connect: () => Promise<void>;
   connectBluetooth: () => Promise<void>;
   connectMidi: () => Promise<void>;
   sendNote: PianoTransport["sendNote"];
@@ -90,6 +96,15 @@ export function usePiano(
         ? webMidi
         : active;
 
+  const connectBluetooth = async () => {
+    setLastSource("bluetooth");
+    await bluetooth.connect();
+  };
+  const connectMidi = async () => {
+    setLastSource("midi");
+    await webMidi.connect();
+  };
+
   return {
     status: active.status,
     deviceName: active.deviceName,
@@ -97,14 +112,23 @@ export function usePiano(
     source,
     bluetoothSupported,
     midiSupported,
-    connectBluetooth: async () => {
-      setLastSource("bluetooth");
-      await bluetooth.connect();
+    connect: async () => {
+      // Prefer Web MIDI when a real input is already available — it covers USB
+      // pianos and OS-bridged BLE pianos and needs no pairing dialog. Otherwise
+      // fall back to Bluetooth pairing.
+      if (midiSupported && (await listMidiInputs()).length > 0) {
+        await connectMidi();
+        return;
+      }
+      if (bluetoothSupported) {
+        await connectBluetooth();
+        return;
+      }
+      // Neither path is available — surface Web MIDI's error.
+      await connectMidi();
     },
-    connectMidi: async () => {
-      setLastSource("midi");
-      await webMidi.connect();
-    },
+    connectBluetooth,
+    connectMidi,
     sendNote: sender.sendNote,
     sendNotesBatch: sender.sendNotesBatch,
   };
