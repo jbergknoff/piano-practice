@@ -1141,6 +1141,18 @@ export function SheetMusicDisplay({
       return;
     }
 
+    // Detect flex container to adjust the sticky left offset. In flex
+    // containers, position:sticky left:0 anchors at the content edge
+    // (x = paddingLeft), not at the scrollport outer edge (x = 0). Negating
+    // paddingLeft corrects the anchor point to the outer left edge.
+    const computedStyle = getComputedStyle(container);
+    const containerDisplay = computedStyle.display;
+    const containerPaddingLeft =
+      Number.parseFloat(computedStyle.paddingLeft) || 0;
+    const isFlex =
+      containerDisplay === "flex" || containerDisplay === "inline-flex";
+    setStickyLeft(isFlex ? -containerPaddingLeft : 0);
+
     let lastMeasureIndex = -1;
     const firstFifths = score.parts[0]?.measures[0]?.activeFifths ?? 0;
 
@@ -1197,6 +1209,10 @@ export function SheetMusicDisplay({
   // Sticky signature overlay: index of the measure at the visible left edge.
   // Updated by the scroll listener (rare, only when crossing a barline).
   const [stickyMeasureIndex, setStickyMeasureIndex] = useState(0);
+  // CSS sticky `left` offset. In a flex container, `left: 0` sticks at the
+  // content edge (x = paddingLeft), not the scrollport outer edge (x = 0).
+  // We negate the container's paddingLeft so the overlay always appears at x=0.
+  const [stickyLeft, setStickyLeft] = useState(0);
   const stickyOverlayRef = useRef<HTMLDivElement>(null);
   // Stable per-mount ID so multiple SheetMusicDisplay instances on the same
   // page (e.g. in tests) don't share the same SVG <linearGradient> id.
@@ -1458,7 +1474,7 @@ export function SheetMusicDisplay({
           data-testid="sticky-signature-overlay"
           style={{
             position: "sticky",
-            left: 0,
+            left: stickyLeft,
             width: stickyWidth,
             // Negative right margin cancels the horizontal space this element
             // takes in the inline-block flow so the score div that follows
