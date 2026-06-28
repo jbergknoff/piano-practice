@@ -10,7 +10,7 @@ import type { ScoreConversion } from "../../../lib/musicxml/musicxml-playback";
 import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../../debug-log";
-import type { useBluetooth } from "../../hooks/use-bluetooth";
+import type { PianoController } from "../../hooks/use-piano";
 import { useCustomRanges } from "../../hooks/use-custom-ranges";
 import {
   type BluetoothHandle,
@@ -59,10 +59,10 @@ interface PracticeScreenProps {
   bpm: number;
   baseBpm: number;
   measureRange: { from: number; to: number } | null;
-  bluetooth: ReturnType<typeof useBluetooth>;
+  piano: PianoController;
   /**
-   * App-owned ref that useBluetooth dispatches MIDI note events through.
-   * PracticeScreen writes the active mode's onNoteEvent into this ref.
+   * App-owned ref that the active input transport dispatches MIDI note events
+   * through. PracticeScreen writes the active mode's onNoteEvent into this ref.
    */
   noteEventDispatchRef: {
     current: ((noteNumber: number, kind: "on" | "off") => void) | null;
@@ -100,7 +100,7 @@ export function PracticeScreen({
   bpm,
   baseBpm,
   measureRange,
-  bluetooth,
+  piano,
   noteEventDispatchRef,
   mode,
   tracks,
@@ -249,17 +249,17 @@ export function PracticeScreen({
   }, []);
 
   // Stable BluetoothHandle that reads from a ref so identity stays constant.
-  const bluetoothRef = useRef(bluetooth);
-  bluetoothRef.current = bluetooth;
+  const pianoRef = useRef(piano);
+  pianoRef.current = piano;
   const bluetoothHandle = useMemo<BluetoothHandle>(
     () => ({
       get status() {
-        return bluetoothRef.current.status;
+        return pianoRef.current.status;
       },
       sendNote: (note, velocity, durationMs, channel) =>
-        bluetoothRef.current.sendNote(note, velocity, durationMs, channel),
+        pianoRef.current.sendNote(note, velocity, durationMs, channel),
       sendNotesBatch: (notes, channel) =>
-        bluetoothRef.current.sendNotesBatch(notes, channel),
+        pianoRef.current.sendNotesBatch(notes, channel),
     }),
     [],
   );
@@ -740,8 +740,7 @@ export function PracticeScreen({
             {(["listen", "wait", "playalong"] as const).map((m) => {
               const isActive = mode === m;
               const requiresPiano = m === "wait" || m === "playalong";
-              const disabled =
-                requiresPiano && bluetooth.status !== "connected";
+              const disabled = requiresPiano && piano.status !== "connected";
               const labels: Record<string, string> = {
                 listen: "Listen",
                 wait: "Wait",
@@ -806,7 +805,7 @@ export function PracticeScreen({
         <ConnectionBadge
           theme={theme}
           accent={accent}
-          bluetooth={bluetooth}
+          piano={piano}
           compact={true}
         />
         <button

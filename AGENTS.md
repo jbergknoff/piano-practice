@@ -18,11 +18,11 @@ Neither package imports app code — the app depends on the packages, not the ot
 App-internal code (under `lib/` and `src/`):
 
 - `lib/musicxml/` — the **playback-derivation layer**: `musicxml-playback.ts` (`musicXmlToConversion` + the `ScoreConversion`/`PlaybackNote`/`RepeatSection` types, `pitchToMidiNumber`, `getMusicXmlTempo`), `expand-repeats.ts`, `mxl.ts` (unzips `.mxl`). Imports the parser + notation types from `@jbergknoff/sheet-music-display`.
-- `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts`
+- `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts` (BLE MIDI packet parse/build), `web-midi.ts` (Web MIDI message parse/build)
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
-- `src/hooks/` — `use-bluetooth.ts`, `use-wake-lock.ts`, `use-file-history.ts`
+- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `use-wake-lock.ts`, `use-file-history.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts`, `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
 
@@ -61,7 +61,9 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `packages/midi-to-musicxml/src/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string (returns the string; the app derives the `ScoreConversion`) |
 | `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click, and tie arcs (`computeTieArcs` + `TieLayer`, see below). Injects the bundled SMuFL `@font-face` at module load; plain text uses the `textFontFamily` prop (the app passes its theme constant); highlight types live in the sibling `highlights.ts`, glyph codepoints in `glyphs.ts` |
 | `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
-| `src/hooks/use-bluetooth.ts` | BLE MIDI input; calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
+| `src/hooks/use-piano.ts` | Unified piano-connection controller: merges the two input transports (`useBluetooth` + `useWebMidi`) into one status/error/device view, exposes a smart `connect()` (auto-selects Web MIDI when a real input is present via `listMidiInputs()`, else Web Bluetooth — so the user never has to pick) plus `connectBluetooth`/`connectMidi` + `bluetoothSupported`/`midiSupported`, and routes `sendNote`/`sendNotesBatch` to whichever transport is connected. App calls this (not `useBluetooth` directly) and passes the result down as the `piano` prop |
+| `src/hooks/use-bluetooth.ts` | BLE MIDI input transport (Web Bluetooth); calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
+| `src/hooks/use-web-midi.ts` | Web MIDI input transport (`navigator.requestMIDIAccess`); same surface as `useBluetooth`. Listens on **every** real input port (filtering out the ALSA "MIDI Through" loopback via `isThroughPort`) so it doesn't matter which port is the piano. Sees USB pianos and, on Linux, BLE pianos that BlueZ bridges to ALSA (which Web Bluetooth can't reach once BlueZ's MIDI plugin claims the GATT service) |
 | `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
@@ -77,7 +79,7 @@ Every mode hook (`useWaitMode`, `usePlayalongMode`, `useListenMode`) consumes th
 
 Mode activation runs in a `useEffect([musicxml, mode])` inside `PracticeScreen`: the cleanup deactivates the previous mode (handle captured in the closure) and the setup activates the new one. Each hook also self-resets on `musicxml` change via its own internal effect. When the user clicks a mode button, `PracticeScreen.handleModeChange` first snaps the cursor to range start and pauses the player (matching pre-refactor behavior), then calls `onModeChange` so the mode-effect can fire. `useWaitMode.activate()` is the only one with non-trivial side effects — it snaps to its first wait point in the active range and installs a no-op `onPositionUpdate` on the player so any stray ticks don't move the cursor.
 
-The note-event routing chain breaks the construction cycle (`useBluetooth` needs a handler, mode hooks need `bluetooth.sendNote`) by indirection: App's `useBluetooth(dispatchNoteEvent)` reads from a `noteEventDispatchRef`; `PracticeScreen` writes `active.onNoteEvent` into that ref on every render via an effect.
+The note-event routing chain breaks the construction cycle (each transport needs a handler, mode hooks need `bluetooth.sendNote`) by indirection: App's `usePiano(dispatchNoteEvent)` passes the dispatcher to both transports, each of which reads from a `noteEventDispatchRef`; `PracticeScreen` writes `active.onNoteEvent` into that ref on every render via an effect. (The `ModeControl.bluetooth` handle is named for history; it is now fed by the unified `piano` controller and carries notes to whichever transport is connected.)
 
 ### Cursor and scroll system
 
@@ -170,7 +172,7 @@ When investigating a note-matching bug from a submitted log, the key fields are 
 Playwright specs live in `tests/integration/` and run via `make integration-test`. To exercise the wait/playalong/listen pipelines deterministically, two browser APIs are mocked in `tests/integration/mocks/`:
 
 - `audio-context.ts` — replaces `window.AudioContext` with one whose `currentTime` is driven by `window.__advanceAudioTime(seconds)`. `MidiPlayer` derives the cursor beat from `audioCtx.currentTime`, so this gives tests precise control over cursor advance without depending on real wall-clock time.
-- `bluetooth.ts` — installs a fake `navigator.bluetooth` whose `getDevices()` returns one device. The App's `useBluetooth` auto-reconnect flips status to `"connected"` on mount, enabling the Wait and Playalong mode buttons. `window.__sendBleMidi(bytes)` dispatches a raw BLE-MIDI packet through the captured `characteristicvaluechanged` listener, exercising the full `parseBLEMIDI` → dispatch pipeline.
+- `bluetooth.ts` — installs a fake `navigator.bluetooth` whose `getDevices()` returns one device. The App's `useBluetooth` auto-reconnect flips status to `"connected"` on mount, and the unified `usePiano` controller surfaces that as connected, enabling the Wait and Playalong mode buttons. `window.__sendBleMidi(bytes)` dispatches a raw BLE-MIDI packet through the captured `characteristicvaluechanged` listener, exercising the full `parseBLEMIDI` → dispatch pipeline.
 
 The helpers in `tests/integration/helpers.ts` (`installMocks`, `sendNoteOn`/`sendNoteOff`/`sendChordOn`/`sendChordOff`, `advanceAudioTime`, `waitForHighlightedNoteIds`) wrap these mocks. DOM assertions on highlighted notes rely on `data-color-id` attributes set by `NoteColorOverlay` in `SheetMusicDisplay.tsx`.
 
