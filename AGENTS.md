@@ -116,20 +116,25 @@ The result: the scroll normally follows the cursor, jump-cuts snap instantly, an
 
 `?demo=1` activates a desktop-only profiling harness for Playalong (the user
 practices on a phone where a performance profile can't be captured, and can't
-get Web Bluetooth working on their laptop). `src/demo/fake-bluetooth.ts` exposes
-`isDemoMode()` + `installFakeBluetooth()`; `main.tsx` installs the inert fake
-adapter before React mounts so `useBluetooth` auto-reconnects to `"connected"`
-(this is what gates Playalong) without hardware. It mirrors the integration-test
-mock in `tests/integration/mocks/bluetooth.ts` but stays separate (that one is a
-stringified init script in another browser context). In demo mode `App` defaults
-the mode to Playalong once a file is loaded, and `PracticeScreen` runs a
-`requestAnimationFrame` **feeder** (gated on `demo && playalong.phase ===
-"playing"`) that emits a synthetic note-on at each note's start beat — and a
-matching note-off after its duration — through the App-owned
-`noteEventDispatchRef`, the exact path real BLE input ends up calling. Firing on
-the true start beat lands within the match tolerance so every note scores as a
-hit, reproducing the full marker + highlight render load. Nothing about this is
-reachable without the query param.
+get Web Bluetooth working on their laptop). It is **fully self-contained in
+`src/demo/` — no production component knows about it**:
+
+- `src/demo/fake-bluetooth.ts` exposes `isDemoMode()` + `installFakeBluetooth()`
+  (+ optional `demoFocusRange()` from `?demo=1&from=X&to=Y`). `main.tsx` installs
+  the inert fake adapter before React mounts so `useBluetooth` auto-reconnects to
+  `"connected"` (this is what gates Playalong) without hardware. It mirrors the
+  integration-test mock in `tests/integration/mocks/bluetooth.ts` but stays
+  separate (that one is a stringified init script in another browser context).
+- `App` (the only wiring) defaults the mode to Playalong once a file is loaded
+  and renders `<DemoOverlay>` when `isDemoMode()`.
+- `src/demo/DemoOverlay.tsx` is a self-contained banner + **"Play notes"** toggle.
+  While active it sprays random note-on/off events (mid-keyboard pitches) through
+  the App-owned `noteEventDispatchRef` — the exact path real BLE input takes — so
+  with Playalong playing it reproduces the marker + highlight render load to
+  profile. It depends only on the dispatch ref; `PracticeScreen` carries **zero**
+  demo code.
+
+Nothing about this is reachable without the query param.
 
 **Playalong render cost lives in paint, not script.** A DevTools trace of a real
 session showed the dominant main-thread cost during playback is **PrePaint +

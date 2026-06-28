@@ -37,11 +37,12 @@ test("capture a Playalong CPU profile as a loadable artifact", async ({
   test.setTimeout(180_000);
 
   const cpuThrottle = Number(process.env.PERF_CPU_THROTTLE ?? "1");
-  const steps = Number(process.env.PERF_STEPS ?? "24");
-  // Default: the short clip for a fast CI artifact. PERF_FULL plays the whole
-  // piece (no focus range) so markers accumulate across hundreds of presses and
-  // the marker overlay's O(markers) reconcile shows up — pair it with
-  // PERF_STEPS and PERF_CPU_THROTTLE for a phone-like stress run.
+  const steps = Number(process.env.PERF_STEPS ?? "40");
+  // Default: the short clip for a fast CI artifact. PERF_FULL loads the whole
+  // piece so the static note tree is large (heavier PrePaint) — pair it with
+  // PERF_STEPS and PERF_CPU_THROTTLE for a phone-like stress run. The DemoOverlay
+  // sprays random notes on its own real-time interval, so longer PERF_STEPS also
+  // accumulates more markers.
   const full = Boolean(process.env.PERF_FULL);
   const fixture = full
     ? "rondo-alla-turca-full.mxl"
@@ -77,11 +78,15 @@ test("capture a Playalong CPU profile as a loadable artifact", async ({
   await client.send("Profiler.setSamplingInterval", { interval: 200 });
 
   await page.getByTitle("Play").click();
+  await page
+    .getByRole("button", { name: "Play notes", exact: true })
+    .click();
   await client.send("Profiler.start");
 
   // Advance the fake audio clock in small steps with short real-time waits, so
-  // position updates + the feeder's note-ons actually render on the main thread
-  // during the captured window (the profiler samples real time).
+  // cursor updates + the overlay's sprayed note events actually render on the
+  // main thread during the captured window (the profiler samples real time; the
+  // sprayer fires on its own real-time interval).
   for (let i = 0; i < steps; i++) {
     await advanceAudioTime(page, 0.5);
     await page.waitForTimeout(20);
@@ -130,6 +135,6 @@ test("capture a Playalong CPU profile as a loadable artifact", async ({
   // Sanity (non-flaky): the run rendered real work and produced a usable profile.
   expect(profile.samples.length).toBeGreaterThan(0);
   expect(busyMicros).toBeGreaterThan(0);
-  expect(markerCount).toBeGreaterThan(20);
+  expect(markerCount).toBeGreaterThan(5);
   expect(fs.statSync(profilePath).size).toBeGreaterThan(0);
 });

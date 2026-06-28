@@ -10,8 +10,6 @@ import type { ScoreConversion } from "../../../lib/musicxml/musicxml-playback";
 import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../../debug-log";
-import { DemoBadge } from "../../demo/DemoBadge";
-import { useDemoPlayalongFeeder } from "../../demo/use-demo-playalong-feeder";
 import type { useBluetooth } from "../../hooks/use-bluetooth";
 import { useCustomRanges } from "../../hooks/use-custom-ranges";
 import {
@@ -69,8 +67,6 @@ interface PracticeScreenProps {
   noteEventDispatchRef: {
     current: ((noteNumber: number, kind: "on" | "off") => void) | null;
   };
-  /** Desktop-only profiling harness (?demo=1): auto-feeds simulated key presses. */
-  demo: boolean;
   mode: "wait" | "playalong" | "listen";
   tracks: TrackInfo[];
   selectedTracks: number[];
@@ -106,7 +102,6 @@ export function PracticeScreen({
   measureRange,
   bluetooth,
   noteEventDispatchRef,
-  demo,
   mode,
   tracks,
   selectedTracks,
@@ -334,18 +329,6 @@ export function PracticeScreen({
     };
   }, [musicxml, mode]);
 
-  // Desktop-only profiling harness (?demo=1). Inert unless `demo` is true; all
-  // logic lives in src/demo so this production component stays clean.
-  useDemoPlayalongFeeder({
-    demo,
-    musicxml,
-    measureRange,
-    playalongPhase: playalong.phase,
-    bpm,
-    getLiveBeat,
-    noteEventDispatchRef,
-  });
-
   // Transport delegation -------------------------------------------------------
 
   const handlePlayPause = useCallback(() => {
@@ -548,9 +531,6 @@ export function PracticeScreen({
           zIndex: 1,
         }}
       />
-
-      {/* Demo-mode badge (dev profiling harness, ?demo=1) */}
-      {demo && <DemoBadge accent={accent} />}
 
       {/* TOP LEFT: back button + piece title */}
       {!playalongActive && (

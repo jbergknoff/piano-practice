@@ -23,6 +23,7 @@ import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
+import { DemoOverlay } from "./demo/DemoOverlay";
 import { demoFocusRange, isDemoMode } from "./demo/fake-bluetooth";
 import { useBluetooth } from "./hooks/use-bluetooth";
 import {
@@ -458,7 +459,6 @@ export function App() {
         measureRange={measureRange}
         bluetooth={bluetooth}
         noteEventDispatchRef={noteEventDispatchRef}
-        demo={demo}
         mode={mode}
         tracks={tracks}
         selectedTracks={selectedTracks}
@@ -479,6 +479,12 @@ export function App() {
         getDebugLog={getDebugLog}
         clearDebugLog={clearDebugLog}
       />
+      {demo && (
+        <DemoOverlay
+          noteEventDispatchRef={noteEventDispatchRef}
+          accent={accent}
+        />
+      )}
     </>
   );
 }
