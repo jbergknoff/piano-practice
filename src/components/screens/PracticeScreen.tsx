@@ -333,16 +333,31 @@ export function PracticeScreen({
   }, [musicxml, mode]);
 
   // Demo feeder ----------------------------------------------------------------
-  // Onset notes (skip tie-continuations) sorted by start beat, for the feeder.
+  // Onset notes (skip tie-continuations) within the active focus range, sorted
+  // by start beat, for the feeder. Confining to the range mirrors Playalong's
+  // selectionNotes and keeps a focused profiling run (which loops within the
+  // range) from dumping every earlier note in a single frame at start.
   const demoFeedNotes = useMemo(() => {
     if (!demo || !musicxml) {
       return [];
     }
+    const measureStartBeats = musicxml.measureStartBeats;
+    const startBeat = measureRange
+      ? (measureStartBeats[measureRange.from - 1] ?? 0)
+      : 0;
+    const endBeat = measureRange
+      ? (measureStartBeats[measureRange.to] ?? musicxml.totalBeats)
+      : musicxml.totalBeats;
     return musicxml.notes
-      .filter((n) => !n.tieStop)
+      .filter(
+        (n) =>
+          !n.tieStop &&
+          (n.graceMainBeat ?? n.startBeat) >= startBeat &&
+          (n.graceMainBeat ?? n.startBeat) < endBeat,
+      )
       .slice()
       .sort((a, b) => a.startBeat - b.startBeat);
-  }, [demo, musicxml]);
+  }, [demo, musicxml, measureRange]);
 
   // While a Playalong run is in flight in demo mode, emit a synthetic note-on at
   // each note's start beat (and a matching note-off after its duration) through

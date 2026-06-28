@@ -23,7 +23,7 @@ import { extractMusicXmlFromMxl } from "../lib/musicxml/mxl";
 import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
-import { isDemoMode } from "./demo/fake-bluetooth";
+import { demoFocusRange, isDemoMode } from "./demo/fake-bluetooth";
 import { useBluetooth } from "./hooks/use-bluetooth";
 import {
   type FileHistory,
@@ -184,6 +184,10 @@ export function App() {
     ) {
       demoDefaultedRef.current = true;
       setMode("playalong");
+      const range = demoFocusRange();
+      if (range) {
+        setMeasureRange(range);
+      }
     }
   }, [demo, musicxml, bluetooth.status]);
 
