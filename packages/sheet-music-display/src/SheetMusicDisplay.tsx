@@ -1450,11 +1450,14 @@ export function SheetMusicDisplay({
         {/*
           Static layer: the note tree (staves, ties, focus overlay/handles).
           Its content only changes on piece/layout/focus changes — never during
-          playback — so promoting it to its own compositor layer (will-change)
-          keeps scrolling a pure composite and, crucially, keeps the dynamic
-          overlay below from repainting it. Profiling showed PrePaint + full-
-          width Paint of this tree every frame was the dominant cost; the
-          score-colour and player-marker overlays now live in a separate layer.
+          playback. The score-colour + player-marker overlays live in a separate
+          <svg> below: because paint invalidation is per-SVG-root, changing the
+          overlay no longer invalidates and repaints this (huge, full-width)
+          tree. Profiling showed PrePaint + full-width Paint of this tree every
+          frame was the dominant cost; the split alone removes it. Do NOT add
+          will-change/transform here — promoting a 9920px SVG with thousands of
+          nodes to its own compositor layer makes per-frame Layerize cost
+          explode (~30ms/frame in profiling).
         */}
         <svg
           ref={svgRef}
@@ -1465,7 +1468,6 @@ export function SheetMusicDisplay({
             display: "block",
             fontFamily: GLYPH_FONT_FAMILY,
             fontSize: fontSize,
-            willChange: "transform",
           }}
           role="img"
           aria-label="Sheet music"
@@ -1565,10 +1567,11 @@ export function SheetMusicDisplay({
         {/*
           Dynamic layer: score-colour highlights + player markers, the only
           things that change during playback. Overlaid exactly on the static
-          SVG (identical size + coordinate space), pointer-events: none so
-          right-click/drag still hit the static layer, and promoted to its own
-          compositor layer so repainting it on every key press / cursor tick
-          does NOT touch the heavy static note tree.
+          SVG (identical size + coordinate space) as a separate SVG root, with
+          pointer-events: none so right-click/drag still hit the static layer.
+          Being its own SVG root means repainting it on every key press / cursor
+          tick re-records only this layer's display items, not the heavy static
+          note tree. (No will-change here either — same Layerize hazard.)
         */}
         <svg
           width={layout.totalWidth}
@@ -1583,7 +1586,6 @@ export function SheetMusicDisplay({
             pointerEvents: "none",
             fontFamily: GLYPH_FONT_FAMILY,
             fontSize: fontSize,
-            willChange: "transform",
           }}
         >
           <NoteColorOverlay infos={noteInfos} entries={scoreEntries} />

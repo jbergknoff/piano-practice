@@ -135,15 +135,18 @@ reachable without the query param.
 session showed the dominant main-thread cost during playback is **PrePaint +
 full-width Paint of the sheet SVG every frame** (the score-colour/marker overlays
 changing inside the one big SVG invalidated the whole note tree), dwarfing the JS
-work. So `SheetMusicDisplay` renders **two stacked SVG layers** inside the wrapper
+work. So `SheetMusicDisplay` renders **two stacked SVG roots** inside the wrapper
 div: a **static layer** (staves, ties, focus overlay/handles — changes only on
 piece/layout/focus) and a **dynamic overlay layer** (`NoteColorOverlay` +
-`PlayerMarkerOverlay`) overlaid exactly on top with `pointer-events: none`. Both
-carry `will-change: transform` so they are separate compositor layers: updating
-highlights/markers on each key press or cursor tick repaints only the small
-dynamic layer, and scrolling is a pure composite. Keep the two layers identical
+`PlayerMarkerOverlay`) overlaid exactly on top with `pointer-events: none`.
+Because paint invalidation is per-SVG-root, changing the overlay re-records only
+the overlay's display items, not the huge static note tree — which is what
+removed the per-frame PrePaint + full-width Paint. Keep the two layers identical
 in size/coordinate space so they stay aligned, and keep the overlay
-`pointer-events: none` so right-click/drag still reach the static layer. (An
+`pointer-events: none` so right-click/drag still reach the static layer. **Do not
+add `will-change: transform` to either SVG** — promoting a 9920px-wide SVG with
+thousands of nodes to a compositor layer made per-frame `Layerize` cost explode
+(~30ms/frame); the plain SVG-root split is what does the work. (An
 earlier round of JS micro-optimizations — marker memoization, quantized highlight
 recompute — was reverted after profiling showed scripting was not the
 bottleneck.)
