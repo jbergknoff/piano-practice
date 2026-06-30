@@ -139,6 +139,70 @@ test("playing the full first measure advances through every wait point", async (
   }
 });
 
+test("a key released after the completion modal appears is not stuck held into the next playthrough", async ({
+  page,
+}) => {
+  // Regression test: Note Off events arriving while the completion modal is
+  // shown used to be dropped entirely (the early `completionModalRef.current
+  // !== null` return skipped the held-notes bookkeeping for ALL events, not
+  // just chord matching). If the user finishes a playthrough still holding
+  // the final chord and only lets go after the modal pops up, that note's
+  // release is the kind of event that would have been dropped, leaving it
+  // "stuck" in heldNotesRef. On the next playthrough, a genuine fresh press
+  // of that same note is then misread as "already held" (no intervening Note
+  // Off was ever processed) and silently swallowed instead of completing the
+  // chord.
+  await loadFile(page, "c-major-melody.mid");
+  await waitForMockBluetoothConnected(page);
+  await switchToWaitMode(page);
+
+  // Focus measure 1 only, so a playthrough completes after just 4 notes.
+  await page.locator("svg[role='img']").click({ button: "right" });
+  await page.getByRole("button", { name: "Jump to measure…" }).click();
+  await page.locator('input[type="number"]').fill("1");
+  await page.getByRole("button", { name: "Go" }).click();
+
+  await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]); // E4
+
+  for (const note of [E4, C5, E5]) {
+    await sendNoteOn(page, note);
+    await sendNoteOff(page, note);
+    await page.waitForTimeout(120);
+  }
+
+  // Press B4 (the final note) but don't release it yet — completing the
+  // attempt opens the results modal while B4 is still physically held.
+  await sendNoteOn(page, B4);
+  await expect(page.getByText("Measure 1 complete")).toBeVisible({
+    timeout: 2_000,
+  });
+
+  // Release B4 only after the modal is up.
+  await sendNoteOff(page, B4);
+  await page.getByRole("button", { name: "Keep practicing" }).click();
+  await expect(page.getByText("Measure 1 complete")).not.toBeVisible({
+    timeout: 2_000,
+  });
+
+  // New playthrough: highlight is back on E4.
+  await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]);
+
+  for (const note of [E4, C5, E5]) {
+    await sendNoteOn(page, note);
+    await sendNoteOff(page, note);
+    await page.waitForTimeout(120);
+  }
+  await waitForHighlightedNoteIds(page, ["p0-m1-n3-v0"]); // B4 wait point
+
+  // Press B4 fresh. If it were still stuck as "held" from the previous
+  // playthrough, this Note On would be seen as a duplicate (no fresh press
+  // recorded), and the attempt would never complete.
+  await sendNoteOn(page, B4);
+  await expect(page.getByText("Measure 1 complete")).toBeVisible({
+    timeout: 2_000,
+  });
+});
+
 test("a note pressed 60ms after an advance is not debounced", async ({
   page,
 }) => {

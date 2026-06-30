@@ -450,6 +450,16 @@ export function useWaitMode(
       return;
     }
     if (completionModalRef.current !== null) {
+      // The modal blocks new chord matching, but a key release must still be
+      // tracked. Otherwise a chord released while the modal is up (e.g. the
+      // final chord of the piece, let go after it completes) never clears
+      // from heldNotesRef, and those notes read as already-held at the start
+      // of the next playthrough.
+      if (kind === "off") {
+        heldNotesRef.current.delete(noteNumber);
+        wrongHeldNotesRef.current.delete(noteNumber);
+        freshlyPressedNotesRef.current.delete(noteNumber);
+      }
       return;
     }
     const ctrl = controlRef.current;
