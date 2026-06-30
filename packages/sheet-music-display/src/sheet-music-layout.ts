@@ -114,6 +114,7 @@ export function resolveLayout(
     staffBottomYs,
     totalWidth,
     totalHeight,
+    ledgerMargin,
   };
 }
 

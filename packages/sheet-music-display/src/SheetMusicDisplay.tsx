@@ -1361,13 +1361,17 @@ export function SheetMusicDisplay({
     };
   }, []);
 
+  // Extend past the staff itself by ledgerMargin so the cursor, focus overlay,
+  // and drag handles cover notes (and their ledger lines) sitting above/below
+  // the grand staff, rather than stopping flush with the staff lines.
   const cursorY1 =
     layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[0] - 4 * layout.staffSpace
+      ? layout.staffBottomYs[0] - 4 * layout.staffSpace - layout.ledgerMargin
       : 0;
   const cursorY2 =
     layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
+      ? layout.staffBottomYs[layout.staffBottomYs.length - 1] +
+        layout.ledgerMargin
       : layout.totalHeight;
 
   // Width of the sticky signature overlay. The content portion holds the clef
