@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { type BtStatus, useBluetooth } from "./use-bluetooth";
-import { listMidiInputs, useWebMidi } from "./use-web-midi";
+import { hasMidiPermission, listMidiInputs, useWebMidi } from "./use-web-midi";
 
 export type PianoSource = "bluetooth" | "midi";
 
@@ -114,11 +114,19 @@ export function usePiano(
     midiSupported,
     connect: async () => {
       // Prefer Web MIDI when a real input is already available — it covers USB
-      // pianos and OS-bridged BLE pianos and needs no pairing dialog. Otherwise
-      // fall back to Bluetooth pairing.
-      if (midiSupported && (await listMidiInputs()).length > 0) {
-        await connectMidi();
-        return;
+      // pianos and OS-bridged BLE pianos and needs no pairing dialog. Only
+      // probe for it when MIDI permission is already granted, so the probe
+      // resolves instantly with no permission prompt: requesting MIDI access
+      // for the first time pops a permission dialog, and on a phone (with no
+      // MIDI device to find anyway) that dialog can consume the click's user
+      // gesture, leaving the Bluetooth fallback below to fail with a "missing
+      // user gesture" error instead of opening the device picker.
+      if (midiSupported && (await hasMidiPermission())) {
+        const inputs = await listMidiInputs();
+        if (inputs.length > 0) {
+          await connectMidi();
+          return;
+        }
       }
       if (bluetoothSupported) {
         await connectBluetooth();
