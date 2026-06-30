@@ -87,6 +87,11 @@ const STAFF_LINE_OPACITY = 0.55;
 // head; grace heads scale this down further by their own grace scale.
 const NOTEHEAD_HALF_WIDTH_FACTOR = 0.55;
 
+// Width of the invisible pointer hit-area for a focus-range drag handle,
+// centered on the handle's pill. Wider than the visible pill (12px) so the
+// handle is easy to grab on a touchscreen without needing pixel precision.
+const HANDLE_HIT_WIDTH = 44;
+
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
 interface BeamGroupData {
@@ -1722,8 +1727,8 @@ export function SheetMusicDisplay({
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: focusX1 - 14,
-                width: 28,
+                left: focusX1 - HANDLE_HIT_WIDTH / 2,
+                width: HANDLE_HIT_WIDTH,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
                 touchAction: "none",
@@ -1736,14 +1741,17 @@ export function SheetMusicDisplay({
               }
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             />
             <div
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: focusX2 - 14,
-                width: 28,
+                left: focusX2 - HANDLE_HIT_WIDTH / 2,
+                width: HANDLE_HIT_WIDTH,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
                 touchAction: "none",
@@ -1756,7 +1764,10 @@ export function SheetMusicDisplay({
               }
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             />
           </>
         )}
