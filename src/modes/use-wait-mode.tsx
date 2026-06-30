@@ -339,6 +339,19 @@ export function useWaitMode(
   const wrongNoteCountRef = useRef(0);
   const attemptStartTimeRef = useRef<number | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
+  // The `measureRange` value that `pointIndex`/the live attempt state was last
+  // reset for. `applyRangeReset` below is idempotent against this: it only
+  // resets once per actual range change, however many times (or however late)
+  // it's called. This guards against a real race — `useEffect`s in
+  // Preact/React flush asynchronously, so a note arriving (via the BLE/MIDI
+  // listener, which fires outside React's render cycle) in the gap between a
+  // range change committing and its effect actually running would otherwise
+  // be judged against the stale pre-change wait point, and the effect's later
+  // flush would then silently overwrite whatever genuine progress that note
+  // produced. Calling `applyRangeReset` synchronously from `onNoteEvent`
+  // itself (in addition to the effect, for the cursor-snap side effect when
+  // no note arrives) closes that gap entirely.
+  const appliedRangeRef = useRef<{ from: number; to: number } | null>(null);
 
   // Mirror live control values to refs so the stable callbacks below can read them.
   const controlRef = useRef(control);
@@ -382,6 +395,7 @@ export function useWaitMode(
     activeRef.current = false;
     setPointIndex(0);
     pointIndexRef.current = 0;
+    appliedRangeRef.current = controlRef.current.measureRange;
     setCompletionModal(null);
     resetAttempt();
     if (wrongNoteTimerRef.current !== null) {
@@ -390,15 +404,21 @@ export function useWaitMode(
     }
   }, [control.musicxml]);
 
-  // When the range changes while wait mode is active, restart from range start.
-  useEffect(() => {
-    if (!activeRef.current) {
+  // Restart from range start when the active range actually changes. Guarded
+  // by `appliedRangeRef` so it is safe to call from both the effect below
+  // (which only covers the "no note arrives" case — see `onNoteEvent`, which
+  // calls this synchronously first) and to call more than once for the same
+  // range without clobbering progress already made under that range.
+  const applyRangeReset = useCallback(() => {
+    const ctrl = controlRef.current;
+    const range = ctrl.measureRange;
+    if (appliedRangeRef.current === range) {
       return;
     }
-    const ctrl = controlRef.current;
+    appliedRangeRef.current = range;
     const measureStartBeats = ctrl.measureStartBeats;
     const points = waitPointsRef.current;
-    const { first } = rangeBounds(points, control.measureRange);
+    const { first } = rangeBounds(points, range);
     setPointIndex(first);
     pointIndexRef.current = first;
     resetAttempt();
@@ -409,12 +429,22 @@ export function useWaitMode(
     if (points.length > 0 && first < points.length) {
       targetBeat = waitPointCursorBeat(points[first], measureStartBeats);
     } else {
-      const range = control.measureRange;
       targetBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
     }
     ctrl.setCursor(targetBeat, "jump");
     ctrl.player.seek(targetBeat);
-  }, [control.measureRange, resetAttempt]);
+  }, [resetAttempt]);
+
+  // When the range changes while wait mode is active, restart from range
+  // start. This effect alone is not enough to be race-free — see
+  // `applyRangeReset`'s call inside `onNoteEvent` for why.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: control.measureRange is the trigger; applyRangeReset reads the live value via controlRef
+  useEffect(() => {
+    if (!activeRef.current) {
+      return;
+    }
+    applyRangeReset();
+  }, [control.measureRange, applyRangeReset]);
 
   const computedHighlights = useMemo<ReadonlyArray<NoteHighlight>>(() => {
     if (!active || !control.musicxml || waitPoints.length === 0) {
@@ -445,316 +475,324 @@ export function useWaitMode(
   const noteHighlights = useStableHighlights(computedHighlights);
 
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
-  const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
-    if (!activeRef.current || waitPointsRef.current.length === 0) {
-      return;
-    }
-    if (completionModalRef.current !== null) {
-      // The modal blocks new chord matching, but a key release must still be
-      // tracked. Otherwise a chord released while the modal is up (e.g. the
-      // final chord of the piece, let go after it completes) never clears
-      // from heldNotesRef, and those notes read as already-held at the start
-      // of the next playthrough.
-      if (kind === "off") {
-        heldNotesRef.current.delete(noteNumber);
+  const onNoteEvent = useCallback(
+    (noteNumber: number, kind: "on" | "off") => {
+      if (!activeRef.current || waitPointsRef.current.length === 0) {
+        return;
+      }
+      // Apply any pending range-change reset before judging this note — see
+      // `applyRangeReset`'s comment for why this can't wait for the effect.
+      applyRangeReset();
+      if (completionModalRef.current !== null) {
+        // The modal blocks new chord matching, but a key release must still be
+        // tracked. Otherwise a chord released while the modal is up (e.g. the
+        // final chord of the piece, let go after it completes) never clears
+        // from heldNotesRef, and those notes read as already-held at the start
+        // of the next playthrough.
+        if (kind === "off") {
+          heldNotesRef.current.delete(noteNumber);
+          wrongHeldNotesRef.current.delete(noteNumber);
+          freshlyPressedNotesRef.current.delete(noteNumber);
+        }
+        return;
+      }
+      const ctrl = controlRef.current;
+      const sensitivityMs = settingsRef.current.noteSensitivityMilliseconds;
+
+      const held = heldNotesRef.current;
+      const now = Date.now();
+      const msSinceAdvance = now - lastAdvanceTimeRef.current;
+
+      // Whether this key was already physically down before this event. A Note On
+      // for an already-held key is a duplicate event (no intervening Note Off),
+      // not a fresh key press — see the wrong-note branch below.
+      const alreadyHeld = kind === "on" && held.has(noteNumber);
+
+      if (kind === "on") {
+        held.add(noteNumber);
+        // A genuine fresh attack (the key was not already down). Duplicate Note
+        // Ons for an already-held key are not fresh presses, so they never make a
+        // held-over note count toward a repeated chord.
+        if (!alreadyHeld) {
+          freshlyPressedNotesRef.current.add(noteNumber);
+        }
+        if (attemptStartTimeRef.current === null) {
+          attemptStartTimeRef.current = now;
+        }
+      } else {
+        held.delete(noteNumber);
         wrongHeldNotesRef.current.delete(noteNumber);
         freshlyPressedNotesRef.current.delete(noteNumber);
+        const points = waitPointsRef.current;
+        const idx = pointIndexRef.current;
+        const { end } = rangeBounds(points, ctrl.measureRange);
+        const wp = idx < end ? points[idx] : null;
+        const offBeat = wp?.beat ?? -1;
+        ctrl.appendToDebugLog({
+          mode: "wait",
+          t: now,
+          note: noteNumber,
+          kind: "off",
+          pointIndex: idx,
+          measure: wp?.measure ?? -1,
+          beat: offBeat,
+          expected: wp ? [...wp.noteNumbers, ...wp.tiedNoteNumbers] : [],
+          fresh: [...freshlyPressedNotesRef.current],
+          held: [...held],
+          msSinceAdvance,
+          outcome: "off",
+        });
+        return;
       }
-      return;
-    }
-    const ctrl = controlRef.current;
-    const sensitivityMs = settingsRef.current.noteSensitivityMilliseconds;
 
-    const held = heldNotesRef.current;
-    const now = Date.now();
-    const msSinceAdvance = now - lastAdvanceTimeRef.current;
-
-    // Whether this key was already physically down before this event. A Note On
-    // for an already-held key is a duplicate event (no intervening Note Off),
-    // not a fresh key press — see the wrong-note branch below.
-    const alreadyHeld = kind === "on" && held.has(noteNumber);
-
-    if (kind === "on") {
-      held.add(noteNumber);
-      // A genuine fresh attack (the key was not already down). Duplicate Note
-      // Ons for an already-held key are not fresh presses, so they never make a
-      // held-over note count toward a repeated chord.
-      if (!alreadyHeld) {
-        freshlyPressedNotesRef.current.add(noteNumber);
-      }
-      if (attemptStartTimeRef.current === null) {
-        attemptStartTimeRef.current = now;
-      }
-    } else {
-      held.delete(noteNumber);
-      wrongHeldNotesRef.current.delete(noteNumber);
-      freshlyPressedNotesRef.current.delete(noteNumber);
       const points = waitPointsRef.current;
       const idx = pointIndexRef.current;
-      const { end } = rangeBounds(points, ctrl.measureRange);
-      const wp = idx < end ? points[idx] : null;
-      const offBeat = wp?.beat ?? -1;
-      ctrl.appendToDebugLog({
+      const { first, end } = rangeBounds(points, ctrl.measureRange);
+
+      if (idx >= end) {
+        return;
+      }
+
+      const wp = points[idx];
+      const expected = wp.noteNumbers;
+      // Tied notes must still be sounding for the chord to be complete, but a
+      // still-held one needs no fresh press. Re-pressing one (after letting it go)
+      // is allowed, so it counts as an accepted note alongside the required ones.
+      const tied = wp.tiedNoteNumbers;
+      const beat = wp.beat;
+      const measure = wp.measure;
+      const heldSnapshot = [...held];
+      // Log the full requirement (fresh-attack notes plus tied-in held notes) so a
+      // chord that won't advance because a released tie is missing is diagnosable.
+      const expectedSnapshot = [...expected, ...tied];
+      const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
         mode: "wait",
         t: now,
         note: noteNumber,
-        kind: "off",
+        kind: "on",
         pointIndex: idx,
-        measure: wp?.measure ?? -1,
-        beat: offBeat,
-        expected: wp ? [...wp.noteNumbers, ...wp.tiedNoteNumbers] : [],
+        measure,
+        beat,
+        expected: expectedSnapshot,
         fresh: [...freshlyPressedNotesRef.current],
-        held: [...held],
+        held: heldSnapshot,
         msSinceAdvance,
-        outcome: "off",
-      });
-      return;
-    }
+      };
 
-    const points = waitPointsRef.current;
-    const idx = pointIndexRef.current;
-    const { first, end } = rangeBounds(points, ctrl.measureRange);
-
-    if (idx >= end) {
-      return;
-    }
-
-    const wp = points[idx];
-    const expected = wp.noteNumbers;
-    // Tied notes must still be sounding for the chord to be complete, but a
-    // still-held one needs no fresh press. Re-pressing one (after letting it go)
-    // is allowed, so it counts as an accepted note alongside the required ones.
-    const tied = wp.tiedNoteNumbers;
-    const beat = wp.beat;
-    const measure = wp.measure;
-    const heldSnapshot = [...held];
-    // Log the full requirement (fresh-attack notes plus tied-in held notes) so a
-    // chord that won't advance because a released tie is missing is diagnosable.
-    const expectedSnapshot = [...expected, ...tied];
-    const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
-      mode: "wait",
-      t: now,
-      note: noteNumber,
-      kind: "on",
-      pointIndex: idx,
-      measure,
-      beat,
-      expected: expectedSnapshot,
-      fresh: [...freshlyPressedNotesRef.current],
-      held: heldSnapshot,
-      msSinceAdvance,
-    };
-
-    if (!expected.has(noteNumber) && !tied.has(noteNumber)) {
-      // Slashed grace notes attached to this wait point are optional: playing
-      // them is permitted and carries no penalty, but they are not required.
-      if (wp.optionalNoteNumbers.has(noteNumber)) {
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
-        return;
-      }
-      // When at a non-slashed grace wait point, notes belonging to the next
-      // wait point are "anticipated" — the player naturally presses grace and
-      // main-chord keys in one physical gesture and must not be penalised for
-      // it. If the grace chord is already complete (e.g. the grace note was
-      // debounced on an earlier tick and sits in fresh), also advance now so
-      // both wait points resolve in a single gesture.
-      if (wp.isGrace && !alreadyHeld) {
-        const anticipationIdx = idx + 1;
-        if (anticipationIdx < end) {
-          const anticipatedWp = points[anticipationIdx];
-          if (
-            anticipatedWp.noteNumbers.has(noteNumber) ||
-            anticipatedWp.optionalNoteNumbers.has(noteNumber) ||
-            anticipatedWp.tiedNoteNumbers.has(noteNumber)
-          ) {
-            const currentFresh = freshlyPressedNotesRef.current;
-            const graceComplete =
-              [...expected].every((n) => held.has(n) && currentFresh.has(n)) &&
-              [...tied].every((n) => held.has(n)) &&
-              wrongHeldNotesRef.current.size === 0;
-            if (graceComplete) {
-              lastAdvanceTimeRef.current = now;
-              const savedFresh = new Set(currentFresh);
-              freshlyPressedNotesRef.current.clear();
-              for (const nextNoteNumber of anticipatedWp.noteNumbers) {
-                if (savedFresh.has(nextNoteNumber)) {
-                  freshlyPressedNotesRef.current.add(nextNoteNumber);
+      if (!expected.has(noteNumber) && !tied.has(noteNumber)) {
+        // Slashed grace notes attached to this wait point are optional: playing
+        // them is permitted and carries no penalty, but they are not required.
+        if (wp.optionalNoteNumbers.has(noteNumber)) {
+          ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
+          return;
+        }
+        // When at a non-slashed grace wait point, notes belonging to the next
+        // wait point are "anticipated" — the player naturally presses grace and
+        // main-chord keys in one physical gesture and must not be penalised for
+        // it. If the grace chord is already complete (e.g. the grace note was
+        // debounced on an earlier tick and sits in fresh), also advance now so
+        // both wait points resolve in a single gesture.
+        if (wp.isGrace && !alreadyHeld) {
+          const anticipationIdx = idx + 1;
+          if (anticipationIdx < end) {
+            const anticipatedWp = points[anticipationIdx];
+            if (
+              anticipatedWp.noteNumbers.has(noteNumber) ||
+              anticipatedWp.optionalNoteNumbers.has(noteNumber) ||
+              anticipatedWp.tiedNoteNumbers.has(noteNumber)
+            ) {
+              const currentFresh = freshlyPressedNotesRef.current;
+              const graceComplete =
+                [...expected].every(
+                  (n) => held.has(n) && currentFresh.has(n),
+                ) &&
+                [...tied].every((n) => held.has(n)) &&
+                wrongHeldNotesRef.current.size === 0;
+              if (graceComplete) {
+                lastAdvanceTimeRef.current = now;
+                const savedFresh = new Set(currentFresh);
+                freshlyPressedNotesRef.current.clear();
+                for (const nextNoteNumber of anticipatedWp.noteNumbers) {
+                  if (savedFresh.has(nextNoteNumber)) {
+                    freshlyPressedNotesRef.current.add(nextNoteNumber);
+                  }
                 }
-              }
-              if (anticipationIdx >= end) {
-                const startTime = attemptStartTimeRef.current;
-                if (startTime !== null) {
-                  recordCompletion({
-                    wrongNotes: wrongNoteCountRef.current,
-                    elapsedMs: now - startTime,
-                    totalPoints: end - first,
-                  });
+                if (anticipationIdx >= end) {
+                  const startTime = attemptStartTimeRef.current;
+                  if (startTime !== null) {
+                    recordCompletion({
+                      wrongNotes: wrongNoteCountRef.current,
+                      elapsedMs: now - startTime,
+                      totalPoints: end - first,
+                    });
+                  }
+                  wrongNoteCountRef.current = 0;
+                  attemptStartTimeRef.current = null;
+                  pointIndexRef.current = first;
+                  setPointIndex(first);
+                  const targetBeat = waitPointCursorBeat(
+                    points[first],
+                    ctrl.measureStartBeats,
+                  );
+                  ctrl.setCursor(targetBeat, "jump");
+                  ctrl.player.seek(targetBeat);
+                } else {
+                  pointIndexRef.current = anticipationIdx;
+                  setPointIndex(anticipationIdx);
+                  const targetBeat = waitPointCursorBeat(
+                    anticipatedWp,
+                    ctrl.measureStartBeats,
+                  );
+                  ctrl.setCursor(targetBeat, "jump");
+                  ctrl.player.seek(targetBeat);
                 }
-                wrongNoteCountRef.current = 0;
-                attemptStartTimeRef.current = null;
-                pointIndexRef.current = first;
-                setPointIndex(first);
-                const targetBeat = waitPointCursorBeat(
-                  points[first],
-                  ctrl.measureStartBeats,
-                );
-                ctrl.setCursor(targetBeat, "jump");
-                ctrl.player.seek(targetBeat);
+                ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
               } else {
-                pointIndexRef.current = anticipationIdx;
-                setPointIndex(anticipationIdx);
-                const targetBeat = waitPointCursorBeat(
-                  anticipatedWp,
-                  ctrl.measureStartBeats,
-                );
-                ctrl.setCursor(targetBeat, "jump");
-                ctrl.player.seek(targetBeat);
+                ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
               }
-              ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
-            } else {
-              ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
+              return;
             }
-            return;
           }
         }
-      }
-      // A Note On for a key that was already held is a duplicate event, not a
-      // fresh wrong key press: some instruments re-send Note On for
-      // sustained/pedalled notes, and the tail of a rolled chord re-articulates
-      // tones that are still down. Such a note must NOT enter wrongHeldNotesRef
-      // — otherwise an upper-chord tone the user is holding across consecutive
-      // wait points would block the next advance even though no new wrong key
-      // was ever pressed. (You physically cannot press an already-down key, so
-      // a fresh wrong press always arrives as a Note On while NOT already held.)
-      if (alreadyHeld) {
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "duplicate" });
+        // A Note On for a key that was already held is a duplicate event, not a
+        // fresh wrong key press: some instruments re-send Note On for
+        // sustained/pedalled notes, and the tail of a rolled chord re-articulates
+        // tones that are still down. Such a note must NOT enter wrongHeldNotesRef
+        // — otherwise an upper-chord tone the user is holding across consecutive
+        // wait points would block the next advance even though no new wrong key
+        // was ever pressed. (You physically cannot press an already-down key, so
+        // a fresh wrong press always arrives as a Note On while NOT already held.)
+        if (alreadyHeld) {
+          ctrl.appendToDebugLog({ ...debugBase, outcome: "duplicate" });
+          return;
+        }
+        // Any non-expected note the user is holding blocks the advance (see the
+        // wrongHeldNotesRef check below) — this is what makes mashing fail. We
+        // record it even inside the grace window, because otherwise a wrong key
+        // mashed within `sensitivityMs` of the previous advance would be
+        // forgiven and the correct key alongside it would slide straight past.
+        // The grace window only suppresses the *audible* wrong-note feedback, so
+        // a near-simultaneous fumble around a transition isn't punished twice.
+        wrongHeldNotesRef.current.add(noteNumber);
+        if (msSinceAdvance < sensitivityMs) {
+          ctrl.appendToDebugLog({ ...debugBase, outcome: "grace" });
+          return;
+        }
+        wrongNoteCountRef.current += 1;
+        // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
+        ctrl.bluetooth.sendNote(42, 55, 80, 9);
+        if (wrongNoteTimerRef.current !== null) {
+          clearTimeout(wrongNoteTimerRef.current);
+        }
+        wrongNoteTimerRef.current = setTimeout(() => {
+          wrongNoteTimerRef.current = null;
+        }, 600);
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "wrong" });
         return;
       }
-      // Any non-expected note the user is holding blocks the advance (see the
-      // wrongHeldNotesRef check below) — this is what makes mashing fail. We
-      // record it even inside the grace window, because otherwise a wrong key
-      // mashed within `sensitivityMs` of the previous advance would be
-      // forgiven and the correct key alongside it would slide straight past.
-      // The grace window only suppresses the *audible* wrong-note feedback, so
-      // a near-simultaneous fumble around a transition isn't punished twice.
-      wrongHeldNotesRef.current.add(noteNumber);
-      if (msSinceAdvance < sensitivityMs) {
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "grace" });
-        return;
-      }
-      wrongNoteCountRef.current += 1;
-      // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
-      ctrl.bluetooth.sendNote(42, 55, 80, 9);
-      if (wrongNoteTimerRef.current !== null) {
-        clearTimeout(wrongNoteTimerRef.current);
-      }
-      wrongNoteTimerRef.current = setTimeout(() => {
-        wrongNoteTimerRef.current = null;
-      }, 600);
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "wrong" });
-      return;
-    }
 
-    // Check chord completion before debounce: if every expected note has been
-    // freshly attacked (and any slashed grace that pre-fills a required note
-    // counts, since a folded grace press carries no intervening advance), the
-    // chord is unambiguously complete and should advance immediately even
-    // within the debounce window. Only debounce when the chord is still
-    // incomplete, to prevent a leftover key from the previous chord from
-    // accidentally triggering a premature advance. Required notes must be
-    // *freshly pressed* — a key merely held over from the previous chord does
-    // not satisfy a repeated note/chord, so each occurrence must be re-struck.
-    // Tied notes are the exception: they only need to remain held (or be
-    // pressed again).
-    const fresh = freshlyPressedNotesRef.current;
-    const chordComplete =
-      [...expected].every((n) => held.has(n) && fresh.has(n)) &&
-      [...tied].every((n) => held.has(n));
-
-    if (!chordComplete && msSinceAdvance < 50) {
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });
-      return;
-    }
-
-    // Even with every expected note down, refuse to advance while the user is
-    // also holding wrong notes. Without this, mashing a handful of keys that
-    // happens to include the right ones would slide past the wait point. The
-    // user must release the extra keys (the chord then advances on the next
-    // press of the expected notes).
-    if (chordComplete && wrongHeldNotesRef.current.size > 0) {
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "extra" });
-      return;
-    }
-
-    if (chordComplete) {
-      lastAdvanceTimeRef.current = now;
-      const nextIdx = idx + 1;
-      // When advancing from a non-slashed grace wait point, capture the notes
-      // pressed in this gesture before clearing so they can be retroactively
-      // credited as fresh presses for the next wait point. Players press grace
-      // and main-chord keys in one gesture; requiring a re-press of
-      // already-held main-chord notes after the grace advances is awkward.
-      const graceAnticipatedFresh =
-        wp.isGrace && nextIdx < end
-          ? new Set(freshlyPressedNotesRef.current)
-          : null;
-      // Each wait point is judged on its own fresh presses; reset the tally so
-      // notes still held into the next chord must be struck again to count.
-      freshlyPressedNotesRef.current.clear();
-      if (graceAnticipatedFresh !== null) {
-        const nextWp = points[nextIdx];
-        for (const nextNoteNumber of nextWp.noteNumbers) {
-          if (graceAnticipatedFresh.has(nextNoteNumber)) {
-            freshlyPressedNotesRef.current.add(nextNoteNumber);
-          }
-        }
-      }
-      if (nextIdx >= end) {
-        // Attempt complete — compute score, persist, show modal.
-        const startTime = attemptStartTimeRef.current;
-        if (startTime !== null) {
-          recordCompletion({
-            wrongNotes: wrongNoteCountRef.current,
-            elapsedMs: now - startTime,
-            totalPoints: end - first,
-          });
-        }
-        wrongNoteCountRef.current = 0;
-        attemptStartTimeRef.current = null;
-        pointIndexRef.current = first;
-        setPointIndex(first);
-        const targetBeat = waitPointCursorBeat(
-          points[first],
-          ctrl.measureStartBeats,
-        );
-        ctrl.setCursor(targetBeat, "jump");
-        ctrl.player.seek(targetBeat);
-      } else {
-        pointIndexRef.current = nextIdx;
-        setPointIndex(nextIdx);
-        const targetBeat = waitPointCursorBeat(
-          points[nextIdx],
-          ctrl.measureStartBeats,
-        );
-        ctrl.setCursor(targetBeat, "jump");
-        ctrl.player.seek(targetBeat);
-      }
-      ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
-    } else {
-      // Distinguish "not all notes down yet" (incomplete) from "every note is
-      // down but a required one was held over rather than re-struck" (stale).
-      // The latter is the signature of a repeated note/chord that needs a fresh
-      // attack — without its own outcome it would read as a baffling INCOMPLETE
-      // with expected ⊆ held.
-      const heldComplete =
-        [...expected].every((n) => held.has(n)) &&
+      // Check chord completion before debounce: if every expected note has been
+      // freshly attacked (and any slashed grace that pre-fills a required note
+      // counts, since a folded grace press carries no intervening advance), the
+      // chord is unambiguously complete and should advance immediately even
+      // within the debounce window. Only debounce when the chord is still
+      // incomplete, to prevent a leftover key from the previous chord from
+      // accidentally triggering a premature advance. Required notes must be
+      // *freshly pressed* — a key merely held over from the previous chord does
+      // not satisfy a repeated note/chord, so each occurrence must be re-struck.
+      // Tied notes are the exception: they only need to remain held (or be
+      // pressed again).
+      const fresh = freshlyPressedNotesRef.current;
+      const chordComplete =
+        [...expected].every((n) => held.has(n) && fresh.has(n)) &&
         [...tied].every((n) => held.has(n));
-      ctrl.appendToDebugLog({
-        ...debugBase,
-        outcome: heldComplete ? "stale" : "incomplete",
-      });
-    }
-  }, []);
+
+      if (!chordComplete && msSinceAdvance < 50) {
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });
+        return;
+      }
+
+      // Even with every expected note down, refuse to advance while the user is
+      // also holding wrong notes. Without this, mashing a handful of keys that
+      // happens to include the right ones would slide past the wait point. The
+      // user must release the extra keys (the chord then advances on the next
+      // press of the expected notes).
+      if (chordComplete && wrongHeldNotesRef.current.size > 0) {
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "extra" });
+        return;
+      }
+
+      if (chordComplete) {
+        lastAdvanceTimeRef.current = now;
+        const nextIdx = idx + 1;
+        // When advancing from a non-slashed grace wait point, capture the notes
+        // pressed in this gesture before clearing so they can be retroactively
+        // credited as fresh presses for the next wait point. Players press grace
+        // and main-chord keys in one gesture; requiring a re-press of
+        // already-held main-chord notes after the grace advances is awkward.
+        const graceAnticipatedFresh =
+          wp.isGrace && nextIdx < end
+            ? new Set(freshlyPressedNotesRef.current)
+            : null;
+        // Each wait point is judged on its own fresh presses; reset the tally so
+        // notes still held into the next chord must be struck again to count.
+        freshlyPressedNotesRef.current.clear();
+        if (graceAnticipatedFresh !== null) {
+          const nextWp = points[nextIdx];
+          for (const nextNoteNumber of nextWp.noteNumbers) {
+            if (graceAnticipatedFresh.has(nextNoteNumber)) {
+              freshlyPressedNotesRef.current.add(nextNoteNumber);
+            }
+          }
+        }
+        if (nextIdx >= end) {
+          // Attempt complete — compute score, persist, show modal.
+          const startTime = attemptStartTimeRef.current;
+          if (startTime !== null) {
+            recordCompletion({
+              wrongNotes: wrongNoteCountRef.current,
+              elapsedMs: now - startTime,
+              totalPoints: end - first,
+            });
+          }
+          wrongNoteCountRef.current = 0;
+          attemptStartTimeRef.current = null;
+          pointIndexRef.current = first;
+          setPointIndex(first);
+          const targetBeat = waitPointCursorBeat(
+            points[first],
+            ctrl.measureStartBeats,
+          );
+          ctrl.setCursor(targetBeat, "jump");
+          ctrl.player.seek(targetBeat);
+        } else {
+          pointIndexRef.current = nextIdx;
+          setPointIndex(nextIdx);
+          const targetBeat = waitPointCursorBeat(
+            points[nextIdx],
+            ctrl.measureStartBeats,
+          );
+          ctrl.setCursor(targetBeat, "jump");
+          ctrl.player.seek(targetBeat);
+        }
+        ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
+      } else {
+        // Distinguish "not all notes down yet" (incomplete) from "every note is
+        // down but a required one was held over rather than re-struck" (stale).
+        // The latter is the signature of a repeated note/chord that needs a fresh
+        // attack — without its own outcome it would read as a baffling INCOMPLETE
+        // with expected ⊆ held.
+        const heldComplete =
+          [...expected].every((n) => held.has(n)) &&
+          [...tied].every((n) => held.has(n));
+        ctrl.appendToDebugLog({
+          ...debugBase,
+          outcome: heldComplete ? "stale" : "incomplete",
+        });
+      }
+    },
+    [applyRangeReset],
+  );
 
   function recordCompletion(stats: {
     wrongNotes: number;
@@ -860,6 +898,7 @@ export function useWaitMode(
 
     setPointIndex(startIdx);
     pointIndexRef.current = startIdx;
+    appliedRangeRef.current = range;
     resetAttempt();
 
     // Suppress any cursor updates from the player while wait mode owns the cursor.
@@ -888,6 +927,7 @@ export function useWaitMode(
     const { first } = rangeBounds(waitPointsRef.current, ctrl.measureRange);
     setPointIndex(first);
     pointIndexRef.current = first;
+    appliedRangeRef.current = ctrl.measureRange;
     resetAttempt();
     const points = waitPointsRef.current;
     if (points.length > 0 && first < points.length) {
