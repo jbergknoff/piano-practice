@@ -371,7 +371,10 @@ export function PracticeScreen({
     beat: number;
   } | null>(null);
 
-  const customRanges = useCustomRanges(fileHash);
+  const totalMeasures = musicxml
+    ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum)
+    : 1;
+  const customRanges = useCustomRanges(fileHash, totalMeasures);
 
   const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
     if (newMode === mode) {
@@ -936,6 +939,12 @@ export function PracticeScreen({
           editor={customRanges.editor}
           nameDraft={customRanges.nameDraft}
           onNameDraftChange={customRanges.setNameDraft}
+          fromDraft={customRanges.fromDraft}
+          onFromDraftChange={customRanges.setFromDraft}
+          toDraft={customRanges.toDraft}
+          onToDraftChange={customRanges.setToDraft}
+          boundsValid={customRanges.boundsValid}
+          totalMeasures={totalMeasures}
           onSave={customRanges.saveEditor}
           onCancel={customRanges.closeEditor}
           onDelete={customRanges.deleteEditing}
@@ -1022,9 +1031,7 @@ export function PracticeScreen({
         onClose={() => setRangesDrawerOpen(false)}
         theme={theme}
         accent={accent}
-        totalMeasures={
-          musicxml ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum) : 1
-        }
+        totalMeasures={totalMeasures}
         measureRange={measureRange}
         onMeasureRangeChange={onMeasureRangeChange}
         fileHash={fileHash}
@@ -1033,6 +1040,12 @@ export function PracticeScreen({
         onEditCustomRange={(range) => {
           setRangesDrawerOpen(false);
           customRanges.openEdit(range);
+        }}
+        onCreateCustomRange={() => {
+          setRangesDrawerOpen(false);
+          customRanges.openCreate(
+            measureRange ?? { from: 1, to: totalMeasures },
+          );
         }}
         repeatSections={musicxml?.repeatSections ?? []}
       />

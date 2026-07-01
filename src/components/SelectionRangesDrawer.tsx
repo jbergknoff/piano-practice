@@ -8,8 +8,8 @@ import {
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
-import { serifTitle } from "../theme";
-import { PencilIcon } from "./icons";
+import { miniButtonStyle, serifTitle } from "../theme";
+import { PencilIcon, PlusIcon } from "./icons";
 
 interface SelectionRangesDrawerProps {
   open: boolean;
@@ -23,6 +23,7 @@ interface SelectionRangesDrawerProps {
   markedBpm: number;
   customRanges: CustomRange[];
   onEditCustomRange: (range: CustomRange) => void;
+  onCreateCustomRange: () => void;
   repeatSections: RepeatSection[];
 }
 
@@ -128,6 +129,7 @@ export function SelectionRangesDrawer({
   markedBpm,
   customRanges,
   onEditCustomRange,
+  onCreateCustomRange,
   repeatSections,
 }: SelectionRangesDrawerProps) {
   const n = totalMeasures;
@@ -267,9 +269,26 @@ export function SelectionRangesDrawer({
         </div>
 
         {/* Custom ranges */}
-        {customRanges.length > 0 && (
-          <Section label="Custom" theme={theme}>
-            {customRanges.map((cr) => {
+        <Section
+          label="Custom"
+          theme={theme}
+          action={
+            <button
+              type="button"
+              onClick={onCreateCustomRange}
+              title="New custom range"
+              style={miniButtonStyle(theme)}
+            >
+              <PlusIcon />
+            </button>
+          }
+        >
+          {customRanges.length === 0 ? (
+            <span style={{ fontSize: 11, color: theme.inkFaint }}>
+              No custom ranges yet
+            </span>
+          ) : (
+            customRanges.map((cr) => {
               const range = { from: cr.from, to: cr.to };
               const active = rangesEqual(measureRange, range);
               return (
@@ -299,13 +318,11 @@ export function SelectionRangesDrawer({
                   onEdit={() => onEditCustomRange(cr)}
                 />
               );
-            })}
-          </Section>
-        )}
+            })
+          )}
+        </Section>
 
-        {customRanges.length > 0 && (
-          <div style={{ height: 1, background: theme.border }} />
-        )}
+        <div style={{ height: 1, background: theme.border }} />
 
         {/* Whole piece */}
         <PresetButton
@@ -443,25 +460,36 @@ export function SelectionRangesDrawer({
 function Section({
   label,
   theme,
+  action,
   children,
 }: {
   label: string;
   theme: ThemeTokens;
+  action?: preact.ComponentChildren;
   children: preact.ComponentChildren;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <span
+      <div
         style={{
-          fontSize: 10,
-          fontWeight: 500,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: theme.inkSoft,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
-        {label}
-      </span>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: theme.inkSoft,
+          }}
+        >
+          {label}
+        </span>
+        {action}
+      </div>
       {children}
     </div>
   );
