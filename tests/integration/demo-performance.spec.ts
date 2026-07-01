@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 import { audioContextMockInitScript } from "./mocks/audio-context";
-import { advanceAudioTime, loadFile, mockCryptoSubtle } from "./helpers";
+import { advanceAudioTime, loadFile, mockCrypto } from "./helpers";
 
 // Minimal shape of a CDP CPU profile (the .cpuprofile DevTools format).
 interface CpuProfile {
@@ -50,7 +50,7 @@ test("capture a Playalong CPU profile as a loadable artifact", async ({
   const url = "/?demo=1";
 
   await page.addInitScript(audioContextMockInitScript());
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await page.addInitScript(() => {
     localStorage.setItem(
       "piano-practice:preferences",

@@ -3,7 +3,7 @@ import {
   getHighlightedNoteIds,
   installMocks,
   loadFile,
-  mockCryptoSubtle,
+  mockCrypto,
   sendChordOff,
   sendChordOn,
   sendNoteOff,
@@ -13,7 +13,7 @@ import {
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await installMocks(page);
   await page.goto("/");
 });

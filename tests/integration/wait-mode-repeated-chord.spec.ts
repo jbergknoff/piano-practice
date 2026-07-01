@@ -3,7 +3,7 @@ import {
   getHighlightedNoteIds,
   installMocks,
   loadFile,
-  mockCryptoSubtle,
+  mockCrypto,
   sendChordOff,
   sendChordOn,
   waitForHighlightedNoteIds,
@@ -27,7 +27,7 @@ const HL_BEAT2 = ["p0-m1-n1-v0", "p0-m1-n1-v1"];
 const HL_BEAT3 = ["p0-m1-n2-v0", "p0-m1-n2-v1"];
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await installMocks(page);
   await page.goto("/");
 });

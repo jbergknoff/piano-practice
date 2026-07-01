@@ -4,7 +4,7 @@ import {
   getHighlightedNoteIds,
   installMocks,
   loadFile,
-  mockCryptoSubtle,
+  mockCrypto,
   waitForFonts,
   waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
@@ -15,7 +15,7 @@ import {
 const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await installMocks(page);
   await page.goto("/");
 });

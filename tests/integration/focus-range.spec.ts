@@ -3,7 +3,7 @@ import {
   advanceAudioTime,
   installMocks,
   loadFile,
-  mockCryptoSubtle,
+  mockCrypto,
   waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
 } from "./helpers";
@@ -59,7 +59,7 @@ import {
 // a looping player would move the cursor forward after the fake-clock advance.
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await installMocks(page);
   await page.goto("/");
 });
