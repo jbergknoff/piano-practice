@@ -6,6 +6,10 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+// Screenshot baselines are generated inside the Docker playwright image; skip
+// pixel comparison outside it (same guard the other visual specs use).
+const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
+
 // simple-grand-piano.musicxml has 8 measures.
 test("creating a custom range via the drawer's + button with explicit bounds", async ({
   page,
@@ -18,6 +22,9 @@ test("creating a custom range via the drawer's + button with explicit bounds", a
 
   const newButton = page.getByTitle("New custom range");
   await expect(newButton).toBeVisible();
+  if (screenshotsEnabled) {
+    await expect(page).toHaveScreenshot("custom-ranges-drawer-empty.png");
+  }
   await newButton.click();
 
   // Modal opens with editable From/To bounds (not a static label),
@@ -27,6 +34,11 @@ test("creating a custom range via the drawer's + button with explicit bounds", a
   const toInput = page.locator("label", { hasText: "To" }).locator("input");
   await expect(fromInput).toHaveValue("1");
   await expect(toInput).toHaveValue("8");
+  if (screenshotsEnabled) {
+    await expect(page).toHaveScreenshot(
+      "custom-ranges-modal-default-bounds.png",
+    );
+  }
 
   const nameInput = page.getByPlaceholder("e.g. Tricky run");
   const saveButton = page.getByRole("button", { name: "Save" });
@@ -55,6 +67,9 @@ test("creating a custom range via the drawer's + button with explicit bounds", a
   const customButton = page.getByRole("button", { name: "Tricky run" });
   await expect(customButton).toBeVisible();
   await expect(customButton.getByText("mm. 3–7")).toBeVisible();
+  if (screenshotsEnabled) {
+    await expect(page).toHaveScreenshot("custom-ranges-drawer-with-range.png");
+  }
 
   await customButton.click();
   await page.getByTitle("Select range").click();
@@ -93,6 +108,11 @@ test("context menu offers Rename (not Edit) for an already-named range, and Rena
     name: "Rename “My Range”",
   });
   await expect(renameOption).toBeVisible();
+  if (screenshotsEnabled) {
+    await expect(page).toHaveScreenshot(
+      "custom-ranges-context-menu-rename.png",
+    );
+  }
 
   // The rename flow only offers the name field — no From/To bounds, unlike
   // the drawer's "New custom range" creation flow.
@@ -100,4 +120,7 @@ test("context menu offers Rename (not Edit) for an already-named range, and Rena
   await expect(page.getByText("Rename range")).toBeVisible();
   await expect(page.locator("label", { hasText: "From" })).toHaveCount(0);
   await expect(page.locator("label", { hasText: "To" })).toHaveCount(0);
+  if (screenshotsEnabled) {
+    await expect(page).toHaveScreenshot("custom-ranges-rename-modal.png");
+  }
 });
