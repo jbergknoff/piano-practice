@@ -61,21 +61,19 @@ test("creating a custom range via the drawer's + button with explicit bounds", a
   await saveButton.click();
   await expect(page.getByText("Name this range")).toHaveCount(0);
 
-  // The new range appears in the Custom list with the correct bounds and can
-  // be selected to set it as the active focus range.
+  // The new range appears in the Custom list with the correct bounds, and
+  // saving it also makes it the active focus range immediately (matching
+  // whatever bounds were just saved, not left on "Whole piece").
   await page.getByTitle("Select range").click();
   const customButton = page.getByRole("button", { name: "Tricky run" });
   await expect(customButton).toBeVisible();
   await expect(customButton.getByText("mm. 3–7")).toBeVisible();
-  if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot("custom-ranges-drawer-with-range.png");
-  }
-
-  await customButton.click();
-  await page.getByTitle("Select range").click();
   await expect(
     page.getByRole("button", { name: "Whole piece" }),
   ).toHaveAttribute("aria-pressed", "false");
+  if (screenshotsEnabled) {
+    await expect(page).toHaveScreenshot("custom-ranges-drawer-with-range.png");
+  }
 });
 
 test("context menu offers Rename (not Edit) for an already-named range, and Rename doesn't expose bounds fields", async ({
@@ -123,4 +121,47 @@ test("context menu offers Rename (not Edit) for an already-named range, and Rena
   if (screenshotsEnabled) {
     await expect(page).toHaveScreenshot("custom-ranges-rename-modal.png");
   }
+});
+
+test("widening the bounds while naming a focused range updates the active focus to match", async ({
+  page,
+}) => {
+  await loadFile(page, "simple-grand-piano.musicxml");
+
+  const container = page.getByTestId("sheet-music-scroll-container");
+  const clickPosition = { x: 750, y: 100 };
+  const focusRect = page.locator("svg[role='img'] > rect");
+
+  await container.click({ button: "right", position: clickPosition });
+  await page.getByRole("button", { name: /Focus measure/ }).click();
+  const singleMeasureWidth = await focusRect.getAttribute("width");
+
+  // Open "Name this range": defaults to the single focused measure.
+  await container.click({ button: "right", position: clickPosition });
+  await page.getByRole("button", { name: "Name this range" }).click();
+  const fromInput = page.locator("label", { hasText: "From" }).locator("input");
+  const toInput = page.locator("label", { hasText: "To" }).locator("input");
+  const focusedMeasure = Number(await fromInput.inputValue());
+  await expect(toInput).toHaveValue(String(focusedMeasure));
+
+  // Widen the range by 2 measures beyond what was focused, and save.
+  const widenedTo = Math.min(focusedMeasure + 2, 8);
+  await toInput.fill(String(widenedTo));
+  await page.getByPlaceholder("e.g. Tricky run").fill("Widened");
+  const saveButton = page.getByRole("button", { name: "Save" });
+  await expect(saveButton).toBeEnabled();
+  await saveButton.click();
+  await expect(page.getByText("Name this range")).toHaveCount(0);
+
+  // The active focus range (the sheet music's orange overlay) should now
+  // match the widened bounds just saved, not the original single measure.
+  const widenedWidth = await focusRect.getAttribute("width");
+  expect(Number(widenedWidth)).toBeGreaterThan(Number(singleMeasureWidth));
+
+  // The drawer's custom range list confirms the same widened bounds.
+  await page.getByTitle("Select range").click();
+  const customButton = page.getByRole("button", { name: "Widened" });
+  await expect(
+    customButton.getByText(`mm. ${focusedMeasure}–${widenedTo}`),
+  ).toBeVisible();
 });

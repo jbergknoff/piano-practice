@@ -22,6 +22,11 @@ function defaultRangeName(range: { from: number; to: number }): string {
 export function useCustomRanges(
   fileHash: string | null,
   totalMeasures: number,
+  // Called with the bounds that were just saved for a new ("create") range —
+  // lets the caller sync the active focus range to match, since the create
+  // modal's From/To fields may have been edited away from whatever range (if
+  // any) was focused when the modal was opened.
+  onRangeCreated?: (range: { from: number; to: number }) => void,
 ) {
   const [ranges, setRanges] = useState<CustomRange[]>([]);
   useEffect(() => {
@@ -99,13 +104,14 @@ export function useCustomRanges(
           to: parsedBounds.to,
         },
       ]);
+      onRangeCreated?.(parsedBounds);
     } else {
       persist(
         ranges.map((r) => (r.id === editor.range.id ? { ...r, name } : r)),
       );
     }
     setEditor(null);
-  }, [editor, nameDraft, parsedBounds, ranges, persist]);
+  }, [editor, nameDraft, parsedBounds, ranges, persist, onRangeCreated]);
 
   const deleteEditing = useCallback(() => {
     if (editor?.kind !== "edit") {

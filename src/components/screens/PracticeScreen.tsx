@@ -372,7 +372,11 @@ export function PracticeScreen({
   } | null>(null);
 
   const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
-  const customRanges = useCustomRanges(fileHash, totalMeasures);
+  const customRanges = useCustomRanges(
+    fileHash,
+    totalMeasures,
+    onMeasureRangeChange,
+  );
 
   const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
     if (newMode === mode) {
