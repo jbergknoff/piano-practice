@@ -72,7 +72,7 @@ export function RangeNameModal({
         }}
       >
         <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>
-          {editor.kind === "create" ? "Name this range" : "Edit range"}
+          {editor.kind === "create" ? "Name this range" : "Rename range"}
         </div>
         <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
           {rangeLabel}

@@ -671,7 +671,7 @@ function CustomRangeButton({
       <button
         type="button"
         onClick={onEdit}
-        title="Edit name"
+        title="Rename"
         style={{
           display: "flex",
           alignItems: "center",

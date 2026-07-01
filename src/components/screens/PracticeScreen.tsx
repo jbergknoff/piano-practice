@@ -878,7 +878,7 @@ export function PracticeScreen({
                   ? [
                       namedRange
                         ? {
-                            label: `Edit “${namedRange.name}”`,
+                            label: `Rename “${namedRange.name}”`,
                             action: "editCustom" as const,
                           }
                         : {
