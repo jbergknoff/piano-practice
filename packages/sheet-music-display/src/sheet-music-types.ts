@@ -138,4 +138,7 @@ export interface ResolvedLayout {
   staffBottomYs: number[];
   totalWidth: number;
   totalHeight: number;
+  /** Vertical space reserved above the first staff / below the last staff for
+   *  ledger lines extending past the grand staff. */
+  ledgerMargin: number;
 }

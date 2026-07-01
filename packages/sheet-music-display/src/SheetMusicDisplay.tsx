@@ -87,6 +87,15 @@ const STAFF_LINE_OPACITY = 0.55;
 // head; grace heads scale this down further by their own grace scale.
 const NOTEHEAD_HALF_WIDTH_FACTOR = 0.55;
 
+// Width of the invisible pointer hit-area for a focus-range drag handle,
+// centered on the handle's pill. Wider than the visible pill (12px) so the
+// handle is easy to grab on a touchscreen without needing pixel precision.
+const HANDLE_HIT_WIDTH = 44;
+
+// Fraction of the adjacent measure's width a focus-handle drag must cross
+// before it snaps to that measure (see snapIndexFromCurrent).
+const HANDLE_SNAP_THRESHOLD_FRACTION = 0.25;
+
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
 interface BeamGroupData {
@@ -937,6 +946,12 @@ export function SheetMusicDisplay({
     return <p>No music to display.</p>;
   }
 
+  // Right-edge x of each measure, used to snap the focus range's "to" handle.
+  const measureEndXs = useMemo(
+    () => layout.measureXs.map((x, i) => x + layout.measureWidths[i]),
+    [layout],
+  );
+
   // Per-note geometry for the color overlay. Depends only on score + layout, so
   // it is computed once per piece and never on color changes.
   const noteInfos = useMemo(
@@ -1221,30 +1236,38 @@ export function SheetMusicDisplay({
     [],
   );
 
-  const snapToMeasureStart = (svgX: number): number => {
-    let best = 0;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < layout.measureXs.length; i++) {
-      const d = Math.abs(layout.measureXs[i] - svgX);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
+  // Walks `idx` from its current position toward whichever neighboring
+  // boundary `svgX` has crossed, one measure at a time (the while loops cover
+  // fast drags that skip past several measures in one pointermove). Using the
+  // *current* index as the reference — rather than picking whichever boundary
+  // in the whole piece is nearest to svgX — means a step only requires
+  // crossing HANDLE_SNAP_THRESHOLD_FRACTION of the adjacent measure's width,
+  // not the 50% you'd need to become "nearest" to the next boundary. That's
+  // what makes the drag feel like it tracks the finger instead of needing a
+  // half-measure throw before anything visibly moves.
+  const snapIndexFromCurrent = (
+    svgX: number,
+    currentIndex: number,
+    boundaries: number[],
+  ): number => {
+    let idx = currentIndex;
+    while (idx < boundaries.length - 1) {
+      const width = boundaries[idx + 1] - boundaries[idx];
+      if (svgX > boundaries[idx] + width * HANDLE_SNAP_THRESHOLD_FRACTION) {
+        idx++;
+      } else {
+        break;
       }
     }
-    return best + 1;
-  };
-
-  const snapToMeasureEnd = (svgX: number): number => {
-    let best = 0;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < layout.measureXs.length; i++) {
-      const d = Math.abs(layout.measureXs[i] + layout.measureWidths[i] - svgX);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
+    while (idx > 0) {
+      const width = boundaries[idx] - boundaries[idx - 1];
+      if (svgX < boundaries[idx] - width * HANDLE_SNAP_THRESHOLD_FRACTION) {
+        idx--;
+      } else {
+        break;
       }
     }
-    return best + 1;
+    return idx;
   };
 
   const onHandlePointerDown = (e: PointerEvent, handle: "left" | "right") => {
@@ -1290,12 +1313,19 @@ export function SheetMusicDisplay({
     const next =
       drag.handle === "left"
         ? {
-            from: Math.min(snapToMeasureStart(svgX), current.to),
+            from: Math.min(
+              snapIndexFromCurrent(svgX, current.from - 1, layout.measureXs) +
+                1,
+              current.to,
+            ),
             to: current.to,
           }
         : {
             from: current.from,
-            to: Math.max(snapToMeasureEnd(svgX), current.from),
+            to: Math.max(
+              snapIndexFromCurrent(svgX, current.to - 1, measureEndXs) + 1,
+              current.from,
+            ),
           };
     dragFocusRangeRef.current = next;
     setDragFocusRange(next);
@@ -1361,13 +1391,17 @@ export function SheetMusicDisplay({
     };
   }, []);
 
+  // Extend past the staff itself by ledgerMargin so the cursor, focus overlay,
+  // and drag handles cover notes (and their ledger lines) sitting above/below
+  // the grand staff, rather than stopping flush with the staff lines.
   const cursorY1 =
     layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[0] - 4 * layout.staffSpace
+      ? layout.staffBottomYs[0] - 4 * layout.staffSpace - layout.ledgerMargin
       : 0;
   const cursorY2 =
     layout.staffBottomYs.length > 0
-      ? layout.staffBottomYs[layout.staffBottomYs.length - 1]
+      ? layout.staffBottomYs[layout.staffBottomYs.length - 1] +
+        layout.ledgerMargin
       : layout.totalHeight;
 
   // Width of the sticky signature overlay. The content portion holds the clef
@@ -1718,8 +1752,8 @@ export function SheetMusicDisplay({
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: focusX1 - 14,
-                width: 28,
+                left: focusX1 - HANDLE_HIT_WIDTH / 2,
+                width: HANDLE_HIT_WIDTH,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
                 touchAction: "none",
@@ -1732,14 +1766,17 @@ export function SheetMusicDisplay({
               }
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             />
             <div
               style={{
                 position: "absolute",
                 top: cursorY1 - 4,
-                left: focusX2 - 14,
-                width: 28,
+                left: focusX2 - HANDLE_HIT_WIDTH / 2,
+                width: HANDLE_HIT_WIDTH,
                 height: cursorY2 - cursorY1 + 8,
                 cursor: "ew-resize",
                 touchAction: "none",
@@ -1752,7 +1789,10 @@ export function SheetMusicDisplay({
               }
               onPointerUp={onHandlePointerUp}
               onPointerCancel={onHandlePointerUp}
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             />
           </>
         )}
