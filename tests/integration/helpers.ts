@@ -31,18 +31,22 @@ export async function waitForFonts(page: Page): Promise<void> {
 }
 
 /**
- * Inject a crypto.subtle implementation before page load for non-secure HTTP
- * origins (e.g. http://server:3456 inside Docker). Browsers only expose
- * SubtleCrypto in secure contexts; localhost qualifies automatically but other
- * hostnames do not, so the app's file-hashing logic would throw without this.
+ * Inject crypto.subtle and crypto.randomUUID implementations before page load
+ * for non-secure HTTP origins (e.g. http://server:3456 inside Docker).
+ * Browsers only expose SubtleCrypto and randomUUID in secure contexts;
+ * localhost qualifies automatically but other hostnames do not, so the app's
+ * file-hashing logic (crypto.subtle) and custom-range id generation
+ * (crypto.randomUUID) would both throw without this.
  *
- * Uses Node's crypto module (exposed via page.exposeFunction) so that
- * per-file-content hashes are real and consistent — file history lookups
- * work correctly across test runs.
+ * crypto.subtle.digest is bridged to Node's crypto module (via
+ * page.exposeFunction) so that per-file-content hashes are real and
+ * consistent — file history lookups work correctly across test runs.
+ * crypto.randomUUID is polyfilled in-browser from crypto.getRandomValues,
+ * which (unlike .subtle/.randomUUID) is available in any context.
  *
  * Must be called before page.goto().
  */
-export async function mockCryptoSubtle(page: Page): Promise<void> {
+export async function mockCrypto(page: Page): Promise<void> {
   // Bridge Node's crypto.createHash into the browser page.
   await page.exposeFunction(
     "__nodeDigest",
@@ -57,28 +61,42 @@ export async function mockCryptoSubtle(page: Page): Promise<void> {
   );
 
   await page.addInitScript(() => {
-    if (window.crypto.subtle) {
-      return;
-    }
     type BridgedWindow = Window & {
       __nodeDigest(algorithm: string, bytes: number[]): Promise<number[]>;
     };
-    Object.defineProperty(window.crypto, "subtle", {
-      value: {
-        digest: async (
-          algorithm: string,
-          data: ArrayBuffer,
-        ): Promise<ArrayBuffer> => {
-          const bytes = Array.from(new Uint8Array(data));
-          const result = await (window as BridgedWindow).__nodeDigest(
-            algorithm,
-            bytes,
-          );
-          return new Uint8Array(result).buffer;
+    if (!window.crypto.subtle) {
+      Object.defineProperty(window.crypto, "subtle", {
+        value: {
+          digest: async (
+            algorithm: string,
+            data: ArrayBuffer,
+          ): Promise<ArrayBuffer> => {
+            const bytes = Array.from(new Uint8Array(data));
+            const result = await (window as BridgedWindow).__nodeDigest(
+              algorithm,
+              bytes,
+            );
+            return new Uint8Array(result).buffer;
+          },
         },
-      },
-      configurable: true,
-    });
+        configurable: true,
+      });
+    }
+    if (!window.crypto.randomUUID) {
+      Object.defineProperty(window.crypto, "randomUUID", {
+        value: () => {
+          const bytes = new Uint8Array(16);
+          window.crypto.getRandomValues(bytes);
+          bytes[6] = (bytes[6] & 0x0f) | 0x40;
+          bytes[8] = (bytes[8] & 0x3f) | 0x80;
+          const hex = Array.from(bytes, (b) =>
+            b.toString(16).padStart(2, "0"),
+          ).join("");
+          return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        },
+        configurable: true,
+      });
+    }
   });
 }
 

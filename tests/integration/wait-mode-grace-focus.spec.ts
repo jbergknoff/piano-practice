@@ -3,7 +3,7 @@ import {
   getHighlightedNoteIds,
   installMocks,
   loadFile,
-  mockCryptoSubtle,
+  mockCrypto,
   sendChordOff,
   sendChordOn,
   sendNoteOff,
@@ -69,7 +69,7 @@ async function playChord(
 }
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await installMocks(page);
   await page.goto("/");
 });

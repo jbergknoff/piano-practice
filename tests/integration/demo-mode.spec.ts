@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { audioContextMockInitScript } from "./mocks/audio-context";
-import { advanceAudioTime, loadFile, mockCryptoSubtle } from "./helpers";
+import { advanceAudioTime, loadFile, mockCrypto } from "./helpers";
 
 // The ?demo=1 profiling harness. Unlike the other specs, this exercises the
 // app's OWN fake Bluetooth (installed by main.tsx for ?demo=1) rather than the
@@ -10,7 +10,7 @@ test("demo mode auto-selects Playalong and the overlay sprays notes", async ({
   page,
 }) => {
   await page.addInitScript(audioContextMockInitScript());
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   // Disable count-in so Play → waiting-for-note and the first sprayed note
   // kicks playback off.
   await page.addInitScript(() => {

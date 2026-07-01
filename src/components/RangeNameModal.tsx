@@ -13,6 +13,12 @@ interface RangeNameModalProps {
   editor: RangeEditorState;
   nameDraft: string;
   onNameDraftChange: (name: string) => void;
+  fromDraft: string;
+  onFromDraftChange: (value: string) => void;
+  toDraft: string;
+  onToDraftChange: (value: string) => void;
+  boundsValid: boolean;
+  totalMeasures: number;
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
@@ -24,6 +30,12 @@ export function RangeNameModal({
   editor,
   nameDraft,
   onNameDraftChange,
+  fromDraft,
+  onFromDraftChange,
+  toDraft,
+  onToDraftChange,
+  boundsValid,
+  totalMeasures,
   onSave,
   onCancel,
   onDelete,
@@ -41,7 +53,8 @@ export function RangeNameModal({
     range.from === range.to
       ? `Measure ${range.from}`
       : `Measures ${range.from}–${range.to}`;
-  const canSave = nameDraft.trim().length > 0;
+  const canSave =
+    nameDraft.trim().length > 0 && (editor.kind === "edit" || boundsValid);
 
   return (
     <>
@@ -72,11 +85,62 @@ export function RangeNameModal({
         }}
       >
         <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>
-          {editor.kind === "create" ? "Name this range" : "Edit range"}
+          {editor.kind === "create" ? "Name this range" : "Rename range"}
         </div>
-        <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
-          {rangeLabel}
-        </div>
+        {editor.kind === "create" ? (
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <label
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              <span style={{ fontSize: 11, color: theme.inkSoft }}>From</span>
+              <input
+                type="number"
+                min={1}
+                max={totalMeasures}
+                value={fromDraft}
+                onInput={(e) =>
+                  onFromDraftChange((e.target as HTMLInputElement).value)
+                }
+                style={boundsInputStyle(theme)}
+              />
+            </label>
+            <label
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              <span style={{ fontSize: 11, color: theme.inkSoft }}>To</span>
+              <input
+                type="number"
+                min={1}
+                max={totalMeasures}
+                value={toDraft}
+                onInput={(e) =>
+                  onToDraftChange((e.target as HTMLInputElement).value)
+                }
+                style={boundsInputStyle(theme)}
+              />
+            </label>
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
+            {rangeLabel}
+          </div>
+        )}
         <input
           ref={inputRef}
           type="text"
@@ -153,4 +217,19 @@ export function RangeNameModal({
       </div>
     </>
   );
+}
+
+function boundsInputStyle(theme: ThemeTokens) {
+  return {
+    width: "100%",
+    boxSizing: "border-box" as const,
+    padding: "10px 12px",
+    fontSize: 14,
+    color: theme.ink,
+    background: theme.panelSolid,
+    border: `0.5px solid ${theme.border}`,
+    borderRadius: 10,
+    outline: "none",
+    fontFamily: FONT_SANS,
+  };
 }

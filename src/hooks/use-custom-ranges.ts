@@ -19,7 +19,15 @@ function defaultRangeName(range: { from: number; to: number }): string {
 
 // Owns the per-file list of named ranges (persisted in local storage) and the
 // state for the naming/editing modal.
-export function useCustomRanges(fileHash: string | null) {
+export function useCustomRanges(
+  fileHash: string | null,
+  totalMeasures: number,
+  // Called with the bounds that were just saved for a new ("create") range —
+  // lets the caller sync the active focus range to match, since the create
+  // modal's From/To fields may have been edited away from whatever range (if
+  // any) was focused when the modal was opened.
+  onRangeCreated?: (range: { from: number; to: number }) => void,
+) {
   const [ranges, setRanges] = useState<CustomRange[]>([]);
   useEffect(() => {
     setRanges(fileHash ? loadCustomRanges(fileHash) : []);
@@ -37,10 +45,17 @@ export function useCustomRanges(fileHash: string | null) {
 
   const [editor, setEditor] = useState<RangeEditorState | null>(null);
   const [nameDraft, setNameDraft] = useState("");
+  // Only meaningful while editor.kind === "create" — the editable from/to
+  // text inputs, kept as strings so the fields can hold intermediate
+  // (invalid) input while typing.
+  const [fromDraft, setFromDraft] = useState("");
+  const [toDraft, setToDraft] = useState("");
 
   const openCreate = useCallback((range: { from: number; to: number }) => {
     setEditor({ kind: "create", from: range.from, to: range.to });
     setNameDraft(defaultRangeName(range));
+    setFromDraft(String(range.from));
+    setToDraft(String(range.to));
   }, []);
 
   const openEdit = useCallback((range: CustomRange) => {
@@ -49,6 +64,24 @@ export function useCustomRanges(fileHash: string | null) {
   }, []);
 
   const closeEditor = useCallback(() => setEditor(null), []);
+
+  const parsedBounds = (() => {
+    if (editor?.kind !== "create") {
+      return null;
+    }
+    const from = Number.parseInt(fromDraft, 10);
+    const to = Number.parseInt(toDraft, 10);
+    if (
+      !Number.isInteger(from) ||
+      !Number.isInteger(to) ||
+      from < 1 ||
+      to < from ||
+      to > totalMeasures
+    ) {
+      return null;
+    }
+    return { from, to };
+  })();
 
   const saveEditor = useCallback(() => {
     if (!editor) {
@@ -59,17 +92,26 @@ export function useCustomRanges(fileHash: string | null) {
       return;
     }
     if (editor.kind === "create") {
+      if (!parsedBounds) {
+        return;
+      }
       persist([
         ...ranges,
-        { id: crypto.randomUUID(), name, from: editor.from, to: editor.to },
+        {
+          id: crypto.randomUUID(),
+          name,
+          from: parsedBounds.from,
+          to: parsedBounds.to,
+        },
       ]);
+      onRangeCreated?.(parsedBounds);
     } else {
       persist(
         ranges.map((r) => (r.id === editor.range.id ? { ...r, name } : r)),
       );
     }
     setEditor(null);
-  }, [editor, nameDraft, ranges, persist]);
+  }, [editor, nameDraft, parsedBounds, ranges, persist, onRangeCreated]);
 
   const deleteEditing = useCallback(() => {
     if (editor?.kind !== "edit") {
@@ -84,6 +126,11 @@ export function useCustomRanges(fileHash: string | null) {
     editor,
     nameDraft,
     setNameDraft,
+    fromDraft,
+    setFromDraft,
+    toDraft,
+    setToDraft,
+    boundsValid: parsedBounds !== null,
     openCreate,
     openEdit,
     closeEditor,

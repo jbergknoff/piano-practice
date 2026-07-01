@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   installMocks,
   loadFile,
-  mockCryptoSubtle,
+  mockCrypto,
   sendChordOff,
   sendChordOn,
   sendNoteOff,
@@ -32,7 +32,7 @@ const HL_BEAT2 = ["p0-m1-n1-v0", "p0-m1-n1-v1"]; // tied C5 + G5
 const HL_BEAT3 = ["p0-m1-n2-v0"]; // C4
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await installMocks(page);
   await page.goto("/");
 });

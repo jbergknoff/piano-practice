@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { loadFile, mockCryptoSubtle } from "./helpers";
+import { loadFile, mockCrypto } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
-  await mockCryptoSubtle(page);
+  await mockCrypto(page);
   await page.goto("/");
 });
 
