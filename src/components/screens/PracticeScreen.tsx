@@ -371,9 +371,7 @@ export function PracticeScreen({
     beat: number;
   } | null>(null);
 
-  const totalMeasures = musicxml
-    ? Math.ceil(musicxml.totalBeats / musicxml.timeSigNum)
-    : 1;
+  const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
   const customRanges = useCustomRanges(fileHash, totalMeasures);
 
   const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
@@ -1084,7 +1082,7 @@ export function PracticeScreen({
       {measureJumpDefault !== null && musicxml && (
         <MeasureJumpModal
           currentMeasure={measureJumpDefault}
-          totalMeasures={musicxml.measureStartBeats.length}
+          totalMeasures={totalMeasures}
           onConfirm={(measureNumber) => {
             onMeasureRangeChange({ from: measureNumber, to: measureNumber });
             setMeasureJumpDefault(null);
