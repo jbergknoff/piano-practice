@@ -87,24 +87,13 @@ const STAFF_LINE_OPACITY = 0.55;
 // head; grace heads scale this down further by their own grace scale.
 const NOTEHEAD_HALF_WIDTH_FACTOR = 0.55;
 
-// A stem placed exactly at the notehead's nominal half-width sometimes lands
-// a hair outside the glyph's actual rendered ink — the SMuFL notehead isn't a
-// perfect ellipse, and browser font hinting can round its edge slightly
-// depending on sub-pixel position, especially on a horizontally scrolled
-// SVG. That shows up as a faint gap between stem and head. Inset the stem's
-// attachment point by this fraction of the half-width so it always lands
-// safely inside the glyph's ink, regardless of hinting jitter. Applied
-// everywhere a stem or beam anchors to a notehead (main stems, beam stems,
-// grace stems).
-const STEM_NOTEHEAD_INSET_FACTOR = 0.15;
-
+// A stem's attachment point, tangent to the notehead's nominal half-width.
 function stemAttachX(
   centerX: number,
   nrx: number,
   stemDir: "up" | "down",
 ): number {
-  const inset = nrx * STEM_NOTEHEAD_INSET_FACTOR;
-  return stemDir === "up" ? centerX + nrx - inset : centerX - nrx + inset;
+  return stemDir === "up" ? centerX + nrx : centerX - nrx;
 }
 
 // Width of the invisible pointer hit-area for a focus-range drag handle,
