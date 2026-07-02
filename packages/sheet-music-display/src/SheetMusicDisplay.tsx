@@ -96,6 +96,14 @@ const HANDLE_HIT_WIDTH = 44;
 // before it snaps to that measure (see snapIndexFromCurrent).
 const HANDLE_SNAP_THRESHOLD_FRACTION = 0.25;
 
+// Stroke width of a note stem. A beam's vertical end edge sits exactly on the
+// stem's centerline, so its diagonal top/bottom edges get anti-aliased right
+// at the corner where they meet the crisp stem stroke — that softened corner
+// reads as the beam falling short of the stem. Beams overhang each end by
+// half this width so the filled polygon fully covers the stem's width at the
+// tip, closing that seam.
+const STEM_STROKE_WIDTH = 1.2;
+
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
 interface BeamGroupData {
@@ -209,34 +217,63 @@ function computeBeamGroups(
 // vertical) stem it terminates against — the corner where they meet looks
 // notched rather than flush. Real engraving draws beams as parallelograms
 // with vertical end edges regardless of slope; build that polygon directly.
+// An end anchored on a real stem is pushed outward along the beam's own line
+// (by half the stem's stroke width) so the fill fully covers the stem's
+// width at the tip — otherwise the diagonal edges' anti-aliasing leaves a
+// faint seam right where they'd otherwise meet the stem's crisp edge. Only
+// stem-anchored ends should overhang; a secondary beam's open stub tip (see
+// secondaryBeamSegments) has no stem to reach and must stay put.
 function beamPolygonPoints(
   x1: number,
   y1: number,
   x2: number,
   y2: number,
   thickness: number,
+  anchorStart = true,
+  anchorEnd = true,
 ): string {
   const half = thickness / 2;
-  return `${x1},${y1 - half} ${x2},${y2 - half} ${x2},${y2 + half} ${x1},${y1 + half}`;
+  const dX = x2 - x1;
+  const slope = dX === 0 ? 0 : (y2 - y1) / dX;
+  const overhang = STEM_STROKE_WIDTH / 2;
+  const ax1 = anchorStart ? x1 - overhang : x1;
+  const ay1 = anchorStart ? y1 - slope * overhang : y1;
+  const ax2 = anchorEnd ? x2 + overhang : x2;
+  const ay2 = anchorEnd ? y2 + slope * overhang : y2;
+  return `${ax1},${ay1 - half} ${ax2},${ay2 - half} ${ax2},${ay2 + half} ${ax1},${ay1 + half}`;
 }
 
 // Compute secondary beam segments for 16th notes within a beam group.
 // Returns x/y endpoints for each segment, following the diagonal of the primary
-// beam (offset toward the noteheads by beamOffset).
+// beam (offset toward the noteheads by beamOffset), plus which ends land on a
+// real stem (see beamPolygonPoints — only those ends should overhang).
 function secondaryBeamSegments(
   types: NoteType[],
   stems: Array<{ stemX: number; stemTipY: number }>,
   beamOffset: number,
   stemDir: "up" | "down",
-): Array<{ x1: number; y1: number; x2: number; y2: number }> {
+): Array<{
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  anchorStart: boolean;
+  anchorEnd: boolean;
+}> {
   const yOffset = stemDir === "up" ? beamOffset : -beamOffset;
   // Pre-compute beam slope for interpolating y at stub endpoints.
   const dX = stems[stems.length - 1].stemX - stems[0].stemX;
   const slope =
     dX === 0 ? 0 : (stems[stems.length - 1].stemTipY - stems[0].stemTipY) / dX;
 
-  const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> =
-    [];
+  const segments: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    anchorStart: boolean;
+    anchorEnd: boolean;
+  }> = [];
   let i = 0;
   while (i < types.length) {
     if (types[i] !== "16th") {
@@ -260,6 +297,8 @@ function secondaryBeamSegments(
           y1: stemY - slope * halfGap,
           x2: stems[idx].stemX,
           y2: stemY,
+          anchorStart: false,
+          anchorEnd: true,
         });
       } else {
         const halfGap =
@@ -271,6 +310,8 @@ function secondaryBeamSegments(
           y1: stemY,
           x2: stems[idx].stemX + halfGap,
           y2: stemY + slope * halfGap,
+          anchorStart: true,
+          anchorEnd: false,
         });
       }
     } else {
@@ -279,6 +320,8 @@ function secondaryBeamSegments(
         y1: stems[runStart].stemTipY + yOffset,
         x2: stems[runEnd - 1].stemX,
         y2: stems[runEnd - 1].stemTipY + yOffset,
+        anchorStart: true,
+        anchorEnd: true,
       });
     }
   }
@@ -2611,7 +2654,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
           y1={stemY1}
           y2={stemY2}
           stroke={inkColor}
-          stroke-width="1.2"
+          stroke-width={STEM_STROKE_WIDTH}
         />
       )}
       {!hasNoStem &&
@@ -2802,6 +2845,8 @@ function BeamLines({
                   seg.x2,
                   seg.y2,
                   beamThickness,
+                  seg.anchorStart,
+                  seg.anchorEnd,
                 )}
                 fill={inkColor}
               />
