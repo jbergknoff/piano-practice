@@ -100,8 +100,12 @@ function stemAttachX(
 // down-stem flags), so nudging the stem's own line slightly right and the
 // flag glyph's anchor slightly left — toward each other — closes any small
 // gap between them without moving either one far enough to look offset from
-// the notehead or the flag's own curve.
-const FLAG_STEM_OVERLAP = 0.4;
+// the notehead or the flag's own curve. Weighted toward the stem: nudging
+// the flag noticeably shifts its own curve leftward (visibly offsetting it
+// from the notehead), while the stem is just a straight line that can move
+// a little further without looking wrong.
+const STEM_FLAG_NUDGE = 0.3;
+const FLAG_STEM_NUDGE = 0.1;
 
 // Width of the invisible pointer hit-area for a focus-range drag handle,
 // centered on the handle's pill. Wider than the visible pill (12px) so the
@@ -2463,8 +2467,8 @@ function GraceNoteGroupEl({
             />
             {/* Stem (upward) */}
             <line
-              x1={showFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
-              x2={showFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
+              x1={showFlag ? stemX + STEM_FLAG_NUDGE : stemX}
+              x2={showFlag ? stemX + STEM_FLAG_NUDGE : stemX}
               y1={ny}
               y2={stemTipY}
               stroke={inkColor}
@@ -2473,7 +2477,7 @@ function GraceNoteGroupEl({
             {/* Flag — omitted when the group belongs to a beamed run */}
             {showFlag && (
               <text
-                x={stemX - FLAG_STEM_OVERLAP}
+                x={stemX - FLAG_STEM_NUDGE}
                 y={stemTipY}
                 text-anchor="start"
                 fill={inkColor}
@@ -2665,8 +2669,8 @@ const ChordGroupEl = memo(function ChordGroupEl({
       )}
       {!hasNoStem && (
         <line
-          x1={hasFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
-          x2={hasFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
+          x1={hasFlag ? stemX + STEM_FLAG_NUDGE : stemX}
+          x2={hasFlag ? stemX + STEM_FLAG_NUDGE : stemX}
           y1={stemY1}
           y2={stemY2}
           stroke={inkColor}
@@ -2677,7 +2681,7 @@ const ChordGroupEl = memo(function ChordGroupEl({
         <Flags
           type={type}
           stemDir={stemDir}
-          stemX={stemX - FLAG_STEM_OVERLAP}
+          stemX={stemX - FLAG_STEM_NUDGE}
           stemTipY={stemY2}
           inkColor={inkColor}
         />
