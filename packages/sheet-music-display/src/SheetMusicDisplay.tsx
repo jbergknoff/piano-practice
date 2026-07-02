@@ -204,6 +204,22 @@ function computeBeamGroups(
   });
 }
 
+// SVG <line> with stroke-width draws end caps perpendicular to the beam's own
+// slope, so a diagonal beam's end edge is slanted relative to the (always
+// vertical) stem it terminates against — the corner where they meet looks
+// notched rather than flush. Real engraving draws beams as parallelograms
+// with vertical end edges regardless of slope; build that polygon directly.
+function beamPolygonPoints(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  thickness: number,
+): string {
+  const half = thickness / 2;
+  return `${x1},${y1 - half} ${x2},${y2 - half} ${x2},${y2 + half} ${x1},${y1 + half}`;
+}
+
 // Compute secondary beam segments for 16th notes within a beam group.
 // Returns x/y endpoints for each segment, following the diagonal of the primary
 // beam (offset toward the noteheads by beamOffset).
@@ -2767,23 +2783,27 @@ function BeamLines({
 
         return (
           <g key={groupKey}>
-            <line
-              x1={x1}
-              x2={x2}
-              y1={beamStartY}
-              y2={beamEndY}
-              stroke={inkColor}
-              stroke-width={beamThickness}
+            <polygon
+              points={beamPolygonPoints(
+                x1,
+                beamStartY,
+                x2,
+                beamEndY,
+                beamThickness,
+              )}
+              fill={inkColor}
             />
             {secSegments.map((seg) => (
-              <line
+              <polygon
                 key={seg.x1}
-                x1={seg.x1}
-                x2={seg.x2}
-                y1={seg.y1}
-                y2={seg.y2}
-                stroke={inkColor}
-                stroke-width={beamThickness}
+                points={beamPolygonPoints(
+                  seg.x1,
+                  seg.y1,
+                  seg.x2,
+                  seg.y2,
+                  beamThickness,
+                )}
+                fill={inkColor}
               />
             ))}
           </g>
