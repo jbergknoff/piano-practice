@@ -2638,13 +2638,15 @@ const ChordGroupEl = memo(function ChordGroupEl({
       ))}
       {/* Beam bar connecting multiple grace note groups */}
       {isGraceBeamed && graceStemTipYs !== undefined && (
-        <line
-          x1={graceXs[0] + graceNrx}
-          x2={graceXs[N - 1] + graceNrx}
-          y1={graceStemTipYs[0]}
-          y2={graceStemTipYs[N - 1]}
-          stroke={inkColor}
-          stroke-width={staffSpace * 0.5 * graceScale}
+        <polygon
+          points={beamPolygonPoints(
+            graceXs[0] + graceNrx,
+            graceStemTipYs[0],
+            graceXs[N - 1] + graceNrx,
+            graceStemTipYs[N - 1],
+            staffSpace * 0.5 * graceScale,
+          )}
+          fill={inkColor}
         />
       )}
       {!hasNoStem && (
