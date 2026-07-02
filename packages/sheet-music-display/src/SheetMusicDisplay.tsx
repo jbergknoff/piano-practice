@@ -96,6 +96,13 @@ function stemAttachX(
   return stemDir === "up" ? centerX + nrx : centerX - nrx;
 }
 
+// A flag glyph always hooks to the right of its stem (for both up- and
+// down-stem flags), so nudging the stem's own line slightly right and the
+// flag glyph's anchor slightly left — toward each other — closes any small
+// gap between them without moving either one far enough to look offset from
+// the notehead or the flag's own curve.
+const FLAG_STEM_OVERLAP = 0.4;
+
 // Width of the invisible pointer hit-area for a focus-range drag handle,
 // centered on the handle's pill. Wider than the visible pill (12px) so the
 // handle is easy to grab on a touchscreen without needing pixel precision.
@@ -2456,8 +2463,8 @@ function GraceNoteGroupEl({
             />
             {/* Stem (upward) */}
             <line
-              x1={stemX}
-              x2={stemX}
+              x1={showFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
+              x2={showFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
               y1={ny}
               y2={stemTipY}
               stroke={inkColor}
@@ -2466,7 +2473,7 @@ function GraceNoteGroupEl({
             {/* Flag — omitted when the group belongs to a beamed run */}
             {showFlag && (
               <text
-                x={stemX}
+                x={stemX - FLAG_STEM_OVERLAP}
                 y={stemTipY}
                 text-anchor="start"
                 fill={inkColor}
@@ -2622,6 +2629,8 @@ const ChordGroupEl = memo(function ChordGroupEl({
     stemY1 = topY;
     stemY2 = beamStemOverride?.stemTipY ?? bottomY + stemLength;
   }
+  const hasFlag =
+    !hasNoStem && (type === "eighth" || type === "16th") && !beamStemOverride;
 
   return (
     <g data-chord-id={`p${partIndex}-m${measureNumber}-n${group.noteIndex}`}>
@@ -2656,25 +2665,23 @@ const ChordGroupEl = memo(function ChordGroupEl({
       )}
       {!hasNoStem && (
         <line
-          x1={stemX}
-          x2={stemX}
+          x1={hasFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
+          x2={hasFlag ? stemX + FLAG_STEM_OVERLAP : stemX}
           y1={stemY1}
           y2={stemY2}
           stroke={inkColor}
           stroke-width={STEM_STROKE_WIDTH}
         />
       )}
-      {!hasNoStem &&
-        (type === "eighth" || type === "16th") &&
-        !beamStemOverride && (
-          <Flags
-            type={type}
-            stemDir={stemDir}
-            stemX={stemX}
-            stemTipY={stemY2}
-            inkColor={inkColor}
-          />
-        )}
+      {hasFlag && (
+        <Flags
+          type={type}
+          stemDir={stemDir}
+          stemX={stemX - FLAG_STEM_OVERLAP}
+          stemTipY={stemY2}
+          inkColor={inkColor}
+        />
+      )}
       {noteGeom.map((info, v) => {
         const { nx, ny } = info;
         return (
