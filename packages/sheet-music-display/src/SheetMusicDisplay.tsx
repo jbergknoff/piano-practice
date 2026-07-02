@@ -87,6 +87,26 @@ const STAFF_LINE_OPACITY = 0.55;
 // head; grace heads scale this down further by their own grace scale.
 const NOTEHEAD_HALF_WIDTH_FACTOR = 0.55;
 
+// A stem placed exactly at the notehead's nominal half-width sometimes lands
+// a hair outside the glyph's actual rendered ink — the SMuFL notehead isn't a
+// perfect ellipse, and browser font hinting can round its edge slightly
+// depending on sub-pixel position, especially on a horizontally scrolled
+// SVG. That shows up as a faint gap between stem and head. Inset the stem's
+// attachment point by this fraction of the half-width so it always lands
+// safely inside the glyph's ink, regardless of hinting jitter. Applied
+// everywhere a stem or beam anchors to a notehead (main stems, beam stems,
+// grace stems).
+const STEM_NOTEHEAD_INSET_FACTOR = 0.15;
+
+function stemAttachX(
+  centerX: number,
+  nrx: number,
+  stemDir: "up" | "down",
+): number {
+  const inset = nrx * STEM_NOTEHEAD_INSET_FACTOR;
+  return stemDir === "up" ? centerX + nrx - inset : centerX - nrx + inset;
+}
+
 // Width of the invisible pointer hit-area for a focus-range drag handle,
 // centered on the handle's pill. Wider than the visible pill (12px) so the
 // handle is easy to grab on a touchscreen without needing pixel precision.
@@ -152,9 +172,7 @@ function computeBeamGroups(
       return stemDir === "up" ? Math.min(...ys) : Math.max(...ys);
     });
 
-    const stemXs = indices.map((i) =>
-      stemDir === "up" ? eventXs[i] + nrx : eventXs[i] - nrx,
-    );
+    const stemXs = indices.map((i) => stemAttachX(eventXs[i], nrx, stemDir));
 
     // Beam endpoints: natural stem tip (standard length) for the first and last
     // chord, then clamped so the total rise stays within maxBeamRise.
@@ -2403,7 +2421,7 @@ function GraceNoteGroupEl({
       {notes.map((note, vi) => {
         const ny = noteY(note.pitch, clef, staffBottomY, staffSpace);
         const nx = x + vi * nrx * 0.3; // slight rightward cascade for unisons
-        const stemX = nx + nrx;
+        const stemX = stemAttachX(nx, nrx, "up");
         const stemTipY = stemTipOverride ?? ny - stemLength;
         const noteId = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${vi}`;
 
@@ -2605,15 +2623,13 @@ const ChordGroupEl = memo(function ChordGroupEl({
       : { x: noteGeom[noteGeom.length - 1].nx, y: topY - staffSpace }
     : null;
 
-  let stemX: number;
+  const stemX = stemAttachX(x, nrx, stemDir);
   let stemY1: number;
   let stemY2: number;
   if (stemDir === "up") {
-    stemX = x + nrx;
     stemY1 = bottomY;
     stemY2 = beamStemOverride?.stemTipY ?? topY - stemLength;
   } else {
-    stemX = x - nrx;
     stemY1 = topY;
     stemY2 = beamStemOverride?.stemTipY ?? bottomY + stemLength;
   }
@@ -2640,9 +2656,9 @@ const ChordGroupEl = memo(function ChordGroupEl({
       {isGraceBeamed && graceStemTipYs !== undefined && (
         <polygon
           points={beamPolygonPoints(
-            graceXs[0] + graceNrx,
+            stemAttachX(graceXs[0], graceNrx, "up"),
             graceStemTipYs[0],
-            graceXs[N - 1] + graceNrx,
+            stemAttachX(graceXs[N - 1], graceNrx, "up"),
             graceStemTipYs[N - 1],
             staffSpace * 0.5 * graceScale,
           )}
