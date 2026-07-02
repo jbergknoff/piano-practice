@@ -73,7 +73,7 @@ Actively developed and used for daily practice. Current limitations worth
 knowing:
 
 - The score renders as one long horizontal system — there is no line wrapping
-  or page layout yet.
+  or page layout yet (planned: [docs/line-wrapping-plan.md](docs/line-wrapping-plan.md)).
 - Dense multi-voice passages are rendered as a rhythmic reduction (voices
   within a staff merge into one onset-ordered stream), not full voice
   separation. Dynamics, slurs, and most ornaments are not rendered.
