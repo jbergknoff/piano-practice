@@ -32,7 +32,6 @@ const NOTEHEADS = [NOTEHEAD_WHOLE, NOTEHEAD_HALF, NOTEHEAD_BLACK];
 // Stroke widths that uniquely identify each kind of <line> (see the renderer).
 const STEM_WIDTH = "1.2";
 const LEDGER_WIDTH = "1";
-const BEAM_WIDTH = "5"; // staffSpace (10) * 0.5
 
 // Mount the component and return its root <svg> plus a few query helpers.
 function renderSheetMusic(
@@ -51,6 +50,7 @@ function renderSheetMusic(
 
   const allText = () => Array.from(svg.querySelectorAll("text"));
   const allLines = () => Array.from(svg.querySelectorAll("line"));
+  const allPolygons = () => Array.from(svg.querySelectorAll("polygon"));
 
   return {
     svg,
@@ -59,6 +59,8 @@ function renderSheetMusic(
       allText().filter((t) => (t.textContent ?? "").includes(glyph)),
     linesWithStrokeWidth: (w: string) =>
       allLines().filter((l) => l.getAttribute("stroke-width") === w),
+    // Beams render as filled polygons (vertical end edges), not stroked lines.
+    beamPolygons: () => allPolygons(),
     // Noteheads in document order (= note order within each measure), each with
     // its x/y so position and intra-chord spacing can be asserted.
     noteheads: () =>
@@ -303,7 +305,7 @@ describe("SheetMusicDisplay rendering", () => {
 
   test("a six-eighth run in 3/4 beams as three per-beat groups", () => {
     // Without beat grouping this would be a single beam spanning the measure.
-    const { linesWithStrokeWidth } = renderSheetMusic(
+    const { beamPolygons } = renderSheetMusic(
       scoreXml(
         [
           EIGHTH("G", 4),
@@ -316,7 +318,7 @@ describe("SheetMusicDisplay rendering", () => {
         { beats: 3, beatType: 4 },
       ),
     );
-    expect(linesWithStrokeWidth(BEAM_WIDTH)).toHaveLength(3);
+    expect(beamPolygons()).toHaveLength(3);
   });
 });
 

@@ -103,6 +103,48 @@ test("Rondo alla Turca full score — tied coda (measure 212)", async ({
   await screenshotRondoAtMeasure(page, 212, "rondo-full-m212-ties.png");
 });
 
+// Close-up regression for the beam/stem geometry fixes: beams are filled
+// parallelograms with vertical, stem-overhung end edges (not stroked lines,
+// which left a notched corner on a diagonal beam), and every stem is inset
+// slightly into its notehead's ink so it never reads as a gap next to the
+// head. Clips tightly around four two-note chords with angled beams
+// (measures 59-60) so the junctions are unambiguous in the resulting image —
+// a tight clip of a native-resolution screenshot is itself a "zoomed in"
+// crop, with no browser zoom trick needed.
+test("beam and stem geometry close-up — flush against noteheads, no gaps", async ({
+  page,
+}) => {
+  await loadFile(page, "rondo-alla-turca-full.mxl");
+
+  const clip = await page.evaluate(() => {
+    const noteEl = document.querySelector('[id*="-m59-"]');
+    noteEl?.scrollIntoView({ block: "nearest", inline: "center" });
+    // Use the stem <line>s for a tight, accurate bounding box — the chord
+    // group's box is inflated by the noteheads' full font em-boxes.
+    const stems = ["p0-m59-n0", "p0-m59-n1", "p0-m59-n2", "p0-m59-n3"].map(
+      (chordId) => document.querySelector(`[data-chord-id="${chordId}"] line`),
+    ) as SVGLineElement[];
+    const rects = stems.map((stem) => stem.getBoundingClientRect());
+    const x = Math.min(...rects.map((r) => r.x));
+    const right = Math.max(...rects.map((r) => r.x + r.width));
+    const y = Math.min(...rects.map((r) => r.y));
+    const bottom = Math.max(...rects.map((r) => r.y + r.height));
+    return {
+      x: Math.round(x - 15),
+      y: Math.round(y - 15),
+      width: Math.round(right - x + 30),
+      height: Math.round(bottom - y + 30),
+    };
+  });
+
+  if (screenshotsEnabled) {
+    await waitForFonts(page);
+    await expect(page).toHaveScreenshot("beam-stem-geometry-closeup.png", {
+      clip,
+    });
+  }
+});
+
 // The sticky overlay should show the key signature that is active at the
 // visible left edge — not always the original one. This test uses a D-major
 // piece (2 sharps) and scrolls past the initial header so the overlay appears

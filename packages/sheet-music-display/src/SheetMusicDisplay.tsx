@@ -87,6 +87,26 @@ const STAFF_LINE_OPACITY = 0.55;
 // head; grace heads scale this down further by their own grace scale.
 const NOTEHEAD_HALF_WIDTH_FACTOR = 0.55;
 
+// A stem's attachment point, tangent to the notehead's nominal half-width.
+function stemAttachX(
+  centerX: number,
+  nrx: number,
+  stemDir: "up" | "down",
+): number {
+  return stemDir === "up" ? centerX + nrx : centerX - nrx;
+}
+
+// A flag glyph always hooks to the right of its stem (for both up- and
+// down-stem flags), so nudging the stem's own line slightly right and the
+// flag glyph's anchor slightly left — toward each other — closes any small
+// gap between them without moving either one far enough to look offset from
+// the notehead or the flag's own curve. Weighted toward the stem: nudging
+// the flag noticeably shifts its own curve leftward (visibly offsetting it
+// from the notehead), while the stem is just a straight line that can move
+// a little further without looking wrong.
+const STEM_FLAG_NUDGE = 0.3;
+const FLAG_STEM_NUDGE = 0.1;
+
 // Width of the invisible pointer hit-area for a focus-range drag handle,
 // centered on the handle's pill. Wider than the visible pill (12px) so the
 // handle is easy to grab on a touchscreen without needing pixel precision.
@@ -95,6 +115,14 @@ const HANDLE_HIT_WIDTH = 44;
 // Fraction of the adjacent measure's width a focus-handle drag must cross
 // before it snaps to that measure (see snapIndexFromCurrent).
 const HANDLE_SNAP_THRESHOLD_FRACTION = 0.25;
+
+// Stroke width of a note stem. A beam's vertical end edge sits exactly on the
+// stem's centerline, so its diagonal top/bottom edges get anti-aliased right
+// at the corner where they meet the crisp stem stroke — that softened corner
+// reads as the beam falling short of the stem. Beams overhang each end by
+// half this width so the filled polygon fully covers the stem's width at the
+// tip, closing that seam.
+const STEM_STROKE_WIDTH = 1.2;
 
 // ── Beam geometry ─────────────────────────────────────────────────────────────
 
@@ -144,9 +172,7 @@ function computeBeamGroups(
       return stemDir === "up" ? Math.min(...ys) : Math.max(...ys);
     });
 
-    const stemXs = indices.map((i) =>
-      stemDir === "up" ? eventXs[i] + nrx : eventXs[i] - nrx,
-    );
+    const stemXs = indices.map((i) => stemAttachX(eventXs[i], nrx, stemDir));
 
     // Beam endpoints: natural stem tip (standard length) for the first and last
     // chord, then clamped so the total rise stays within maxBeamRise.
@@ -204,23 +230,68 @@ function computeBeamGroups(
   });
 }
 
+// SVG <line> with stroke-width draws end caps perpendicular to the beam's own
+// slope, so a diagonal beam's end edge is slanted relative to the (always
+// vertical) stem it terminates against — the corner where they meet looks
+// notched rather than flush. Real engraving draws beams as parallelograms
+// with vertical end edges regardless of slope; build that polygon directly.
+// An end anchored on a real stem is pushed outward along the beam's own line
+// (by half the stem's stroke width) so the fill fully covers the stem's
+// width at the tip — otherwise the diagonal edges' anti-aliasing leaves a
+// faint seam right where they'd otherwise meet the stem's crisp edge. Only
+// stem-anchored ends should overhang; a secondary beam's open stub tip (see
+// secondaryBeamSegments) has no stem to reach and must stay put.
+function beamPolygonPoints(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  thickness: number,
+  anchorStart = true,
+  anchorEnd = true,
+): string {
+  const half = thickness / 2;
+  const dX = x2 - x1;
+  const slope = dX === 0 ? 0 : (y2 - y1) / dX;
+  const overhang = STEM_STROKE_WIDTH / 2;
+  const ax1 = anchorStart ? x1 - overhang : x1;
+  const ay1 = anchorStart ? y1 - slope * overhang : y1;
+  const ax2 = anchorEnd ? x2 + overhang : x2;
+  const ay2 = anchorEnd ? y2 + slope * overhang : y2;
+  return `${ax1},${ay1 - half} ${ax2},${ay2 - half} ${ax2},${ay2 + half} ${ax1},${ay1 + half}`;
+}
+
 // Compute secondary beam segments for 16th notes within a beam group.
 // Returns x/y endpoints for each segment, following the diagonal of the primary
-// beam (offset toward the noteheads by beamOffset).
+// beam (offset toward the noteheads by beamOffset), plus which ends land on a
+// real stem (see beamPolygonPoints — only those ends should overhang).
 function secondaryBeamSegments(
   types: NoteType[],
   stems: Array<{ stemX: number; stemTipY: number }>,
   beamOffset: number,
   stemDir: "up" | "down",
-): Array<{ x1: number; y1: number; x2: number; y2: number }> {
+): Array<{
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  anchorStart: boolean;
+  anchorEnd: boolean;
+}> {
   const yOffset = stemDir === "up" ? beamOffset : -beamOffset;
   // Pre-compute beam slope for interpolating y at stub endpoints.
   const dX = stems[stems.length - 1].stemX - stems[0].stemX;
   const slope =
     dX === 0 ? 0 : (stems[stems.length - 1].stemTipY - stems[0].stemTipY) / dX;
 
-  const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> =
-    [];
+  const segments: Array<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    anchorStart: boolean;
+    anchorEnd: boolean;
+  }> = [];
   let i = 0;
   while (i < types.length) {
     if (types[i] !== "16th") {
@@ -244,6 +315,8 @@ function secondaryBeamSegments(
           y1: stemY - slope * halfGap,
           x2: stems[idx].stemX,
           y2: stemY,
+          anchorStart: false,
+          anchorEnd: true,
         });
       } else {
         const halfGap =
@@ -255,6 +328,8 @@ function secondaryBeamSegments(
           y1: stemY,
           x2: stems[idx].stemX + halfGap,
           y2: stemY + slope * halfGap,
+          anchorStart: true,
+          anchorEnd: false,
         });
       }
     } else {
@@ -263,6 +338,8 @@ function secondaryBeamSegments(
         y1: stems[runStart].stemTipY + yOffset,
         x2: stems[runEnd - 1].stemX,
         y2: stems[runEnd - 1].stemTipY + yOffset,
+        anchorStart: true,
+        anchorEnd: true,
       });
     }
   }
@@ -2344,7 +2421,7 @@ function GraceNoteGroupEl({
       {notes.map((note, vi) => {
         const ny = noteY(note.pitch, clef, staffBottomY, staffSpace);
         const nx = x + vi * nrx * 0.3; // slight rightward cascade for unisons
-        const stemX = nx + nrx;
+        const stemX = stemAttachX(nx, nrx, "up");
         const stemTipY = stemTipOverride ?? ny - stemLength;
         const noteId = `p${partIndex}-m${measureNumber}-n${noteIndex}-v${vi}`;
 
@@ -2390,8 +2467,8 @@ function GraceNoteGroupEl({
             />
             {/* Stem (upward) */}
             <line
-              x1={stemX}
-              x2={stemX}
+              x1={showFlag ? stemX + STEM_FLAG_NUDGE : stemX}
+              x2={showFlag ? stemX + STEM_FLAG_NUDGE : stemX}
               y1={ny}
               y2={stemTipY}
               stroke={inkColor}
@@ -2400,7 +2477,7 @@ function GraceNoteGroupEl({
             {/* Flag — omitted when the group belongs to a beamed run */}
             {showFlag && (
               <text
-                x={stemX}
+                x={stemX - FLAG_STEM_NUDGE}
                 y={stemTipY}
                 text-anchor="start"
                 fill={inkColor}
@@ -2546,18 +2623,18 @@ const ChordGroupEl = memo(function ChordGroupEl({
       : { x: noteGeom[noteGeom.length - 1].nx, y: topY - staffSpace }
     : null;
 
-  let stemX: number;
+  const stemX = stemAttachX(x, nrx, stemDir);
   let stemY1: number;
   let stemY2: number;
   if (stemDir === "up") {
-    stemX = x + nrx;
     stemY1 = bottomY;
     stemY2 = beamStemOverride?.stemTipY ?? topY - stemLength;
   } else {
-    stemX = x - nrx;
     stemY1 = topY;
     stemY2 = beamStemOverride?.stemTipY ?? bottomY + stemLength;
   }
+  const hasFlag =
+    !hasNoStem && (type === "eighth" || type === "16th") && !beamStemOverride;
 
   return (
     <g data-chord-id={`p${partIndex}-m${measureNumber}-n${group.noteIndex}`}>
@@ -2579,36 +2656,36 @@ const ChordGroupEl = memo(function ChordGroupEl({
       ))}
       {/* Beam bar connecting multiple grace note groups */}
       {isGraceBeamed && graceStemTipYs !== undefined && (
-        <line
-          x1={graceXs[0] + graceNrx}
-          x2={graceXs[N - 1] + graceNrx}
-          y1={graceStemTipYs[0]}
-          y2={graceStemTipYs[N - 1]}
-          stroke={inkColor}
-          stroke-width={staffSpace * 0.5 * graceScale}
+        <polygon
+          points={beamPolygonPoints(
+            stemAttachX(graceXs[0], graceNrx, "up"),
+            graceStemTipYs[0],
+            stemAttachX(graceXs[N - 1], graceNrx, "up"),
+            graceStemTipYs[N - 1],
+            staffSpace * 0.5 * graceScale,
+          )}
+          fill={inkColor}
         />
       )}
       {!hasNoStem && (
         <line
-          x1={stemX}
-          x2={stemX}
+          x1={hasFlag ? stemX + STEM_FLAG_NUDGE : stemX}
+          x2={hasFlag ? stemX + STEM_FLAG_NUDGE : stemX}
           y1={stemY1}
           y2={stemY2}
           stroke={inkColor}
-          stroke-width="1.2"
+          stroke-width={STEM_STROKE_WIDTH}
         />
       )}
-      {!hasNoStem &&
-        (type === "eighth" || type === "16th") &&
-        !beamStemOverride && (
-          <Flags
-            type={type}
-            stemDir={stemDir}
-            stemX={stemX}
-            stemTipY={stemY2}
-            inkColor={inkColor}
-          />
-        )}
+      {hasFlag && (
+        <Flags
+          type={type}
+          stemDir={stemDir}
+          stemX={stemX - FLAG_STEM_NUDGE}
+          stemTipY={stemY2}
+          inkColor={inkColor}
+        />
+      )}
       {noteGeom.map((info, v) => {
         const { nx, ny } = info;
         return (
@@ -2767,23 +2844,29 @@ function BeamLines({
 
         return (
           <g key={groupKey}>
-            <line
-              x1={x1}
-              x2={x2}
-              y1={beamStartY}
-              y2={beamEndY}
-              stroke={inkColor}
-              stroke-width={beamThickness}
+            <polygon
+              points={beamPolygonPoints(
+                x1,
+                beamStartY,
+                x2,
+                beamEndY,
+                beamThickness,
+              )}
+              fill={inkColor}
             />
             {secSegments.map((seg) => (
-              <line
+              <polygon
                 key={seg.x1}
-                x1={seg.x1}
-                x2={seg.x2}
-                y1={seg.y1}
-                y2={seg.y2}
-                stroke={inkColor}
-                stroke-width={beamThickness}
+                points={beamPolygonPoints(
+                  seg.x1,
+                  seg.y1,
+                  seg.x2,
+                  seg.y2,
+                  beamThickness,
+                  seg.anchorStart,
+                  seg.anchorEnd,
+                )}
+                fill={inkColor}
               />
             ))}
           </g>
