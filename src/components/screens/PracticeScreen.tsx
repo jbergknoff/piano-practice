@@ -78,7 +78,7 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
-  onOpenFile: () => void;
+  onGoToLanding: () => void;
   playalongPlayMusic: boolean;
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
   playalongMetronome: boolean;
@@ -111,7 +111,7 @@ export function PracticeScreen({
   onMeasureRangeChange,
   onModeChange,
   onTrackToggle,
-  onOpenFile,
+  onGoToLanding,
   playalongPlayMusic,
   onPlayalongPlayMusicChange,
   playalongMetronome,
@@ -552,9 +552,9 @@ export function PracticeScreen({
         >
           <button
             type="button"
-            onClick={onOpenFile}
+            onClick={onGoToLanding}
             style={cornerButtonStyle(theme)}
-            title="Open file"
+            title="Back to your pieces"
           >
             <OpenFileIcon />
           </button>

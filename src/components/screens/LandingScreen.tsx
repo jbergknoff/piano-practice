@@ -1,16 +1,24 @@
 import { useState } from "preact/hooks";
+import type { LibrarySummary } from "../../hooks/use-file-history";
+import type { LibraryEntry } from "../../hooks/use-file-library";
 import type { PianoController } from "../../hooks/use-piano";
+import { prettyTitle } from "../../pretty-title";
 import type { ThemeTokens } from "../../theme";
 import {
   blurFilter,
   FONT_MONO,
   FONT_SANS,
+  glassPanel,
   hexA,
+  miniButtonStyle,
   serifTitle,
 } from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
+import { formatDate, ScoreChip } from "../ResultModal";
 import { HelpBadge } from "../HelpBadge";
-import { OpenFileIcon } from "../icons";
+import { OpenFileIcon, TrashIcon } from "../icons";
+
+type LibraryListEntry = LibraryEntry & LibrarySummary;
 
 interface LandingScreenProps {
   theme: ThemeTokens;
@@ -19,6 +27,101 @@ interface LandingScreenProps {
   piano: PianoController;
   onFile: (e: Event) => void;
   onDrop: (e: DragEvent) => void;
+  entries: LibraryListEntry[];
+  onSelectEntry: (entry: LibraryListEntry) => void;
+  onDeleteEntry: (hash: string) => void;
+}
+
+function LibraryRow({
+  theme,
+  entry,
+  onSelect,
+  onDelete,
+}: {
+  theme: ThemeTokens;
+  entry: LibraryListEntry;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const title = prettyTitle(entry.fileName);
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "stretch",
+        gap: 6,
+        borderRadius: 10,
+        border: `0.5px solid ${theme.border}`,
+        background: theme.panel,
+        transition: "border-color 0.15s, background 0.15s",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          padding: "10px 12px",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          flex: 1,
+          minWidth: 0,
+          outline: "none",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            color: theme.ink,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {title}
+        </span>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: theme.inkSoft }}>
+            {entry.lastPracticedAt !== null
+              ? formatDate(entry.lastPracticedAt)
+              : "Not yet practiced"}
+          </span>
+          {entry.mode && (
+            <span style={{ fontSize: 11, color: theme.inkFaint }}>
+              {entry.mode}
+            </span>
+          )}
+          {entry.bestScore !== null && (
+            <span style={{ fontSize: 11 }}>
+              <ScoreChip score={entry.bestScore} />
+            </span>
+          )}
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (window.confirm(`Delete "${title}" and its practice history?`)) {
+            onDelete();
+          }
+        }}
+        title="Delete"
+        style={{
+          ...miniButtonStyle(theme),
+          alignSelf: "center",
+          marginRight: 8,
+        }}
+      >
+        <TrashIcon />
+      </button>
+    </div>
+  );
 }
 
 export function LandingScreen({
@@ -28,6 +131,9 @@ export function LandingScreen({
   piano,
   onFile,
   onDrop,
+  entries,
+  onSelectEntry,
+  onDeleteEntry,
 }: LandingScreenProps) {
   const [hovering, setHovering] = useState(false);
   const connected = piano.status === "connected";
@@ -81,7 +187,7 @@ export function LandingScreen({
         />
       </div>
 
-      {/* Centered drop zone */}
+      {/* Centered drop zone + library */}
       <div
         style={{
           position: "relative",
@@ -90,6 +196,10 @@ export function LandingScreen({
           maxWidth: 480,
           padding: "0 24px",
           boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          maxHeight: "100%",
         }}
       >
         <label
@@ -201,6 +311,34 @@ export function LandingScreen({
             ))}
           </div>
         </label>
+
+        {entries.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              padding: 16,
+              borderRadius: 16,
+              overflowY: "auto",
+              maxHeight: 260,
+              ...glassPanel(theme),
+            }}
+          >
+            <span style={serifTitle(theme, 16)}>Your pieces</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {entries.map((entry) => (
+                <LibraryRow
+                  key={entry.hash}
+                  theme={theme}
+                  entry={entry}
+                  onSelect={() => onSelectEntry(entry)}
+                  onDelete={() => onDeleteEntry(entry.hash)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
