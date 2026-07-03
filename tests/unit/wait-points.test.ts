@@ -204,4 +204,43 @@ describe("buildWaitPoints – slashed grace notes", () => {
     expect(c5Point?.optionalNoteNumbers.has(74)).toBe(true); // D5 = 74 optional
     expect(c5Point?.noteNumbers.has(74)).toBe(false); // D5 not required
   });
+
+  test("two notes at the same musical beat but with floating-point-drifted startBeat values still form one chord wait point", () => {
+    // Reproduces a bug where a two-note chord split across two staves/voices
+    // produced two single-note wait points instead of one two-note wait point,
+    // because each staff accumulates its own beatCursor via a separate chain
+    // of float additions and can land an ULP or so apart from the other at
+    // "the same" beat.
+    const notes = [
+      {
+        noteNumber: 71, // B4
+        startBeat: 19.333333333333332,
+        durationBeats: 0.3333333333333333,
+        velocity: 80,
+        tieStop: false,
+        partIndex: 0,
+        measureNumber: 5,
+        measureIndex: 4,
+        noteIndex: 0,
+        voiceIndex: 0,
+      },
+      {
+        noteNumber: 80, // G#5
+        startBeat: 19.333333333333336,
+        durationBeats: 0.3333333333333333,
+        velocity: 80,
+        tieStop: false,
+        partIndex: 1,
+        measureNumber: 5,
+        measureIndex: 4,
+        noteIndex: 0,
+        voiceIndex: 0,
+      },
+    ];
+    const points = buildWaitPoints(notes);
+
+    expect(points).toHaveLength(1);
+    expect(points[0].noteNumbers.has(71)).toBe(true);
+    expect(points[0].noteNumbers.has(80)).toBe(true);
+  });
 });
