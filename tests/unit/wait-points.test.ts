@@ -205,42 +205,63 @@ describe("buildWaitPoints – slashed grace notes", () => {
     expect(c5Point?.noteNumbers.has(74)).toBe(false); // D5 not required
   });
 
-  test("two notes at the same musical beat but with floating-point-drifted startBeat values still form one chord wait point", () => {
-    // Reproduces a bug where a two-note chord split across two staves/voices
-    // produced two single-note wait points instead of one two-note wait point,
-    // because each staff accumulates its own beatCursor via a separate chain
-    // of float additions and can land an ULP or so apart from the other at
-    // "the same" beat.
-    const notes = [
-      {
-        noteNumber: 71, // B4
-        startBeat: 19.333333333333332,
-        durationBeats: 0.3333333333333333,
-        velocity: 80,
-        tieStop: false,
-        partIndex: 0,
-        measureNumber: 5,
-        measureIndex: 4,
-        noteIndex: 0,
-        voiceIndex: 0,
-      },
-      {
-        noteNumber: 80, // G#5
-        startBeat: 19.333333333333336,
-        durationBeats: 0.3333333333333333,
-        velocity: 80,
-        tieStop: false,
-        partIndex: 1,
-        measureNumber: 5,
-        measureIndex: 4,
-        noteIndex: 0,
-        voiceIndex: 0,
-      },
-    ];
+  test("a chord split across two parts lands on one wait point even though each part reaches the beat via a different chain of additions", () => {
+    // Regression test: a two-note chord split across two <part>s (e.g. a grand
+    // staff piano piece) previously produced two single-note wait points
+    // instead of one two-note wait point. Each part accumulated its own
+    // running beat via `beatCursor += duration / divisions`, and — because
+    // float addition is not associative — one part reaching a beat via five
+    // 1-tick additions (divisions=3: 1/3 five times) landed on a different
+    // IEEE 754 double than another part reaching the identical beat via a
+    // single 5-tick note (5/3 in one division):
+    //   five additions of 1/3 → 1.6666666666666665
+    //   one division of 5/3   → 1.6666666666666667
+    // Part P1 plays five triplet eighths (ticks 0-5) then the chord note at
+    // tick 5; part P2 plays one long note spanning ticks 0-5 then its chord
+    // note at the same tick 5. Both chord notes are at the same musical beat
+    // and must form a single wait point.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>RH</part-name></score-part>
+    <score-part id="P2"><part-name>LH</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>3</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>6</duration><type>half</type></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1">
+      <attributes>
+        <divisions>3</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>5</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>2</octave></pitch><duration>1</duration><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>6</duration><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const { notes } = musicXmlToConversion(xml);
     const points = buildWaitPoints(notes);
 
-    expect(points).toHaveLength(1);
-    expect(points[0].noteNumbers.has(71)).toBe(true);
-    expect(points[0].noteNumbers.has(80)).toBe(true);
+    const chordPoint = points.find(
+      (p) => p.noteNumbers.has(76) /* E5 */ && p.noteNumbers.has(43) /* G2 */,
+    );
+    expect(chordPoint).toBeDefined();
+    expect(chordPoint?.noteNumbers.size).toBe(2);
   });
 });

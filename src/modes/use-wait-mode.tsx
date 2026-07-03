@@ -86,20 +86,6 @@ export interface WaitModeSettings {
  * sounding there. A tie that lands on a beat with no other onset is dropped —
  * there is nothing to wait for.
  */
-/**
- * Rounds a beat value to collapse floating-point drift while preserving any
- * genuine musical distinction. `startBeat` is accumulated per staff via
- * repeated `beatCursor += duration / divisions` additions (see
- * `musicxml-playback.ts`); because float addition is not associative, two
- * staves that both land on "the same" beat can end up an ULP or so apart.
- * The smallest real beat gap in a score is bounded by 1 / divisions, which is
- * never anywhere near this precision, so rounding to 9 decimal places merges
- * only floating-point noise.
- */
-function roundBeat(beat: number): number {
-  return Math.round(beat * 1e9) / 1e9;
-}
-
 export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
   // Per-beat tracking splits required vs optional vs tied note numbers so that
   // slashed grace notes remain optional even when clamped to the same beat as
@@ -123,15 +109,11 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
 
   for (const note of notes) {
     if (note.tieStop) {
-      tieStops.push({
-        beat: roundBeat(note.startBeat),
-        noteNumber: note.noteNumber,
-      });
+      tieStops.push({ beat: note.startBeat, noteNumber: note.noteNumber });
       continue;
     }
     const isSlashedGrace = (note.isGrace && note.isGraceSlash) ?? false;
-    const beat = roundBeat(note.startBeat);
-    const existing = beatMap.get(beat);
+    const existing = beatMap.get(note.startBeat);
     if (existing) {
       if (isSlashedGrace) {
         // Always make the grace optional at the wait point whose beat it
@@ -152,7 +134,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         existing.isAllGraceSlash = false;
       }
     } else if (isSlashedGrace) {
-      beatMap.set(beat, {
+      beatMap.set(note.startBeat, {
         requiredNumbers: new Set(),
         optionalNumbers: new Set([note.noteNumber]),
         tiedNumbers: new Set(),
@@ -161,7 +143,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
         measure: note.measureIndex + 1,
       });
     } else {
-      beatMap.set(beat, {
+      beatMap.set(note.startBeat, {
         requiredNumbers: new Set([note.noteNumber]),
         optionalNumbers: new Set(),
         tiedNumbers: new Set(),
@@ -257,7 +239,7 @@ export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
     ) {
       continue;
     }
-    const index = beatToMergedIndex.get(roundBeat(note.graceMainBeat));
+    const index = beatToMergedIndex.get(note.graceMainBeat);
     if (index !== undefined) {
       merged[index].optionalNoteNumbers.add(note.noteNumber);
     }
@@ -473,7 +455,7 @@ export function useWaitMode(
     const tied = waitPoints[idx].tiedNoteNumbers;
     const highlights: NoteHighlight[] = [];
     for (const note of control.musicxml.notes) {
-      if (roundBeat(note.startBeat) !== targetBeat) {
+      if (note.startBeat !== targetBeat) {
         continue;
       }
       // Notes freshly attacked at this beat are highlighted; a tied-in note is
