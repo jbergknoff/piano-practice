@@ -108,19 +108,35 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
   // the display and playback see the fully-unrolled score.
   const expandedXml = expandRepeatsMusicXml(xml);
   const score = parseScore(expandedXml);
+  // Computed once from a single part's event durations (see
+  // `computeMeasureStartBeats`), so every part shares the exact same beat for
+  // a given measure boundary rather than each re-deriving its own.
+  const measureStartBeats = computeMeasureStartBeats(score);
   const notes: PlaybackNote[] = [];
 
   score.parts.forEach((part, partIndex) => {
-    let beatCursor = 0;
     let measureIndex = 0;
     for (const measure of part.measures) {
       const divisions = measure.divisions || 4;
+      const measureStart = measureStartBeats[measureIndex] ?? 0;
+      // Walk this measure's onsets in exact integer ticks (the file's own
+      // division units) instead of accumulating a running float beat across
+      // the whole part. Ticks add up exactly; combined with the shared
+      // `measureStart` above, every part lands on a bit-identical beat for
+      // notes at the same onset. The previous per-part float accumulation let
+      // two staves whose events summed to the same beat via a different
+      // sequence of additions drift apart by an ULP or more — e.g. a rest of
+      // duration 2 then a note of duration 2 in one staff rounds differently
+      // than a single note of duration 4 in another, even though both reach
+      // beat 0.5 — which silently split chord wait points into single notes.
+      let tickCursor = 0;
       for (const event of measure.events) {
         if (isRest(event)) {
-          beatCursor += event.duration / divisions;
+          tickCursor += event.duration;
           continue;
         }
 
+        const beatCursor = measureStart + tickCursor / divisions;
         const gracesBefore = event.gracesBefore ?? [];
         gracesBefore.forEach((graceGroup, groupIndex) => {
           // Grace notes are played slightly before the main note. When there
@@ -150,7 +166,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
         });
 
         // `event.duration` is the display duration (space to next onset in this
-        // part); it drives beatCursor so subsequent notes start at the right beat.
+        // part); it drives tickCursor so subsequent notes start at the right beat.
         // `event.playbackDuration`, when present, is the actual sounding length
         // (set by the MIDI-to-MusicXML converter via <play-duration>); use it for
         // durationBeats so highlight timing reflects the true note length rather
@@ -178,7 +194,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
             voiceIndex,
           });
         });
-        beatCursor += displayBeats;
+        tickCursor += event.duration;
       }
       measureIndex++;
     }
@@ -207,6 +223,6 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
     timeSigDen: timeSig.beatType,
     totalBeats,
     repeatSections: extractRepeatSections(xml),
-    measureStartBeats: computeMeasureStartBeats(score),
+    measureStartBeats,
   };
 }
