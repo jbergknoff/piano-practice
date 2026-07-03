@@ -30,7 +30,7 @@ File naming: components are `PascalCase`; everything else is `kebab-case`.
 
 ### Two-screen model
 
-The app renders either `LandingScreen` (file picker + file library) or `PracticeScreen` (practice view), driven by whether a file is loaded (either `midiData` from a MIDI file or `loadedXml` from a MusicXML/`.mxl` file). `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay. The top-left corner button in `PracticeScreen` (`onGoToLanding`) returns to `LandingScreen` rather than opening the OS file picker directly — from there the user can either pick a previously-opened piece from the library or drop/browse a new file.
+The app renders either `LandingScreen` (file picker + file library) or `PracticeScreen` (practice view), driven by whether a file is loaded (either `midiData` from a MIDI file or `loadedXml` from a MusicXML/`.mxl` file). `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay. The top-left corner has two buttons: a home button (`onGoToLanding`) that returns to `LandingScreen`'s file library, and an open-file button (`onOpenFile`) that still opens the OS file picker directly.
 
 ### Data pipeline
 
@@ -161,7 +161,7 @@ bottleneck.)
 
 ### PracticeScreen control areas
 
-- **Top-left** — back button, piece title (opens info modal on click)
+- **Top-left** — home button (back to library), open-file button, piece title (opens info modal on click)
 - **Bottom-left** — Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
 

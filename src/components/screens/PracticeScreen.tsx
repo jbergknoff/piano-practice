@@ -40,6 +40,7 @@ import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
 import {
   GearIcon,
+  HomeIcon,
   OpenFileIcon,
   PauseIcon,
   PencilIcon,
@@ -78,6 +79,7 @@ interface PracticeScreenProps {
   onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
   onModeChange: (mode: "wait" | "playalong" | "listen") => void;
   onTrackToggle: (idx: number) => void;
+  onOpenFile: () => void;
   onGoToLanding: () => void;
   playalongPlayMusic: boolean;
   onPlayalongPlayMusicChange: (enabled: boolean) => void;
@@ -111,6 +113,7 @@ export function PracticeScreen({
   onMeasureRangeChange,
   onModeChange,
   onTrackToggle,
+  onOpenFile,
   onGoToLanding,
   playalongPlayMusic,
   onPlayalongPlayMusicChange,
@@ -537,7 +540,7 @@ export function PracticeScreen({
         }}
       />
 
-      {/* TOP LEFT: back button + piece title */}
+      {/* TOP LEFT: home button + open-file button + piece title */}
       {!playalongActive && (
         <div
           style={{
@@ -555,6 +558,14 @@ export function PracticeScreen({
             onClick={onGoToLanding}
             style={cornerButtonStyle(theme)}
             title="Back to your pieces"
+          >
+            <HomeIcon />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenFile}
+            style={cornerButtonStyle(theme)}
+            title="Open file"
           >
             <OpenFileIcon />
           </button>

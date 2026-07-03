@@ -59,6 +59,7 @@ export function App() {
   const demo = isDemoMode();
 
   // ── File / MIDI state ────────────────────────────────────────────────────
+  const openFileInputRef = useRef<HTMLInputElement>(null);
   const [midiData, setMidiData] = useState<MidiData | null>(null);
   // MusicXML loaded directly from a .musicxml/.xml file (no MIDI source).
   const [loadedXml, setLoadedXml] = useState<string | null>(null);
@@ -378,6 +379,10 @@ export function App() {
     setInitialBeat(0);
   }
 
+  function handleOpenFile() {
+    openFileInputRef.current?.click();
+  }
+
   // ── Persistence ──────────────────────────────────────────────────────────
   const snapshotRef = useRef<{ hash: string; history: FileHistory } | null>(
     null,
@@ -476,6 +481,13 @@ export function App() {
 
   return (
     <>
+      <input
+        ref={openFileInputRef}
+        type="file"
+        accept=".mid,.midi,audio/midi,.musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml"
+        onChange={handleFileInput}
+        style={{ display: "none" }}
+      />
       <PracticeScreen
         theme={theme}
         accent={accent}
@@ -497,6 +509,7 @@ export function App() {
         onMeasureRangeChange={setMeasureRange}
         onModeChange={setMode}
         onTrackToggle={onTrackToggle}
+        onOpenFile={handleOpenFile}
         onGoToLanding={handleGoToLanding}
         playalongPlayMusic={playalongPlayMusic}
         onPlayalongPlayMusicChange={setPlayalongPlayMusic}
