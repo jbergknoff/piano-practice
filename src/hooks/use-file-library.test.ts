@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
-  saveAttempt,
-  saveCustomRanges,
-  saveFileHistory,
-} from "./use-file-history";
-import {
   deleteLibraryEntry,
-  deleteLibraryEntryAndHistory,
   getAllLibraryEntries,
   getLibraryEntry,
   getMostRecentlyOpenedEntry,
@@ -75,39 +69,11 @@ describe("getAllLibraryEntries / getMostRecentlyOpenedEntry", () => {
   });
 });
 
-describe("deleteLibraryEntry / deleteLibraryEntryAndHistory", () => {
-  test("deleteLibraryEntry removes only the record", async () => {
+describe("deleteLibraryEntry", () => {
+  test("removes the record", async () => {
     await putLibraryEntry("hash1", "piece.mid", new Uint8Array([1]));
     await deleteLibraryEntry("hash1");
     expect(await getLibraryEntry("hash1")).toBeNull();
-  });
-
-  test("deleteLibraryEntryAndHistory clears the library entry and every localStorage store", async () => {
-    const hash = "hash1";
-    await putLibraryEntry(hash, "piece.mid", new Uint8Array([1]));
-    saveFileHistory(hash, {
-      bpmRatio: 1,
-      measureRange: null,
-      mode: "wait",
-      selectedTrackIndices: [0],
-      currentBeat: 0,
-    });
-    saveAttempt(hash, "full", {
-      timestamp: Date.now(),
-      wrongNotes: 0,
-      elapsedMs: 100,
-      score: 90,
-    });
-    saveCustomRanges(hash, [{ id: "1", name: "Intro", from: 1, to: 4 }]);
-
-    await deleteLibraryEntryAndHistory(hash);
-
-    expect(await getLibraryEntry(hash)).toBeNull();
-    expect(localStorage.getItem(`piano-practice:file:${hash}`)).toBeNull();
-    expect(localStorage.getItem(`piano-practice:attempts:${hash}`)).toBeNull();
-    expect(
-      localStorage.getItem(`piano-practice:custom-ranges:${hash}`),
-    ).toBeNull();
   });
 });
 

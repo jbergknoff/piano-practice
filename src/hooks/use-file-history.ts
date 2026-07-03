@@ -53,14 +53,6 @@ export function saveFileHistory(hash: string, history: FileHistory): void {
   }
 }
 
-export function deleteFileHistory(hash: string): void {
-  try {
-    localStorage.removeItem(STORAGE_PREFIX + hash);
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
-}
-
 export interface WaitModeAttempt {
   timestamp: number;
   wrongNotes: number;
@@ -137,17 +129,6 @@ export function clearAttempts(hash: string, selectionKey: string): void {
     const history = loadAttemptHistory(hash);
     history[selectionKey] = [];
     localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
-}
-
-// Removes both the wait-mode and playalong attempt logs for a hash entirely
-// (every selection key), used when a piece is removed from the library.
-export function deleteAllAttempts(hash: string): void {
-  try {
-    localStorage.removeItem(ATTEMPTS_PREFIX + hash);
-    localStorage.removeItem(PLAYALONG_ATTEMPTS_PREFIX + hash);
   } catch {
     // ignore (private mode, quota exceeded, etc.)
   }
@@ -254,14 +235,6 @@ export function loadCustomRanges(hash: string): CustomRange[] {
 export function saveCustomRanges(hash: string, ranges: CustomRange[]): void {
   try {
     localStorage.setItem(CUSTOM_RANGES_PREFIX + hash, JSON.stringify(ranges));
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
-}
-
-export function deleteAllCustomRanges(hash: string): void {
-  try {
-    localStorage.removeItem(CUSTOM_RANGES_PREFIX + hash);
   } catch {
     // ignore (private mode, quota exceeded, etc.)
   }

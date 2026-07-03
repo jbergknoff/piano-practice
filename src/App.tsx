@@ -27,7 +27,7 @@ import { DemoOverlay } from "./demo/DemoOverlay";
 import { demoFocusRange, isDemoMode } from "./demo/fake-bluetooth";
 import {
   type LibraryEntry,
-  deleteLibraryEntryAndHistory,
+  deleteLibraryEntry,
   getAllLibraryEntries,
   getMostRecentlyOpenedEntry,
   migrateRecentFileToLibrary,
@@ -223,7 +223,7 @@ export function App() {
   }, [refreshLibrary]);
 
   async function handleDeleteLibraryEntry(hash: string) {
-    await deleteLibraryEntryAndHistory(hash);
+    await deleteLibraryEntry(hash);
     await refreshLibrary();
   }
 

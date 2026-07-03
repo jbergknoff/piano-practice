@@ -107,7 +107,7 @@ function LibraryRow({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          if (window.confirm(`Delete "${title}" and its practice history?`)) {
+          if (window.confirm(`Remove "${title}" from your library?`)) {
             onDelete();
           }
         }}

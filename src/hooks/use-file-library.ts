@@ -1,9 +1,4 @@
-import {
-  deleteAllAttempts,
-  deleteAllCustomRanges,
-  deleteFileHistory,
-  hashFileBytes,
-} from "./use-file-history";
+import { hashFileBytes } from "./use-file-history";
 
 const DB_NAME = "piano-practice";
 const DB_VERSION = 1;
@@ -106,21 +101,16 @@ export async function getMostRecentlyOpenedEntry(): Promise<LibraryEntry | null>
   );
 }
 
+// Removes only the cached file bytes for a hash — FileHistory, attempts, and
+// custom ranges are left alone, so reopening the same file later (which
+// recreates the library entry under the same hash) brings its old practice
+// history back automatically.
 export async function deleteLibraryEntry(hash: string): Promise<void> {
   try {
     await withStore("readwrite", (store) => store.delete(hash));
   } catch {
     // ignore (quota exceeded, private mode, etc.)
   }
-}
-
-export async function deleteLibraryEntryAndHistory(
-  hash: string,
-): Promise<void> {
-  await deleteLibraryEntry(hash);
-  deleteFileHistory(hash);
-  deleteAllAttempts(hash);
-  deleteAllCustomRanges(hash);
 }
 
 const RECENT_FILE_KEY = "piano-practice:recent-file";
