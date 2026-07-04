@@ -13,7 +13,9 @@ export interface BluetoothState {
   status: BtStatus;
   deviceName: string | null;
   error: string | null;
-  connect: () => Promise<void>;
+  /** Resolves to whether the connection succeeded, so callers can decide
+   * whether to fall back to another transport. */
+  connect: () => Promise<boolean>;
   /** Send a note to the connected device. No-op when not connected. */
   sendNote: (
     note: number,
@@ -103,11 +105,11 @@ export function useBluetooth(
     tryAutoReconnect();
   }, []);
 
-  async function connect() {
+  async function connect(): Promise<boolean> {
     if (!navigator.bluetooth) {
       setError("Web Bluetooth not available");
       setStatus("error");
-      return;
+      return false;
     }
     setStatus("connecting");
     setError(null);
@@ -116,15 +118,17 @@ export function useBluetooth(
         filters: [{ services: [BLE_MIDI_SERVICE] }],
       });
       await connectDevice(device);
+      return true;
     } catch (err) {
       const msg = String(err);
       // User dismissed the device picker — not an error, just go back to idle.
       if (msg.includes("cancelled") || msg.includes("User cancelled")) {
         setStatus("idle");
-        return;
+        return false;
       }
       setError(msg);
       setStatus("error");
+      return false;
     }
   }
 
