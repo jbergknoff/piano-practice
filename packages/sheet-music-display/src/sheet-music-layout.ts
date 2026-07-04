@@ -213,18 +213,12 @@ function eventAdvance(deltaDivs: number, noteUnitWidth: number): number {
 // staves reaching the same musical onset via different rhythms — a right-hand
 // triplet eighth and a left-hand straight eighth both landing on beat 2 of a
 // 3-against-2 measure — can differ by a single IEEE 754 ULP (7.999999999999999
-// vs 8). The onset Set in buildMeasureSpine would then treat them as two
-// distinct columns and draw the simultaneous noteheads MIN_EVENT_ADVANCE apart
-// instead of stacked. Quantizing every onset to a fixed grid before it is used
-// as a key collapses that drift onto one shared column. The grid is far finer
-// than any real subdivision, so genuinely distinct onsets never merge. (This
-// mirrors the exact-integer-tick walk musicXmlToConversion uses to keep the same
-// two notes on one wait-mode beat — the layout spine is the other place the same
-// simultaneity has to be preserved.)
-const ONSET_QUANTIZATION = 1e6;
-function quantizeOnset(position: number): number {
-  return Math.round(position * ONSET_QUANTIZATION) / ONSET_QUANTIZATION;
-}
+// vs 8). Onsets closer together than this never belong to different columns: the
+// finest real subdivision is orders of magnitude larger, so a sub-epsilon gap is
+// always float drift, not two distinct notes. buildMeasureSpine collapses such
+// pairs into one shared column and eventXsFromSpine walks columns by index (not
+// by float-keyed lookup), so simultaneous noteheads stay stacked.
+const ONSET_EPSILON = 1e-6;
 
 // Minimum advance INTO a note that carries accidentals, so the glyph (drawn to
 // the left of the notehead, possibly stacked into columns) clears the previous
@@ -274,53 +268,56 @@ export function buildMeasureSpine(
   staffSpace: number,
   noteUnitWidth: number,
 ): { divs: number[]; xs: number[]; endDiv: number; endX: number } {
-  const onsets = new Set<number>();
-  // Accidental advance competes with the natural gap: ensures the previous
-  // notehead clears the current accidental glyph (whichever is larger wins).
-  const accAdvanceByDiv = new Map<number, number>();
-  // Grace advance is always additive: grace noteheads occupy their own slot
-  // to the left of the main notehead regardless of how tight the surrounding
-  // notes are. Using max() here would let a large natural gap absorb the
-  // grace space, causing the grace notehead to land on top of the previous note.
-  const graceAdvByDiv = new Map<number, number>();
+  // Every event's onset across every staff, paired with the extra advance its
+  // notehead needs. Accidental advance competes with the natural gap (the larger
+  // wins, so the previous notehead clears the accidental glyph); grace advance is
+  // always additive (grace noteheads own a slot left of the main notehead, so a
+  // large natural gap must not absorb it and land the grace on the previous note).
+  const rawOnsets: Array<{ pos: number; acc: number; graceAdv: number }> = [];
   let contentEnd = 0; // last division any part's notes actually reach
   for (const measure of measures) {
     let pos = 0;
     for (const event of measure.events) {
-      const onset = quantizeOnset(pos);
-      onsets.add(onset);
-      if (!isRest(event)) {
-        const chord = event as ChordGroup;
-        const acc = accidentalAdvance(chord.notes, staffSpace);
-        const graceAdv = (chord.gracesBefore?.length ?? 0) * GRACE_NOTE_ADVANCE;
-        if (acc > 0) {
-          accAdvanceByDiv.set(
-            onset,
-            Math.max(accAdvanceByDiv.get(onset) ?? 0, acc),
-          );
-        }
-        if (graceAdv > 0) {
-          graceAdvByDiv.set(
-            onset,
-            Math.max(graceAdvByDiv.get(onset) ?? 0, graceAdv),
-          );
-        }
-      }
+      const chord = isRest(event) ? null : (event as ChordGroup);
+      rawOnsets.push({
+        pos,
+        acc: chord ? accidentalAdvance(chord.notes, staffSpace) : 0,
+        graceAdv: chord
+          ? (chord.gracesBefore?.length ?? 0) * GRACE_NOTE_ADVANCE
+          : 0,
+      });
       pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
     }
     contentEnd = Math.max(contentEnd, pos);
   }
 
-  const divs = [...onsets].sort((a, b) => a - b);
+  // Collapse onsets from different staves that land on the same musical position
+  // (within ONSET_EPSILON — see the constant) into one column, taking the max
+  // accidental/grace advance across the notes that share it. Sorting first means
+  // an equal-onset run is contiguous, so a single forward scan merges it.
+  rawOnsets.sort((a, b) => a.pos - b.pos);
+  const divs: number[] = [];
+  const accByColumn: number[] = [];
+  const graceByColumn: number[] = [];
+  for (const onset of rawOnsets) {
+    const last = divs.length - 1;
+    if (last >= 0 && onset.pos - divs[last] <= ONSET_EPSILON) {
+      accByColumn[last] = Math.max(accByColumn[last], onset.acc);
+      graceByColumn[last] = Math.max(graceByColumn[last], onset.graceAdv);
+    } else {
+      divs.push(onset.pos);
+      accByColumn.push(onset.acc);
+      graceByColumn.push(onset.graceAdv);
+    }
+  }
+
   const contentStart = measureLeadIn(measures, isFirst, staffSpace);
   const xs: number[] = [];
   let x = contentStart;
   for (let k = 0; k < divs.length; k++) {
     if (k > 0) {
       const gap = eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
-      x +=
-        Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0) +
-        (graceAdvByDiv.get(divs[k]) ?? 0);
+      x += Math.max(gap, accByColumn[k]) + graceByColumn[k];
     }
     xs.push(x);
   }
@@ -338,22 +335,28 @@ export function buildMeasureSpine(
 }
 
 // Map a single part's events onto the shared spine: each event takes the x of
-// its onset division. Because the spine's onsets are the union across all parts,
-// every event's onset is present.
+// its onset column. The spine's columns are the union of every part's onsets, so
+// each event's onset is one of them; and both events and columns run in ascending
+// onset order, so a single integer column index walked forward finds each match —
+// no float-keyed lookup, which is what let a triplet onset (7.999999999999999)
+// miss the straight-eighth column it shares (8). Advancing while the *next*
+// column is still at or before this event's onset (± ONSET_EPSILON) lands the
+// index on the column the event belongs to.
 export function eventXsFromSpine(
   events: MeasureEvent[],
   spine: MeasureSpine,
 ): number[] {
-  const xByDiv = new Map<number, number>();
-  for (let i = 0; i < spine.divs.length; i++) {
-    xByDiv.set(spine.divs[i], spine.xs[i]);
-  }
   const xs: number[] = [];
   let pos = 0;
+  let column = 0;
   for (const event of events) {
-    xs.push(
-      xByDiv.get(quantizeOnset(pos)) ?? spine.xs[spine.xs.length - 1] ?? 0,
-    );
+    while (
+      column + 1 < spine.divs.length &&
+      spine.divs[column + 1] <= pos + ONSET_EPSILON
+    ) {
+      column++;
+    }
+    xs.push(spine.xs[column] ?? 0);
     pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
   }
   return xs;
