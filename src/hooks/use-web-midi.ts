@@ -112,11 +112,11 @@ export function useWebMidi(
     };
   }
 
-  async function connect() {
+  async function connect(): Promise<boolean> {
     if (typeof navigator === "undefined" || !navigator.requestMIDIAccess) {
       setError("Web MIDI not available");
       setStatus("error");
-      return;
+      return false;
     }
     setStatus("connecting");
     setError(null);
@@ -128,12 +128,14 @@ export function useWebMidi(
       if (inputs.length === 0) {
         setError("No MIDI input devices found");
         setStatus("error");
-        return;
+        return false;
       }
       attach(access, inputs);
+      return true;
     } catch (err) {
       setError(String(err));
       setStatus("error");
+      return false;
     }
   }
 

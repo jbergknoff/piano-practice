@@ -81,15 +81,22 @@ function unsupportedBody(accent: string) {
   );
 }
 
-function errorBody(accent: string, source: PianoSource | null) {
+function errorBody(
+  accent: string,
+  source: PianoSource | null,
+  canRetryOtherTransport: boolean,
+) {
   if (source === "midi") {
     return (
       <span>
         No MIDI device was found. Connect your piano over USB, or pair it in
         your operating system's Bluetooth settings first — on Linux, BlueZ
-        bridges a paired BLE piano to a MIDI port this app can then use. Then
-        try again. See the {compatibilityLink(accent, "compatibility page ↗")}{" "}
-        for what's supported.
+        bridges a paired BLE piano to a MIDI port this app can then use.{" "}
+        {canRetryOtherTransport
+          ? '"Try again" below will attempt a Bluetooth connection instead.'
+          : "Then try again."}{" "}
+        See the {compatibilityLink(accent, "compatibility page ↗")} for what's
+        supported.
       </span>
     );
   }
@@ -106,10 +113,12 @@ function errorBody(accent: string, source: PianoSource | null) {
           <code style={{ fontSize: 11 }}>chrome://flags</code> and enable both{" "}
           <strong>Experimental Web Platform features</strong> and{" "}
           <strong>Use the new permissions backend for Web Bluetooth</strong>,
-          then relaunch. If pairing still fails, try connecting over USB or Web
-          MIDI instead.
+          then relaunch.
         </>
-      )}
+      )}{" "}
+      {canRetryOtherTransport
+        ? 'If your piano is connected over USB, "Try again" below will attempt a Web MIDI connection instead.'
+        : "If pairing still fails, try connecting over USB or Web MIDI instead."}
     </span>
   );
 }
@@ -173,13 +182,19 @@ export function ConnectionBadge({
     />
   );
 
+  const canRetryOtherTransport =
+    (piano.lastFailedSource === "bluetooth" && piano.midiSupported) ||
+    (piano.lastFailedSource === "midi" && piano.bluetoothSupported);
+
   const title = connected
     ? `Connected · ${piano.deviceName}`
     : connecting
       ? "Connecting…"
       : hasError
         ? (piano.error ?? "Connection failed")
-        : "Connect a piano";
+        : canRetryOtherTransport
+          ? `Connect a piano (click again to try ${piano.lastFailedSource === "bluetooth" ? "Web MIDI" : "Bluetooth"})`
+          : "Connect a piano";
 
   function handleClick() {
     if (!supported) {
@@ -399,7 +414,7 @@ export function ConnectionBadge({
                 lineHeight: 1.6,
               }}
             >
-              {errorBody(accent, piano.source)}
+              {errorBody(accent, piano.source, canRetryOtherTransport)}
             </p>
             <div
               style={{
