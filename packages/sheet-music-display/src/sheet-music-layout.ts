@@ -208,6 +208,24 @@ function eventAdvance(deltaDivs: number, noteUnitWidth: number): number {
   return Math.max((deltaDivs / DIVISIONS) * noteUnitWidth, MIN_EVENT_ADVANCE);
 }
 
+// Onset positions are accumulated as a running float sum of event durations.
+// Triplet durations (e.g. 4/3 of a division) don't sum to clean values, so two
+// staves reaching the same musical onset via different rhythms — a right-hand
+// triplet eighth and a left-hand straight eighth both landing on beat 2 of a
+// 3-against-2 measure — can differ by a single IEEE 754 ULP (7.999999999999999
+// vs 8). The onset Set in buildMeasureSpine would then treat them as two
+// distinct columns and draw the simultaneous noteheads MIN_EVENT_ADVANCE apart
+// instead of stacked. Quantizing every onset to a fixed grid before it is used
+// as a key collapses that drift onto one shared column. The grid is far finer
+// than any real subdivision, so genuinely distinct onsets never merge. (This
+// mirrors the exact-integer-tick walk musicXmlToConversion uses to keep the same
+// two notes on one wait-mode beat — the layout spine is the other place the same
+// simultaneity has to be preserved.)
+const ONSET_QUANTIZATION = 1e6;
+function quantizeOnset(position: number): number {
+  return Math.round(position * ONSET_QUANTIZATION) / ONSET_QUANTIZATION;
+}
+
 // Minimum advance INTO a note that carries accidentals, so the glyph (drawn to
 // the left of the notehead, possibly stacked into columns) clears the previous
 // notehead in a tight run. 0 when the chord has no accidentals. Mirrors
@@ -269,21 +287,22 @@ export function buildMeasureSpine(
   for (const measure of measures) {
     let pos = 0;
     for (const event of measure.events) {
-      onsets.add(pos);
+      const onset = quantizeOnset(pos);
+      onsets.add(onset);
       if (!isRest(event)) {
         const chord = event as ChordGroup;
         const acc = accidentalAdvance(chord.notes, staffSpace);
         const graceAdv = (chord.gracesBefore?.length ?? 0) * GRACE_NOTE_ADVANCE;
         if (acc > 0) {
           accAdvanceByDiv.set(
-            pos,
-            Math.max(accAdvanceByDiv.get(pos) ?? 0, acc),
+            onset,
+            Math.max(accAdvanceByDiv.get(onset) ?? 0, acc),
           );
         }
         if (graceAdv > 0) {
           graceAdvByDiv.set(
-            pos,
-            Math.max(graceAdvByDiv.get(pos) ?? 0, graceAdv),
+            onset,
+            Math.max(graceAdvByDiv.get(onset) ?? 0, graceAdv),
           );
         }
       }
@@ -332,7 +351,9 @@ export function eventXsFromSpine(
   const xs: number[] = [];
   let pos = 0;
   for (const event of events) {
-    xs.push(xByDiv.get(pos) ?? spine.xs[spine.xs.length - 1] ?? 0);
+    xs.push(
+      xByDiv.get(quantizeOnset(pos)) ?? spine.xs[spine.xs.length - 1] ?? 0,
+    );
     pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
   }
   return xs;
