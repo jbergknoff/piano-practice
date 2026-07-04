@@ -281,43 +281,46 @@ export function saveGlobalPreferences(prefs: GlobalPreferences): void {
   }
 }
 
-const RECENT_FILE_KEY = "piano-practice:recent-file";
-
-export function saveRecentFile(name: string, bytes: Uint8Array): void {
-  try {
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    localStorage.setItem(
-      RECENT_FILE_KEY,
-      JSON.stringify({ name, data: btoa(binary) }),
-    );
-  } catch {
-    // ignore (quota exceeded, etc.)
-  }
+export interface LibrarySummary {
+  lastPracticedAt: number | null;
+  mode: "wait" | "playalong" | "listen" | null;
+  bestScore: number | null;
 }
 
-export function loadRecentFile(): {
-  name: string;
-  bytes: Uint8Array<ArrayBuffer>;
-} | null {
-  try {
-    const raw = localStorage.getItem(RECENT_FILE_KEY);
-    if (!raw) {
-      return null;
+// Aggregates practice stats for a file across every selection key and both
+// attempt kinds, for display in the file-library list.
+export function computeLibrarySummary(hash: string): LibrarySummary {
+  let lastPracticedAt: number | null = null;
+  let bestScore: number | null = null;
+
+  for (const list of Object.values(loadAttemptHistory(hash))) {
+    for (const attempt of list) {
+      lastPracticedAt = Math.max(
+        lastPracticedAt ?? Number.NEGATIVE_INFINITY,
+        attempt.timestamp,
+      );
+      bestScore = Math.max(
+        bestScore ?? Number.NEGATIVE_INFINITY,
+        attempt.score,
+      );
     }
-    const record = JSON.parse(raw) as { name: string; data: string };
-    if (typeof record.name !== "string" || typeof record.data !== "string") {
-      return null;
-    }
-    const binary = atob(record.data);
-    const bytes = new Uint8Array(binary.length) as Uint8Array<ArrayBuffer>;
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return { name: record.name, bytes };
-  } catch {
-    return null;
   }
+  for (const list of Object.values(loadPlayalongAttemptHistory(hash))) {
+    for (const attempt of list) {
+      lastPracticedAt = Math.max(
+        lastPracticedAt ?? Number.NEGATIVE_INFINITY,
+        attempt.timestamp,
+      );
+      bestScore = Math.max(
+        bestScore ?? Number.NEGATIVE_INFINITY,
+        attempt.score,
+      );
+    }
+  }
+
+  return {
+    lastPracticedAt,
+    mode: loadFileHistory(hash)?.mode ?? null,
+    bestScore,
+  };
 }

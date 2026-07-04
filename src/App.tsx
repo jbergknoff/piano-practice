@@ -25,25 +25,28 @@ import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { DemoOverlay } from "./demo/DemoOverlay";
 import { demoFocusRange, isDemoMode } from "./demo/fake-bluetooth";
+import {
+  type LibraryEntry,
+  deleteLibraryEntry,
+  getAllLibraryEntries,
+  getMostRecentlyOpenedEntry,
+  migrateRecentFileToLibrary,
+  putLibraryEntry,
+} from "./hooks/use-file-library";
 import { usePiano } from "./hooks/use-piano";
 import {
+  computeLibrarySummary,
   type FileHistory,
+  type LibrarySummary,
   hashFileBytes,
   loadFileHistory,
   loadGlobalPreferences,
-  loadRecentFile,
   saveFileHistory,
   saveGlobalPreferences,
-  saveRecentFile,
 } from "./hooks/use-file-history";
 import { useWakeLock } from "./hooks/use-wake-lock";
+import { prettyTitle } from "./pretty-title";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
-
-function prettyTitle(filename: string): string {
-  return filename
-    .replace(/\.(mid|midi|musicxml|xml|mxl)$/i, "")
-    .replace(/[-_]/g, " ");
-}
 
 function isMusicXmlFile(name: string): boolean {
   return /\.(musicxml|xml|mxl)$/i.test(name);
@@ -61,11 +64,13 @@ export function App() {
   // MusicXML loaded directly from a .musicxml/.xml file (no MIDI source).
   const [loadedXml, setLoadedXml] = useState<string | null>(null);
   // True from first render until the auto-restore attempt completes (success
-  // or failure). Initialized by reading localStorage synchronously so the
-  // landing screen is never painted when a recent file is about to load.
-  const [isRestoringRecentFile, setIsRestoringRecentFile] = useState(
-    () => loadRecentFile() !== null,
-  );
+  // or failure). IndexedDB lookups are async, so this always starts true and
+  // the auto-resume effect below flips it to false once it settles — the
+  // landing screen is never painted before that check resolves.
+  const [isRestoringRecentFile, setIsRestoringRecentFile] = useState(true);
+  const [libraryEntries, setLibraryEntries] = useState<
+    Array<LibraryEntry & LibrarySummary>
+  >([]);
   const [tracks, setTracks] = useState<TrackInfo[]>([]);
   const [selectedTracks, setSelectedTracks] = useState<number[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -204,13 +209,43 @@ export function App() {
     return savedMode;
   }
 
+  // ── File library ─────────────────────────────────────────────────────────
+  const refreshLibrary = useCallback(async () => {
+    const entries = await getAllLibraryEntries();
+    setLibraryEntries(
+      entries
+        .map((entry) => ({ ...entry, ...computeLibrarySummary(entry.hash) }))
+        .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt),
+    );
+  }, []);
+
+  useEffect(() => {
+    void refreshLibrary();
+  }, [refreshLibrary]);
+
+  async function handleDeleteLibraryEntry(hash: string) {
+    await deleteLibraryEntry(hash);
+    await refreshLibrary();
+  }
+
   // ── File loading + history restore ───────────────────────────────────────
   useEffect(() => {
-    const recent = loadRecentFile();
-    if (!recent) {
-      return;
-    }
-    loadFile(new File([recent.bytes], recent.name));
+    let cancelled = false;
+    (async () => {
+      await migrateRecentFileToLibrary();
+      const entry = await getMostRecentlyOpenedEntry();
+      if (cancelled) {
+        return;
+      }
+      if (!entry) {
+        setIsRestoringRecentFile(false);
+        return;
+      }
+      loadFile(new File([entry.bytes], entry.fileName));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Route a dropped/selected/restored file to the right parser by extension.
@@ -250,7 +285,7 @@ export function App() {
       parseScore(xml); // throws on invalid MusicXML
       const hash = await hashFileBytes(bytes);
       setFileHash(hash);
-      saveRecentFile(file.name, bytes);
+      void putLibraryEntry(hash, file.name, bytes);
 
       const tempo = getMusicXmlTempo(xml);
       const history = loadFileHistory(hash);
@@ -281,7 +316,7 @@ export function App() {
       const bytes = new Uint8Array(buffer);
       const hash = await hashFileBytes(bytes);
       setFileHash(hash);
-      saveRecentFile(file.name, bytes);
+      void putLibraryEntry(hash, file.name, bytes);
 
       const parsed = parseMidi(bytes);
       const trackList = getMidiTracks(parsed);
@@ -331,6 +366,7 @@ export function App() {
   }
 
   function handleGoToLanding() {
+    void refreshLibrary();
     setMidiData(null);
     setLoadedXml(null);
     setFileName(null);
@@ -434,6 +470,11 @@ export function App() {
         piano={piano}
         onFile={handleFileInput}
         onDrop={handleFileDrop}
+        entries={libraryEntries}
+        onSelectEntry={(entry) =>
+          loadFile(new File([entry.bytes], entry.fileName))
+        }
+        onDeleteEntry={handleDeleteLibraryEntry}
       />
     );
   }
@@ -469,6 +510,7 @@ export function App() {
         onModeChange={setMode}
         onTrackToggle={onTrackToggle}
         onOpenFile={handleOpenFile}
+        onGoToLanding={handleGoToLanding}
         playalongPlayMusic={playalongPlayMusic}
         onPlayalongPlayMusicChange={setPlayalongPlayMusic}
         playalongMetronome={playalongMetronome}

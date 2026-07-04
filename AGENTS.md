@@ -20,9 +20,9 @@ App-internal code (under `lib/` and `src/`):
 - `lib/musicxml/` — the **playback-derivation layer**: `musicxml-playback.ts` (`musicXmlToConversion` + the `ScoreConversion`/`PlaybackNote`/`RepeatSection` types, `pitchToMidiNumber`, `getMusicXmlTempo`), `expand-repeats.ts`, `mxl.ts` (unzips `.mxl`). Imports the parser + notation types from `@jbergknoff/sheet-music-display`.
 - `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts` (BLE MIDI packet parse/build), `web-midi.ts` (Web MIDI message parse/build)
 - `lib/circular-buffer/` — generic O(1) ring buffer
-- `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `globals.d.ts`
+- `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
-- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `use-wake-lock.ts`, `use-file-history.ts`
+- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `use-wake-lock.ts`, `use-file-history.ts`, `use-file-library.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts`, `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
 
@@ -30,7 +30,7 @@ File naming: components are `PascalCase`; everything else is `kebab-case`.
 
 ### Two-screen model
 
-The app renders either `LandingScreen` (file picker) or `PracticeScreen` (practice view), driven by whether a file is loaded (either `midiData` from a MIDI file or `loadedXml` from a MusicXML/`.mxl` file). `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay.
+The app renders either `LandingScreen` (file picker + file library) or `PracticeScreen` (practice view), driven by whether a file is loaded (either `midiData` from a MIDI file or `loadedXml` from a MusicXML/`.mxl` file). `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay. The top-left corner has two buttons: a home button (`onGoToLanding`) that returns to `LandingScreen`'s file library, and an open-file button (`onOpenFile`) that still opens the OS file picker directly.
 
 ### Data pipeline
 
@@ -50,7 +50,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 |------|------|
 | `src/App.tsx` | Session shell: file load/parse (MIDI + MusicXML/`.mxl`, routed by extension), history persistence, bluetooth, force-listen-on-disconnect, landing↔practice routing |
 | `src/components/screens/PracticeScreen.tsx` | Owns the `MidiPlayer`, the live cursor + snap state, transport delegation, and instantiates the three mode hooks; renders `{active.overlay}` and `{active.modal}` |
-| `src/components/screens/LandingScreen.tsx` | File drop/pick screen |
+| `src/components/screens/LandingScreen.tsx` | File drop/pick screen; also renders the "Your pieces" library list (title, last-practiced date, mode, best score) when any files have been opened before |
 | `src/modes/mode-control.ts` | `ModeControl` / `ModeHandle` interfaces and `createPlayerHandle` (stable handle that delegates to whatever `MidiPlayer` the getter currently returns) |
 | `src/modes/use-wait-mode.tsx` | Mode hook: wait-point matching, scoring, result modal; receives `ModeControl` |
 | `src/modes/use-playalong-mode.tsx` | Mode hook: count-in, audio-to-piano routing, F1 scoring, count-in overlay + result modal |
@@ -60,7 +60,8 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `lib/musicxml/mxl.ts` | Unzips `.mxl` containers (native `DecompressionStream`) and returns the root MusicXML string |
 | `packages/midi-to-musicxml/src/midi-to-musicxml.ts` | Converts parsed MIDI to a MusicXML string (returns the string; the app derives the `ScoreConversion`) |
 | `packages/sheet-music-display/src/SheetMusicDisplay.tsx` | Renders MusicXML visually; handles focus overlay, drag handles, cursor, right-click, and tie arcs (`computeTieArcs` + `TieLayer`, see below). Injects the bundled SMuFL `@font-face` at module load; plain text uses the `textFontFamily` prop (the app passes its theme constant); highlight types live in the sibling `highlights.ts`, glyph codepoints in `glyphs.ts` |
-| `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log |
+| `src/hooks/use-file-history.ts` | localStorage persistence: per-file history (BPM, range, mode, cursor) + attempt log + `computeLibrarySummary` (aggregates last-practiced date/mode/best-score across every selection key and both attempt kinds, for the library list) |
+| `src/hooks/use-file-library.ts` | IndexedDB-backed file library: stores every opened file's bytes keyed by the same SHA-256 content hash used by `use-file-history.ts` (`putLibraryEntry`/`getLibraryEntry`/`getAllLibraryEntries`/`getMostRecentlyOpenedEntry`/`deleteLibraryEntry`) plus a one-shot `migrateRecentFileToLibrary` that moves the old single-slot `piano-practice:recent-file` localStorage blob into the library on first run. `deleteLibraryEntry` only removes the cached bytes/list entry — it deliberately leaves `FileHistory`, attempts, and custom ranges alone, so reopening the same file later (which recreates the entry under the same hash) brings its old practice history back automatically |
 | `src/hooks/use-piano.ts` | Unified piano-connection controller: merges the two input transports (`useBluetooth` + `useWebMidi`) into one status/error/device view, exposes a smart `connect()` (auto-selects Web MIDI when a real input is present via `listMidiInputs()`, else Web Bluetooth — so the user never has to pick) plus `connectBluetooth`/`connectMidi` + `bluetoothSupported`/`midiSupported`, and routes `sendNote`/`sendNotesBatch` to whichever transport is connected. App calls this (not `useBluetooth` directly) and passes the result down as the `piano` prop |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input transport (Web Bluetooth); calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/hooks/use-web-midi.ts` | Web MIDI input transport (`navigator.requestMIDIAccess`); same surface as `useBluetooth`. Listens on **every** real input port (filtering out the ALSA "MIDI Through" loopback via `isThroughPort`) so it doesn't matter which port is the piano. Sees USB pianos and, on Linux, BLE pianos that BlueZ bridges to ALSA (which Web Bluetooth can't reach once BlueZ's MIDI plugin claims the GATT service) |
@@ -160,7 +161,7 @@ bottleneck.)
 
 ### PracticeScreen control areas
 
-- **Top-left** — back button, piece title (opens info modal on click)
+- **Top-left** — home button (back to library), open-file button, piece title (opens info modal on click)
 - **Bottom-left** — Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
 
