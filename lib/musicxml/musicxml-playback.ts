@@ -97,10 +97,21 @@ export function getMusicXmlTempo(xml: string): number {
 }
 
 /**
+ * The note ID contract shared with the renderer: both derive
+ * `p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}` from the same
+ * parsed score, so a `PlaybackNote`'s ID always matches the rendered
+ * notehead's `data-color-id` it should recolor. `@jbergknoff/sheet-music-display`
+ * builds the same string independently (it cannot depend on app code), so this
+ * exact template must stay in sync with `SheetMusicDisplay.tsx` if it ever changes.
+ */
+export function playbackNoteId(note: PlaybackNote): string {
+  return `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
+}
+
+/**
  * Derive playback data (notes, timing, totals) from a MusicXML string. This is
  * the single source of playback metadata for both MIDI-converted and directly
- * loaded scores: the IDs built here
- * (`p{partIndex}-m{measureNumber}-n{noteIndex}-v{voiceIndex}`) match the IDs the
+ * loaded scores: the IDs built here (see `playbackNoteId`) match the IDs the
  * renderer assigns from the same parsed score, so highlighting stays in sync.
  */
 export function musicXmlToConversion(xml: string): ScoreConversion {

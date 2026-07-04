@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
+import { selectionLabelForRange } from "../selection";
 import {
   type CustomRange,
   loadCustomRanges,
@@ -10,12 +11,6 @@ import {
 export type RangeEditorState =
   | { kind: "create"; from: number; to: number }
   | { kind: "edit"; range: CustomRange };
-
-function defaultRangeName(range: { from: number; to: number }): string {
-  return range.from === range.to
-    ? `Measure ${range.from}`
-    : `Measures ${range.from}–${range.to}`;
-}
 
 // Owns the per-file list of named ranges (persisted in local storage) and the
 // state for the naming/editing modal.
@@ -53,7 +48,7 @@ export function useCustomRanges(
 
   const openCreate = useCallback((range: { from: number; to: number }) => {
     setEditor({ kind: "create", from: range.from, to: range.to });
-    setNameDraft(defaultRangeName(range));
+    setNameDraft(selectionLabelForRange(range));
     setFromDraft(String(range.from));
     setToDraft(String(range.to));
   }, []);

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "preact/hooks";
 import type { RangeEditorState } from "../hooks/use-custom-ranges";
+import { selectionLabelForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -49,10 +50,7 @@ export function RangeNameModal({
   }, []);
 
   const range = editor.kind === "create" ? editor : editor.range;
-  const rangeLabel =
-    range.from === range.to
-      ? `Measure ${range.from}`
-      : `Measures ${range.from}–${range.to}`;
+  const rangeLabel = selectionLabelForRange(range);
   const canSave =
     nameDraft.trim().length > 0 && (editor.kind === "edit" || boundsValid);
 
