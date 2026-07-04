@@ -7,6 +7,7 @@ import {
   loadAttemptHistory,
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
+import { type MeasureRange, selectionKeyForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import { miniButtonStyle, serifTitle } from "../theme";
 import { PencilIcon, PlusIcon } from "./icons";
@@ -17,8 +18,8 @@ interface SelectionRangesDrawerProps {
   theme: ThemeTokens;
   accent: string;
   totalMeasures: number;
-  measureRange: { from: number; to: number } | null;
-  onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
+  measureRange: MeasureRange | null;
+  onMeasureRangeChange: (r: MeasureRange | null) => void;
   fileHash: string | null;
   markedBpm: number;
   customRanges: CustomRange[];
@@ -27,10 +28,7 @@ interface SelectionRangesDrawerProps {
   repeatSections: RepeatSection[];
 }
 
-function rangesEqual(
-  a: { from: number; to: number } | null,
-  b: { from: number; to: number } | null,
-): boolean {
+function rangesEqual(a: MeasureRange | null, b: MeasureRange | null): boolean {
   if (a === null && b === null) {
     return true;
   }
@@ -38,10 +36,6 @@ function rangesEqual(
     return false;
   }
   return a.from === b.from && a.to === b.to;
-}
-
-function selectionKey(range: { from: number; to: number } | null): string {
-  return range ? `m${range.from}-m${range.to}` : "full";
 }
 
 function bestAttempt(attempts: WaitModeAttempt[]): WaitModeAttempt | null {
@@ -114,7 +108,7 @@ function MiniBar({
 
 interface Preset {
   label: string;
-  range: { from: number; to: number } | null;
+  range: MeasureRange | null;
 }
 
 export function SelectionRangesDrawer({
@@ -178,22 +172,20 @@ export function SelectionRangesDrawer({
     },
   ];
 
-  function handleSelect(range: { from: number; to: number } | null) {
+  function handleSelect(range: MeasureRange | null) {
     onMeasureRangeChange(range);
     onClose();
   }
 
-  function bestForRange(
-    range: { from: number; to: number } | null,
-  ): WaitModeAttempt | null {
-    const key = selectionKey(range);
+  function bestForRange(range: MeasureRange | null): WaitModeAttempt | null {
+    const key = selectionKeyForRange(range);
     return bestAttempt(attemptHistory[key] ?? []);
   }
 
   function bestPlayalongForRange(
-    range: { from: number; to: number } | null,
+    range: MeasureRange | null,
   ): PlayalongAttempt | null {
-    const key = selectionKey(range);
+    const key = selectionKeyForRange(range);
     return bestPlayalongAttempt(playalongHistory[key] ?? [], markedBpm);
   }
 

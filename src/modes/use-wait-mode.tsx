@@ -20,7 +20,17 @@ import {
   saveAttempt,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
-import type { PlaybackNote } from "../../lib/musicxml/musicxml-playback";
+import {
+  type PlaybackNote,
+  playbackNoteId,
+} from "../../lib/musicxml/musicxml-playback";
+import {
+  type MeasureRange,
+  selectionEndBeat,
+  selectionKeyForRange,
+  selectionLabelForRange,
+  selectionStartBeat,
+} from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
 import { useStableHighlights } from "./note-colors";
 
@@ -282,7 +292,7 @@ function waitPointCursorBeat(
  */
 function rangeBounds(
   points: WaitPoint[],
-  range: { from: number; to: number } | null,
+  range: MeasureRange | null,
 ): { first: number; end: number } {
   if (!range) {
     return { first: 0, end: points.length };
@@ -374,6 +384,26 @@ export function useWaitMode(
     attemptStartTimeRef.current = null;
   }, []);
 
+  // Move pointIndex/cursor/player to wait point `index` — or, if `index` is
+  // past the last point (e.g. an empty piece), to the selection start beat.
+  // Consolidates the "jump to a wait point" sequence that recurs at every
+  // advance, activation, range reset, and manual reset. Does not touch the
+  // live note-matching state (heldNotesRef etc.) — callers that need a fresh
+  // attempt call `resetAttempt` themselves; the grace-anticipation advance
+  // deliberately carries some of that state forward instead of resetting it.
+  const jumpToPoint = useCallback((index: number) => {
+    const ctrl = controlRef.current;
+    const points = waitPointsRef.current;
+    setPointIndex(index);
+    pointIndexRef.current = index;
+    const targetBeat =
+      points.length > 0 && index < points.length
+        ? waitPointCursorBeat(points[index], ctrl.measureStartBeats)
+        : selectionStartBeat(ctrl.measureRange, ctrl.measureStartBeats);
+    ctrl.setCursor(targetBeat, "jump");
+    ctrl.player.seek(targetBeat);
+  }, []);
+
   // Wait-point set is keyed off musicxml; rebuild when it changes.
   const waitPoints = useMemo<WaitPoint[]>(() => {
     const musicxml = control.musicxml;
@@ -416,24 +446,13 @@ export function useWaitMode(
       return;
     }
     appliedRangeRef.current = range;
-    const measureStartBeats = ctrl.measureStartBeats;
     const points = waitPointsRef.current;
     const { first } = rangeBounds(points, range);
-    setPointIndex(first);
-    pointIndexRef.current = first;
     resetAttempt();
-
     // Move the cursor and player to the new range start so the user can see
     // what they are about to play.
-    let targetBeat: number;
-    if (points.length > 0 && first < points.length) {
-      targetBeat = waitPointCursorBeat(points[first], measureStartBeats);
-    } else {
-      targetBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
-    }
-    ctrl.setCursor(targetBeat, "jump");
-    ctrl.player.seek(targetBeat);
-  }, [resetAttempt]);
+    jumpToPoint(first);
+  }, [resetAttempt, jumpToPoint]);
 
   // When the range changes while wait mode is active, restart from range
   // start. This effect alone is not enough to be race-free — see
@@ -466,7 +485,7 @@ export function useWaitMode(
       }
       highlights.push({
         kind: "score",
-        id: `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
+        id: playbackNoteId(note),
         color: settings.accent,
       });
     }
@@ -617,14 +636,7 @@ export function useWaitMode(
                     freshlyPressedNotesRef.current.add(nextNoteNumber);
                   }
                 }
-                pointIndexRef.current = anticipationIdx;
-                setPointIndex(anticipationIdx);
-                const targetBeat = waitPointCursorBeat(
-                  anticipatedWp,
-                  ctrl.measureStartBeats,
-                );
-                ctrl.setCursor(targetBeat, "jump");
-                ctrl.player.seek(targetBeat);
+                jumpToPoint(anticipationIdx);
                 ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
               } else {
                 ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
@@ -736,23 +748,9 @@ export function useWaitMode(
           }
           wrongNoteCountRef.current = 0;
           attemptStartTimeRef.current = null;
-          pointIndexRef.current = first;
-          setPointIndex(first);
-          const targetBeat = waitPointCursorBeat(
-            points[first],
-            ctrl.measureStartBeats,
-          );
-          ctrl.setCursor(targetBeat, "jump");
-          ctrl.player.seek(targetBeat);
+          jumpToPoint(first);
         } else {
-          pointIndexRef.current = nextIdx;
-          setPointIndex(nextIdx);
-          const targetBeat = waitPointCursorBeat(
-            points[nextIdx],
-            ctrl.measureStartBeats,
-          );
-          ctrl.setCursor(targetBeat, "jump");
-          ctrl.player.seek(targetBeat);
+          jumpToPoint(nextIdx);
         }
         ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
       } else {
@@ -770,7 +768,7 @@ export function useWaitMode(
         });
       }
     },
-    [applyRangeReset],
+    [applyRangeReset, jumpToPoint],
   );
 
   function recordCompletion(stats: {
@@ -785,12 +783,11 @@ export function useWaitMode(
       return;
     }
     const range = ctrl.measureRange;
-    const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
+    const selectionKey = selectionKeyForRange(range);
     const measureStartBeats = ctrl.measureStartBeats;
-    const selectionBeats = range
-      ? (measureStartBeats[range.to] ?? mx.totalBeats) -
-        (measureStartBeats[range.from - 1] ?? 0)
-      : mx.totalBeats;
+    const selectionBeats =
+      selectionEndBeat(range, measureStartBeats, mx.totalBeats) -
+      selectionStartBeat(range, measureStartBeats);
     const bpm = settingsRef.current.bpm;
     const expectedDurationMs = bpm > 0 ? (selectionBeats / bpm) * 60_000 : 0;
 
@@ -813,11 +810,7 @@ export function useWaitMode(
     saveAttempt(hash, selectionKey, attempt);
     const allAttempts = loadAttemptHistory(hash)[selectionKey] ?? [];
 
-    const selectionLabel = range
-      ? range.from === range.to
-        ? `Measure ${range.from}`
-        : `Measures ${range.from}–${range.to}`
-      : "Full piece";
+    const selectionLabel = selectionLabelForRange(range);
 
     setCompletionModal({
       history: allAttempts,
@@ -835,7 +828,6 @@ export function useWaitMode(
     const ctrl = controlRef.current;
     const points = waitPointsRef.current;
     const range = ctrl.measureRange;
-    const measureStartBeats = ctrl.measureStartBeats;
     const { first } = rangeBounds(points, range);
 
     // Pick start point: range start if a range is active, else nearest wait
@@ -866,17 +858,7 @@ export function useWaitMode(
     // Stop playback, snap cursor / player to the start point.
     ctrl.player.pause();
     ctrl.setIsPlaying(false);
-    const startBeat =
-      points.length > 0
-        ? waitPointCursorBeat(points[startIdx], measureStartBeats)
-        : range
-          ? (measureStartBeats[range.from - 1] ?? 0)
-          : 0;
-    ctrl.player.seek(startBeat);
-    ctrl.setCursor(startBeat, "jump");
-
-    setPointIndex(startIdx);
-    pointIndexRef.current = startIdx;
+    jumpToPoint(startIdx);
     appliedRangeRef.current = range;
     resetAttempt();
 
@@ -888,7 +870,7 @@ export function useWaitMode(
 
     setActive(true);
     activeRef.current = true;
-  }, [resetAttempt]);
+  }, [resetAttempt, jumpToPoint]);
 
   const deactivate = useCallback(() => {
     uninstallCallbacksRef.current?.();
@@ -904,20 +886,10 @@ export function useWaitMode(
   const handleReset = useCallback(() => {
     const ctrl = controlRef.current;
     const { first } = rangeBounds(waitPointsRef.current, ctrl.measureRange);
-    setPointIndex(first);
-    pointIndexRef.current = first;
     appliedRangeRef.current = ctrl.measureRange;
     resetAttempt();
-    const points = waitPointsRef.current;
-    if (points.length > 0 && first < points.length) {
-      const targetBeat = waitPointCursorBeat(
-        points[first],
-        ctrl.measureStartBeats,
-      );
-      ctrl.setCursor(targetBeat, "jump");
-      ctrl.player.seek(targetBeat);
-    }
-  }, [resetAttempt]);
+    jumpToPoint(first);
+  }, [resetAttempt, jumpToPoint]);
 
   const handleSeek = useCallback(
     (beat: number) => {

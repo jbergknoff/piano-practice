@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import {
   useCallback,
   useEffect,
@@ -5,7 +6,10 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { PlaybackNote } from "../../lib/musicxml/musicxml-playback";
+import {
+  type PlaybackNote,
+  playbackNoteId,
+} from "../../lib/musicxml/musicxml-playback";
 import {
   formatDate,
   ResultModal,
@@ -19,6 +23,12 @@ import {
   loadPlayalongAttemptHistory,
   savePlayalongAttempt,
 } from "../hooks/use-file-history";
+import {
+  selectionEndBeat,
+  selectionKeyForRange,
+  selectionLabelForRange,
+  selectionStartBeat,
+} from "../selection";
 import type { ThemeTokens } from "../theme";
 import { blurFilter } from "../theme";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
@@ -51,10 +61,6 @@ export interface PlayalongSettings {
 export interface PlayalongModeHandle extends ModeHandle {
   /** Exposed so PracticeScreen can label the play button "Stop" during count-in. */
   phase: PlayalongPhase;
-}
-
-function noteKey(note: PlaybackNote): string {
-  return `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
 }
 
 /**
@@ -166,10 +172,12 @@ export function usePlayalongMode(
     }
     const range = control.measureRange;
     const measureStartBeats = control.measureStartBeats;
-    const startBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
-    const endBeat = range
-      ? (measureStartBeats[range.to] ?? musicxml.totalBeats)
-      : musicxml.totalBeats;
+    const startBeat = selectionStartBeat(range, measureStartBeats);
+    const endBeat = selectionEndBeat(
+      range,
+      measureStartBeats,
+      musicxml.totalBeats,
+    );
     return musicxml.notes.filter((n) => {
       if (n.tieStop) {
         return false;
@@ -195,7 +203,7 @@ export function usePlayalongMode(
       return 100;
     }
     const matched = notes.filter((n) =>
-      hitNoteIdsRef.current.has(noteKey(n)),
+      hitNoteIdsRef.current.has(playbackNoteId(n)),
     ).length;
     const extra = extraNoteCountRef.current;
     const expected = notes.length;
@@ -212,7 +220,7 @@ export function usePlayalongMode(
       return;
     }
     const range = ctrl.measureRange;
-    const selectionKey = range ? `m${range.from}-m${range.to}` : "full";
+    const selectionKey = selectionKeyForRange(range);
     const attempt: PlayalongAttempt = {
       timestamp: Date.now(),
       score,
@@ -220,11 +228,7 @@ export function usePlayalongMode(
     };
     savePlayalongAttempt(hash, selectionKey, attempt);
     const allAttempts = loadPlayalongAttemptHistory(hash)[selectionKey] ?? [];
-    const selectionLabel = range
-      ? range.from === range.to
-        ? `Measure ${range.from}`
-        : `Measures ${range.from}–${range.to}`
-      : "Full piece";
+    const selectionLabel = selectionLabelForRange(range);
     setResultModal({
       history: allAttempts,
       selectionLabel,
@@ -264,7 +268,7 @@ export function usePlayalongMode(
     ctrl.player.pause();
     ctrl.setIsPlaying(false);
     const range = ctrl.measureRange;
-    const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
+    const startBeat = selectionStartBeat(range, ctrl.measureStartBeats);
     ctrl.player.seek(startBeat);
     ctrl.setCursor(startBeat, "jump");
   }
@@ -329,7 +333,7 @@ export function usePlayalongMode(
     }
 
     const range = ctrl.measureRange;
-    const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
+    const startBeat = selectionStartBeat(range, ctrl.measureStartBeats);
     player.seek(startBeat);
     ctrl.setCursor(startBeat, "jump");
 
@@ -455,7 +459,7 @@ export function usePlayalongMode(
         note.noteNumber === noteNumber &&
         Math.abs(note.startBeat - beat) <= tol
       ) {
-        const id = noteKey(note);
+        const id = playbackNoteId(note);
         if (!newHits.has(id)) {
           newHits.add(id);
           matched = true;
@@ -507,26 +511,14 @@ export function usePlayalongMode(
     const scoreHighlights: NoteHighlight[] = [];
 
     if (phase === "playing" || phase === "complete") {
-      const range = control.measureRange;
-      const measureStartBeats = control.measureStartBeats;
-      const startBeat = range ? (measureStartBeats[range.from - 1] ?? 0) : 0;
-      const endBeat = range
-        ? (measureStartBeats[range.to] ?? musicxml.totalBeats)
-        : musicxml.totalBeats;
-      // In complete phase, treat all selection notes as past.
+      // In complete phase, treat all selection notes as past. Iterating
+      // `selectionNotes` (rather than re-filtering `musicxml.notes` by range)
+      // guarantees the notes scored and the notes colored are exactly the
+      // same set.
       const effectiveBeat =
         phase === "complete" ? Number.POSITIVE_INFINITY : control.currentBeat;
-      for (const note of musicxml.notes) {
-        if (note.tieStop) {
-          continue;
-        }
-        if (
-          (note.graceMainBeat ?? note.startBeat) < startBeat ||
-          (note.graceMainBeat ?? note.startBeat) >= endBeat
-        ) {
-          continue;
-        }
-        const id = noteKey(note);
+      for (const note of selectionNotes) {
+        const id = playbackNoteId(note);
         if (hitNoteIds.has(id)) {
           scoreHighlights.push({ kind: "score", id, color: "#43a047" });
         } else if (note.startBeat < effectiveBeat - settings.timingBeats) {
@@ -544,7 +536,7 @@ export function usePlayalongMode(
         ) {
           scoreHighlights.push({
             kind: "score",
-            id: noteKey(note),
+            id: playbackNoteId(note),
             color: settings.accent,
           });
         }
@@ -554,12 +546,11 @@ export function usePlayalongMode(
     return scoreHighlights.concat(playerMarkers);
   }, [
     control.musicxml,
-    control.measureRange,
-    control.measureStartBeats,
     control.currentBeat,
     phase,
     hitNoteIds,
     playerMarkers,
+    selectionNotes,
     settings.timingBeats,
     settings.accent,
   ]);
@@ -609,11 +600,11 @@ export function usePlayalongMode(
               // Keep phase="complete" so green/red note colors remain for review.
               // Seek to start so the sheet is positioned at the beginning.
               const ctrl = controlRef.current;
-              const mx = ctrl.musicxml;
               const range = ctrl.measureRange;
-              const startBeat = range
-                ? (ctrl.measureStartBeats[range.from - 1] ?? 0)
-                : 0;
+              const startBeat = selectionStartBeat(
+                range,
+                ctrl.measureStartBeats,
+              );
               ctrl.player.seek(startBeat);
               ctrl.setCursor(startBeat, "jump");
             }}
@@ -664,6 +655,60 @@ export function usePlayalongMode(
   };
 }
 
+// Shared centered frosted-glass card used by both transport overlays below —
+// they differ only in the main content and the caption underneath it.
+function TransportOverlayCard({
+  padding,
+  caption,
+  children,
+}: {
+  padding: string;
+  caption: string;
+  children: ComponentChildren;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 10,
+        pointerEvents: "none",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(0,0,0,0.55)",
+          ...blurFilter("blur(8px)"),
+          borderRadius: 16,
+          padding,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        {children}
+        <div
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.7)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginTop: 8,
+          }}
+        >
+          {caption}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CountInOverlay({
   countInBeat,
 }: {
@@ -673,108 +718,36 @@ function CountInOverlay({
     ? (countInBeat.beat % countInBeat.timeSigNum) + 1
     : null;
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        zIndex: 10,
-        pointerEvents: "none",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
+    <TransportOverlayCard padding="14px 28px" caption="Count in…">
       <div
         style={{
-          background: "rgba(0,0,0,0.55)",
-          ...blurFilter("blur(8px)"),
-          borderRadius: 16,
-          padding: "14px 28px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
+          fontSize: 72,
+          fontWeight: 700,
+          color: "#fff",
+          lineHeight: 1,
+          fontVariantNumeric: "tabular-nums",
         }}
       >
-        <div
-          style={{
-            fontSize: 72,
-            fontWeight: 700,
-            color: "#fff",
-            lineHeight: 1,
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {beatDisplay ?? ""}
-        </div>
-        <div
-          style={{
-            fontSize: 13,
-            color: "rgba(255,255,255,0.7)",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            marginTop: 8,
-          }}
-        >
-          Count in…
-        </div>
+        {beatDisplay ?? ""}
       </div>
-    </div>
+    </TransportOverlayCard>
   );
 }
 
 function WaitingForNoteOverlay() {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-        zIndex: 10,
-        pointerEvents: "none",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 8,
-      }}
-    >
+    <TransportOverlayCard padding="18px 28px" caption="to start">
       <div
         style={{
-          background: "rgba(0,0,0,0.55)",
-          ...blurFilter("blur(8px)"),
-          borderRadius: 16,
-          padding: "18px 28px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
+          fontSize: 28,
+          fontWeight: 700,
+          color: "#fff",
+          lineHeight: 1.1,
+          textAlign: "center",
         }}
       >
-        <div
-          style={{
-            fontSize: 28,
-            fontWeight: 700,
-            color: "#fff",
-            lineHeight: 1.1,
-            textAlign: "center",
-          }}
-        >
-          Press any key
-        </div>
-        <div
-          style={{
-            fontSize: 13,
-            color: "rgba(255,255,255,0.7)",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            marginTop: 8,
-          }}
-        >
-          to start
-        </div>
+        Press any key
       </div>
-    </div>
+    </TransportOverlayCard>
   );
 }
