@@ -11,7 +11,7 @@ import {
   radius,
   serifTitle,
 } from "../theme";
-import { BluetoothIcon } from "./icons";
+import { BluetoothIcon, UsbIcon } from "./icons";
 
 // Coarse browser detection — only used to tailor the unsupported message.
 const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
@@ -368,8 +368,13 @@ export function ConnectionBadge({
                 style={{
                   ...modalActionButtonStyle(theme, "accent", accent),
                   width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
                 }}
               >
+                <BluetoothIcon size={13} />
                 Bluetooth
               </button>
               <button
@@ -381,8 +386,13 @@ export function ConnectionBadge({
                 style={{
                   ...modalActionButtonStyle(theme, "accent", accent),
                   width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
                 }}
               >
+                <UsbIcon size={13} />
                 USB (Web MIDI)
               </button>
             </div>

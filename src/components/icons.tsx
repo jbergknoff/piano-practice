@@ -83,6 +83,27 @@ export function BluetoothIcon({ size = 12 }: { size?: number }) {
   );
 }
 
+export function UsbIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="7" y="8" width="10" height="6" rx="1" />
+      <path d="M9 8V4" />
+      <path d="M15 8V4" />
+      <path d="M12 14v6" />
+    </svg>
+  );
+}
+
 export function SectionsIcon({ size = 16 }: { size?: number }) {
   return (
     <span
