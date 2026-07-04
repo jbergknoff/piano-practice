@@ -1,12 +1,14 @@
 # piano-practice
 
-A browser-based piano practice app. Load a MIDI or MusicXML file, connect a
+This is a browser-based piano practice app. Load a MIDI or MusicXML file, connect a
 digital piano over Bluetooth or USB, and the app renders the sheet music and
 listens to what you play — waiting for you, playing along with you, or just
 performing the piece while you follow.
 
 Everything runs client-side: there is no server, no account, and no data leaves
 the browser. Files, settings, and practice history are stored locally.
+
+Use it at https://jbergknoff-piano-practice.netlify.app/.
 
 ## Practice modes
 
