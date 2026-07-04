@@ -15,11 +15,17 @@ import { useCustomRanges } from "../../hooks/use-custom-ranges";
 import {
   type BluetoothHandle,
   type ModeControl,
+  type PracticeMode,
   createPlayerHandle,
 } from "../../modes/mode-control";
 import { useListenMode } from "../../modes/use-listen-mode";
 import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
+import {
+  type MeasureRange,
+  selectionEndBeat,
+  selectionStartBeat,
+} from "../../selection";
 import type { ThemeTokens } from "../../theme";
 import {
   chipToggleButtonStyle,
@@ -59,7 +65,7 @@ interface PracticeScreenProps {
   fileHash: string | null;
   bpm: number;
   baseBpm: number;
-  measureRange: { from: number; to: number } | null;
+  measureRange: MeasureRange | null;
   piano: PianoController;
   /**
    * App-owned ref that the active input transport dispatches MIDI note events
@@ -68,7 +74,7 @@ interface PracticeScreenProps {
   noteEventDispatchRef: {
     current: ((noteNumber: number, kind: "on" | "off") => void) | null;
   };
-  mode: "wait" | "playalong" | "listen";
+  mode: PracticeMode;
   tracks: TrackInfo[];
   selectedTracks: number[];
   /** Beat to seek to once the player is created (used for history restore). */
@@ -76,8 +82,8 @@ interface PracticeScreenProps {
   /** Fires whenever the live cursor beat changes — App persists it. */
   onCurrentBeatChange: (beat: number) => void;
   onBpmChange: (bpm: number) => void;
-  onMeasureRangeChange: (r: { from: number; to: number } | null) => void;
-  onModeChange: (mode: "wait" | "playalong" | "listen") => void;
+  onMeasureRangeChange: (r: MeasureRange | null) => void;
+  onModeChange: (mode: PracticeMode) => void;
   onTrackToggle: (idx: number) => void;
   onOpenFile: () => void;
   onGoToLanding: () => void;
@@ -181,8 +187,12 @@ export function PracticeScreen({
       if (range) {
         const measureStartBeats = musicxml.measureStartBeats;
         player.focusRange = {
-          startBeat: measureStartBeats[range.from - 1] ?? 0,
-          endBeat: measureStartBeats[range.to] ?? musicxml.totalBeats,
+          startBeat: selectionStartBeat(range, measureStartBeats),
+          endBeat: selectionEndBeat(
+            range,
+            measureStartBeats,
+            musicxml.totalBeats,
+          ),
         };
       }
       // Apply initialBeat BEFORE assigning onPositionUpdate so the seek
@@ -223,8 +233,12 @@ export function PracticeScreen({
     }
     if (measureRange) {
       const measureStartBeats = musicxml.measureStartBeats;
-      const startBeat = measureStartBeats[measureRange.from - 1] ?? 0;
-      const endBeat = measureStartBeats[measureRange.to] ?? musicxml.totalBeats;
+      const startBeat = selectionStartBeat(measureRange, measureStartBeats);
+      const endBeat = selectionEndBeat(
+        measureRange,
+        measureStartBeats,
+        musicxml.totalBeats,
+      );
       if (player) {
         player.focusRange = { startBeat, endBeat };
         player.seek(startBeat);
@@ -381,17 +395,16 @@ export function PracticeScreen({
     onMeasureRangeChange,
   );
 
-  const handleModeChange = (newMode: "wait" | "playalong" | "listen") => {
+  const handleModeChange = (newMode: PracticeMode) => {
     if (newMode === mode) {
       return;
     }
     // Snap to range start before switching modes so the new mode activates
     // at a predictable position. Each mode's own activate() handles any
     // additional setup (e.g. wait mode picking its first wait point).
-    const startBeat =
-      measureRange && musicxml
-        ? (musicxml.measureStartBeats[measureRange.from - 1] ?? 0)
-        : 0;
+    const startBeat = musicxml
+      ? selectionStartBeat(measureRange, musicxml.measureStartBeats)
+      : 0;
     clearDebugLog();
     playerRef.current?.pause();
     setIsPlaying(false);

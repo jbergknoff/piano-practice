@@ -1,9 +1,12 @@
+import type { PracticeMode } from "../modes/mode-control";
+import type { MeasureRange } from "../selection";
+
 const STORAGE_PREFIX = "piano-practice:file:";
 
 export interface FileHistory {
   bpmRatio: number;
-  measureRange: { from: number; to: number } | null;
-  mode: "wait" | "playalong" | "listen";
+  measureRange: MeasureRange | null;
+  mode: PracticeMode;
   selectedTrackIndices: number[];
   currentBeat: number;
 }
@@ -18,39 +21,50 @@ export async function hashFileBytes(bytes: Uint8Array): Promise<string> {
     .join("");
 }
 
-export function loadFileHistory(hash: string): FileHistory | null {
+// Every localStorage read/write in this file goes through these two
+// primitives, so quota-exceeded / private-mode / malformed-JSON failures are
+// handled once (silently: reads fall back to the caller-supplied default,
+// writes are dropped) instead of in every load/save function individually.
+function loadJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + hash);
+    const raw = localStorage.getItem(key);
     if (!raw) {
-      return null;
+      return fallback;
     }
-    const h = JSON.parse(raw) as FileHistory & {
-      showFocus?: boolean;
-      waitModeActive?: boolean;
-    };
-    if (typeof h.bpmRatio !== "number" || h.bpmRatio <= 0) {
-      return null;
-    }
-    // Normalize old format that used showFocus + waitModeActive
-    if (!h.mode) {
-      h.mode = h.waitModeActive === false ? "listen" : "wait";
-    }
-    // Normalize old "race" value to "playalong"
-    if ((h.mode as string) === "race") {
-      h.mode = "playalong";
-    }
-    return h as FileHistory;
+    return JSON.parse(raw) as T;
   } catch {
-    return null;
+    return fallback;
   }
 }
 
-export function saveFileHistory(hash: string, history: FileHistory): void {
+function saveJson(key: string, value: unknown): void {
   try {
-    localStorage.setItem(STORAGE_PREFIX + hash, JSON.stringify(history));
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // ignore (private mode, quota exceeded, etc.)
   }
+}
+
+export function loadFileHistory(hash: string): FileHistory | null {
+  const h = loadJson<
+    (FileHistory & { showFocus?: boolean; waitModeActive?: boolean }) | null
+  >(STORAGE_PREFIX + hash, null);
+  if (!h || typeof h.bpmRatio !== "number" || h.bpmRatio <= 0) {
+    return null;
+  }
+  // Normalize old format that used showFocus + waitModeActive
+  if (!h.mode) {
+    h.mode = h.waitModeActive === false ? "listen" : "wait";
+  }
+  // Normalize old "race" value to "playalong"
+  if ((h.mode as string) === "race") {
+    h.mode = "playalong";
+  }
+  return h;
+}
+
+export function saveFileHistory(hash: string, history: FileHistory): void {
+  saveJson(STORAGE_PREFIX + hash, history);
 }
 
 export interface WaitModeAttempt {
@@ -60,154 +74,90 @@ export interface WaitModeAttempt {
   score: number; // 0–100, computed at save time
 }
 
-type AttemptHistory = Record<string, WaitModeAttempt[]>;
-
-const ATTEMPTS_PREFIX = "piano-practice:attempts:";
-const MAX_ATTEMPTS_PER_SELECTION = 50;
-
 export interface PlayalongAttempt {
   timestamp: number;
   score: number; // 0–100
   bpm: number;
 }
 
-type PlayalongAttemptHistory = Record<string, PlayalongAttempt[]>;
+const MAX_ATTEMPTS_PER_SELECTION = 50;
 
-const PLAYALONG_ATTEMPTS_PREFIX = "piano-practice:playalong-attempts:";
-
-export function loadAttemptHistory(hash: string): AttemptHistory {
-  try {
-    const raw = localStorage.getItem(ATTEMPTS_PREFIX + hash);
-    if (!raw) {
-      return {};
-    }
-    return JSON.parse(raw) as AttemptHistory;
-  } catch {
-    return {};
+/**
+ * Builds the load/save/delete/clear operations shared by the wait-mode and
+ * playalong attempt logs — they differ only in storage prefix, attempt shape,
+ * and (for "clear") which attempts a caller wants removed.
+ */
+function createAttemptStore<T extends { timestamp: number }>(prefix: string) {
+  function loadHistory(hash: string): Record<string, T[]> {
+    return loadJson(prefix + hash, {});
   }
-}
 
-export function saveAttempt(
-  hash: string,
-  selectionKey: string,
-  attempt: WaitModeAttempt,
-): void {
-  try {
-    const history = loadAttemptHistory(hash);
+  function saveAttempt(hash: string, selectionKey: string, attempt: T): void {
+    const history = loadHistory(hash);
     const list = history[selectionKey] ?? [];
     list.push(attempt);
     if (list.length > MAX_ATTEMPTS_PER_SELECTION) {
       list.splice(0, list.length - MAX_ATTEMPTS_PER_SELECTION);
     }
     history[selectionKey] = list;
-    localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
+    saveJson(prefix + hash, history);
   }
-}
 
-export function deleteAttempt(
-  hash: string,
-  selectionKey: string,
-  timestamp: number,
-): WaitModeAttempt[] {
-  try {
-    const history = loadAttemptHistory(hash);
+  function deleteAttempt(
+    hash: string,
+    selectionKey: string,
+    timestamp: number,
+  ): T[] {
+    const history = loadHistory(hash);
     const list = (history[selectionKey] ?? []).filter(
       (a) => a.timestamp !== timestamp,
     );
     history[selectionKey] = list;
-    localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
+    saveJson(prefix + hash, history);
     return list;
-  } catch {
-    return [];
   }
+
+  function clearMatching(
+    hash: string,
+    selectionKey: string,
+    predicate: (attempt: T) => boolean,
+  ): void {
+    const history = loadHistory(hash);
+    history[selectionKey] = (history[selectionKey] ?? []).filter(
+      (a) => !predicate(a),
+    );
+    saveJson(prefix + hash, history);
+  }
+
+  return { loadHistory, saveAttempt, deleteAttempt, clearMatching };
 }
+
+const ATTEMPTS_PREFIX = "piano-practice:attempts:";
+const waitAttempts = createAttemptStore<WaitModeAttempt>(ATTEMPTS_PREFIX);
+
+export const loadAttemptHistory = waitAttempts.loadHistory;
+export const saveAttempt = waitAttempts.saveAttempt;
+export const deleteAttempt = waitAttempts.deleteAttempt;
 
 export function clearAttempts(hash: string, selectionKey: string): void {
-  try {
-    const history = loadAttemptHistory(hash);
-    history[selectionKey] = [];
-    localStorage.setItem(ATTEMPTS_PREFIX + hash, JSON.stringify(history));
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
+  waitAttempts.clearMatching(hash, selectionKey, () => true);
 }
 
-export function loadPlayalongAttemptHistory(
-  hash: string,
-): PlayalongAttemptHistory {
-  try {
-    const raw = localStorage.getItem(PLAYALONG_ATTEMPTS_PREFIX + hash);
-    if (!raw) {
-      return {};
-    }
-    return JSON.parse(raw) as PlayalongAttemptHistory;
-  } catch {
-    return {};
-  }
-}
+const PLAYALONG_ATTEMPTS_PREFIX = "piano-practice:playalong-attempts:";
+const playalongAttempts = createAttemptStore<PlayalongAttempt>(
+  PLAYALONG_ATTEMPTS_PREFIX,
+);
 
-export function savePlayalongAttempt(
-  hash: string,
-  selectionKey: string,
-  attempt: PlayalongAttempt,
-): void {
-  try {
-    const history = loadPlayalongAttemptHistory(hash);
-    const list = history[selectionKey] ?? [];
-    list.push(attempt);
-    if (list.length > MAX_ATTEMPTS_PER_SELECTION) {
-      list.splice(0, list.length - MAX_ATTEMPTS_PER_SELECTION);
-    }
-    history[selectionKey] = list;
-    localStorage.setItem(
-      PLAYALONG_ATTEMPTS_PREFIX + hash,
-      JSON.stringify(history),
-    );
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
-}
-
-export function deletePlayalongAttempt(
-  hash: string,
-  selectionKey: string,
-  timestamp: number,
-): PlayalongAttempt[] {
-  try {
-    const history = loadPlayalongAttemptHistory(hash);
-    const list = (history[selectionKey] ?? []).filter(
-      (a) => a.timestamp !== timestamp,
-    );
-    history[selectionKey] = list;
-    localStorage.setItem(
-      PLAYALONG_ATTEMPTS_PREFIX + hash,
-      JSON.stringify(history),
-    );
-    return list;
-  } catch {
-    return [];
-  }
-}
+export const loadPlayalongAttemptHistory = playalongAttempts.loadHistory;
+export const savePlayalongAttempt = playalongAttempts.saveAttempt;
+export const deletePlayalongAttempt = playalongAttempts.deleteAttempt;
 
 export function clearPlayalongAttempts(
   hash: string,
   selectionKey: string,
   bpm: number,
 ): void {
-  try {
-    const history = loadPlayalongAttemptHistory(hash);
-    history[selectionKey] = (history[selectionKey] ?? []).filter(
-      (a) => a.bpm !== bpm,
-    );
-    localStorage.setItem(
-      PLAYALONG_ATTEMPTS_PREFIX + hash,
-      JSON.stringify(history),
-    );
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
+  playalongAttempts.clearMatching(hash, selectionKey, (a) => a.bpm === bpm);
 }
 
 export interface CustomRange {
@@ -220,24 +170,12 @@ export interface CustomRange {
 const CUSTOM_RANGES_PREFIX = "piano-practice:custom-ranges:";
 
 export function loadCustomRanges(hash: string): CustomRange[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_RANGES_PREFIX + hash);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as CustomRange[]) : [];
-  } catch {
-    return [];
-  }
+  const parsed = loadJson<unknown>(CUSTOM_RANGES_PREFIX + hash, []);
+  return Array.isArray(parsed) ? (parsed as CustomRange[]) : [];
 }
 
 export function saveCustomRanges(hash: string, ranges: CustomRange[]): void {
-  try {
-    localStorage.setItem(CUSTOM_RANGES_PREFIX + hash, JSON.stringify(ranges));
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
+  saveJson(CUSTOM_RANGES_PREFIX + hash, ranges);
 }
 
 export interface GlobalPreferences {
@@ -249,41 +187,24 @@ export interface GlobalPreferences {
 const GLOBAL_PREFERENCES_KEY = "piano-practice:preferences";
 
 export function loadGlobalPreferences(): GlobalPreferences {
-  try {
-    const raw = localStorage.getItem(GLOBAL_PREFERENCES_KEY);
-    if (!raw) {
-      return {
-        playalongPlayMusic: true,
-        playalongMetronome: false,
-        playalongCountIn: true,
-      };
-    }
-    const parsed = JSON.parse(raw) as Partial<GlobalPreferences>;
-    return {
-      playalongPlayMusic: parsed.playalongPlayMusic ?? true,
-      playalongMetronome: parsed.playalongMetronome ?? false,
-      playalongCountIn: parsed.playalongCountIn ?? true,
-    };
-  } catch {
-    return {
-      playalongPlayMusic: true,
-      playalongMetronome: false,
-      playalongCountIn: true,
-    };
-  }
+  const parsed = loadJson<Partial<GlobalPreferences> | null>(
+    GLOBAL_PREFERENCES_KEY,
+    null,
+  );
+  return {
+    playalongPlayMusic: parsed?.playalongPlayMusic ?? true,
+    playalongMetronome: parsed?.playalongMetronome ?? false,
+    playalongCountIn: parsed?.playalongCountIn ?? true,
+  };
 }
 
 export function saveGlobalPreferences(prefs: GlobalPreferences): void {
-  try {
-    localStorage.setItem(GLOBAL_PREFERENCES_KEY, JSON.stringify(prefs));
-  } catch {
-    // ignore (private mode, quota exceeded, etc.)
-  }
+  saveJson(GLOBAL_PREFERENCES_KEY, prefs);
 }
 
 export interface LibrarySummary {
   lastPracticedAt: number | null;
-  mode: "wait" | "playalong" | "listen" | null;
+  mode: PracticeMode | null;
   bestScore: number | null;
 }
 

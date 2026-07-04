@@ -4,21 +4,6 @@
 export const BLE_MIDI_SERVICE = "03b80e5a-ede8-4b33-a751-6ce34ec4c700";
 export const BLE_MIDI_CHARACTERISTIC = "7772e5db-3868-4112-a1a9-f2669d106bf3";
 
-const NOTE_NAMES = [
-  "C",
-  "C#",
-  "D",
-  "D#",
-  "E",
-  "F",
-  "F#",
-  "G",
-  "G#",
-  "A",
-  "A#",
-  "B",
-];
-
 // Builds a BLE MIDI packet with multiple Note On events (no running status).
 // Format: [header] ([ts][status][note][vel]) * N
 export function buildBLEMIDIBatch(
@@ -46,23 +31,10 @@ export function buildBLEMIDIBatch(
   return view as Uint8Array<ArrayBuffer>;
 }
 
-// Our own data model for a parsed MIDI note event. The fields map directly to
-// what the MIDI spec calls Note On / Note Off messages (status, note number,
-// velocity), plus UI-convenience fields (id, time, name).
-export type NoteEvent = {
-  id: number;
-  time: string;
-  kind: "on" | "off";
-  note: number; // 0–127, per the MIDI spec
-  name: string; // e.g. "C4"
-  velocity: number; // 0–127
-};
-
-let nextId = 0;
-
-export function midiNoteName(n: number): string {
-  return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1);
-}
+// Mirrors lib/midi/web-midi.ts's ParsedNote — the only fields any consumer
+// reads (the note number and on/off kind). Deliberately not an id/timestamp/
+// name-carrying record: nothing downstream needs more than this.
+export type ParsedNote = { note: number; kind: "on" | "off" };
 
 // Builds a minimal BLE MIDI packet containing a single Note On or Note Off.
 // Format: [header, timestamp, status, note, velocity] — timestamps are zeroed.
@@ -93,8 +65,8 @@ export function buildBLEMIDINote(
 //   [header byte] ([timestamp byte] [MIDI status] [data...])...
 // Bytes with bit 7 set that appear before a new MIDI message are timestamps
 // and are skipped. MIDI data bytes always have bit 7 clear (values 0–127).
-export function parseBLEMIDI(data: Uint8Array): NoteEvent[] {
-  const events: NoteEvent[] = [];
+export function parseBLEMIDI(data: Uint8Array): ParsedNote[] {
+  const events: ParsedNote[] = [];
   let i = 1; // skip header byte
   let status = 0;
 
@@ -117,14 +89,13 @@ export function parseBLEMIDI(data: Uint8Array): NoteEvent[] {
         i += 2;
         // Note On with velocity 0 is equivalent to Note Off (MIDI spec running status).
         const isOn = type === 0x90 && velocity > 0;
-        events.push({
-          id: nextId++,
-          time: new Date().toTimeString().slice(0, 8),
-          kind: isOn ? "on" : "off",
-          note,
-          name: midiNoteName(note),
-          velocity,
-        });
+        events.push({ note, kind: isOn ? "on" : "off" });
+      } else {
+        // Truncated message: a note byte with no paired velocity byte left in
+        // the packet. Nothing more to parse — stop rather than looping
+        // forever re-inspecting the same incomplete tail (i would otherwise
+        // never advance).
+        break;
       }
     } else {
       i++; // skip unhandled message type

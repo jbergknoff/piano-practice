@@ -4,10 +4,14 @@ import type { VNode } from "preact";
 import type { MidiPlayer } from "../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
+import type { MeasureRange } from "../selection";
 
 // Re-exported from the display package (its public API) so the rest of the app
 // can keep importing the highlight type from mode-control.
 export type { NoteHighlight } from "@jbergknoff/sheet-music-display";
+
+/** The three practice modes, persisted in `FileHistory` and driven by `App`. */
+export type PracticeMode = "wait" | "playalong" | "listen";
 
 export interface PlayerHandle {
   play(): Promise<void>;
@@ -139,7 +143,7 @@ export interface ModeControl {
   currentBeat: number;
   currentBeatRef: { current: number };
   musicxml: ScoreConversion | null;
-  measureRange: { from: number; to: number } | null;
+  measureRange: MeasureRange | null;
   /**
    * Quarter-note beat at which each measure begins (index 0 = measure 1),
    * cached from `musicxml.measureStartBeats` on file load. Use this — not

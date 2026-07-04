@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useRef } from "preact/hooks";
+import { playbackNoteId } from "../../lib/musicxml/musicxml-playback";
+import { selectionStartBeat } from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
 import { useStableHighlights } from "./note-colors";
 
@@ -33,7 +35,7 @@ export function useListenMode(
   const handleReset = useCallback(() => {
     const ctrl = controlRef.current;
     const range = ctrl.measureRange;
-    const startBeat = range ? (ctrl.measureStartBeats[range.from - 1] ?? 0) : 0;
+    const startBeat = selectionStartBeat(range, ctrl.measureStartBeats);
     ctrl.player.pause();
     ctrl.player.seek(startBeat);
     ctrl.setIsPlaying(false);
@@ -77,7 +79,7 @@ export function useListenMode(
       ) {
         highlights.push({
           kind: "score",
-          id: `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`,
+          id: playbackNoteId(note),
           color: settings.accent,
         });
       }

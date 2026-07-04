@@ -45,7 +45,9 @@ import {
   saveGlobalPreferences,
 } from "./hooks/use-file-history";
 import { useWakeLock } from "./hooks/use-wake-lock";
+import type { PracticeMode } from "./modes/mode-control";
 import { prettyTitle } from "./pretty-title";
+import type { MeasureRange } from "./selection";
 import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 
 function isMusicXmlFile(name: string): boolean {
@@ -83,11 +85,8 @@ export function App() {
   // ── Transport + persisted settings ───────────────────────────────────────
   const [bpm, setBpm] = useState(120);
   const [baseBpm, setBaseBpm] = useState(120);
-  const [measureRange, setMeasureRange] = useState<{
-    from: number;
-    to: number;
-  } | null>(null);
-  const [mode, setMode] = useState<"wait" | "playalong" | "listen">("listen");
+  const [measureRange, setMeasureRange] = useState<MeasureRange | null>(null);
+  const [mode, setMode] = useState<PracticeMode>("listen");
   const [playalongPlayMusic, setPlayalongPlayMusic] = useState(
     () => loadGlobalPreferences().playalongPlayMusic,
   );
@@ -199,9 +198,7 @@ export function App() {
 
   // Returns the mode from history, falling back to "listen" when the saved
   // mode requires a piano connection and none is currently connected.
-  function clampModeToPianoStatus(
-    savedMode: "wait" | "playalong" | "listen",
-  ): "wait" | "playalong" | "listen" {
+  function clampModeToPianoStatus(savedMode: PracticeMode): PracticeMode {
     const requiresPiano = savedMode === "wait" || savedMode === "playalong";
     if (requiresPiano && piano.status !== "connected") {
       return "listen";
@@ -257,9 +254,10 @@ export function App() {
     }
   }
 
-  // Reset all file-derived state before loading a new file (shared by both
-  // the MIDI and MusicXML paths).
-  function resetForNewFile(name: string) {
+  // Reset all file-derived state — shared by loading a new file (name set)
+  // and returning to the library, which is effectively "no file loaded"
+  // (name null).
+  function resetForNewFile(name: string | null) {
     setFileName(name);
     setFileError(null);
     setMidiData(null);
@@ -271,6 +269,20 @@ export function App() {
     setMode("listen");
     setFileHash(null);
     setInitialBeat(0);
+  }
+
+  // Applies saved per-file settings when history exists for this file hash,
+  // otherwise falls back to the file's own tempo. Shared by both file-loading
+  // paths; track-selection restore is MIDI-only, so it stays with its caller.
+  function applyFileHistory(history: FileHistory | null, tempo: number) {
+    if (history) {
+      setBpm(Math.round(tempo * history.bpmRatio));
+      setMeasureRange(history.measureRange);
+      setMode(clampModeToPianoStatus(history.mode));
+      setInitialBeat(history.currentBeat);
+    } else {
+      setBpm(tempo);
+    }
   }
 
   async function parseMusicXmlFile(file: File) {
@@ -292,15 +304,7 @@ export function App() {
 
       setLoadedXml(xml);
       setBaseBpm(tempo);
-
-      if (history) {
-        setBpm(Math.round(tempo * history.bpmRatio));
-        setMeasureRange(history.measureRange);
-        setMode(clampModeToPianoStatus(history.mode));
-        setInitialBeat(history.currentBeat);
-      } else {
-        setBpm(tempo);
-      }
+      applyFileHistory(history, tempo);
     } catch (err) {
       setFileError(String(err));
     } finally {
@@ -335,14 +339,10 @@ export function App() {
         setSelectedTracks(
           validTracks.length > 0 ? validTracks : trackList.map((t) => t.index),
         );
-        setBpm(Math.round(tempo * history.bpmRatio));
-        setMeasureRange(history.measureRange);
-        setMode(clampModeToPianoStatus(history.mode));
-        setInitialBeat(history.currentBeat);
       } else {
         setSelectedTracks(trackList.map((t) => t.index));
-        setBpm(tempo);
       }
+      applyFileHistory(history, tempo);
     } catch (err) {
       setFileError(String(err));
     } finally {
@@ -367,16 +367,7 @@ export function App() {
 
   function handleGoToLanding() {
     void refreshLibrary();
-    setMidiData(null);
-    setLoadedXml(null);
-    setFileName(null);
-    setFileHash(null);
-    setTracks([]);
-    setSelectedTracks([]);
-    currentBeatRef.current = 0;
-    setMeasureRange(null);
-    setMode("listen");
-    setInitialBeat(0);
+    resetForNewFile(null);
   }
 
   function handleOpenFile() {
@@ -449,10 +440,6 @@ export function App() {
         : [...prev, idx].sort((a, b) => a - b),
     );
 
-  function handleBpmChange(newBpm: number) {
-    setBpm(newBpm);
-  }
-
   const pieceTitle = fileName ? prettyTitle(fileName) : "Untitled";
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -505,7 +492,7 @@ export function App() {
         selectedTracks={selectedTracks}
         initialBeat={initialBeat}
         onCurrentBeatChange={handleCurrentBeatChange}
-        onBpmChange={handleBpmChange}
+        onBpmChange={setBpm}
         onMeasureRangeChange={setMeasureRange}
         onModeChange={setMode}
         onTrackToggle={onTrackToggle}
