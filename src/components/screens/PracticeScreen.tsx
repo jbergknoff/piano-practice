@@ -1003,7 +1003,12 @@ export function PracticeScreen({
                   "Tempo",
                   `${baseBpm} BPM${bpm !== baseBpm ? ` (playing at ${bpm})` : ""}`,
                 ],
-                ["Time signature", musicxml ? `${musicxml.timeSigNum}/4` : "—"],
+                [
+                  "Time signature",
+                  musicxml
+                    ? `${musicxml.timeSigNum}/${musicxml.timeSigDen}`
+                    : "—",
+                ],
                 ...(tracks.length > 0
                   ? ([["Tracks", String(tracks.length)]] as [string, string][])
                   : []),

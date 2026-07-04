@@ -89,14 +89,6 @@ export class MidiPlayer {
     this._state = "paused";
   }
 
-  stop(): void {
-    this.cancelAll();
-    this.stopTick();
-    this.resumeBeat = 0;
-    this._state = "stopped";
-    this.onPositionUpdate?.(0);
-  }
-
   setBpm(bpm: number): void {
     if (bpm === this._bpm) {
       return;
