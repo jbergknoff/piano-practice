@@ -57,6 +57,29 @@ function noteKey(note: PlaybackNote): string {
   return `p${note.partIndex}-m${note.measureNumber}-n${note.noteIndex}-v${note.voiceIndex}`;
 }
 
+/**
+ * 1-based measure number containing `beat`, from the actual per-measure start
+ * beats (correct for pickup measures, unlike `floor(beat / timeSigNum) + 1`).
+ * Returns -1 when the beat is negative or no measure data is available.
+ */
+function measureNumberForBeat(
+  measureStartBeats: number[],
+  beat: number,
+): number {
+  if (beat < 0 || measureStartBeats.length === 0) {
+    return -1;
+  }
+  let measure = 1;
+  for (let index = 1; index < measureStartBeats.length; index++) {
+    if (measureStartBeats[index] <= beat) {
+      measure = index + 1;
+    } else {
+      break;
+    }
+  }
+  return measure;
+}
+
 export function usePlayalongMode(
   control: ModeControl,
   settings: PlayalongSettings,
@@ -381,8 +404,7 @@ export function usePlayalongMode(
     const ctrl = controlRef.current;
     const now = Date.now();
     const beat = ctrl.currentBeatRef.current;
-    const timeSigNum = ctrl.musicxml?.timeSigNum ?? 4;
-    const measure = beat >= 0 ? Math.floor(beat / timeSigNum) + 1 : -1;
+    const measure = measureNumberForBeat(ctrl.measureStartBeats, beat);
     const held = heldNotesRef.current;
 
     if (kind === "off") {

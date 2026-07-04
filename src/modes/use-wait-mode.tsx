@@ -617,35 +617,14 @@ export function useWaitMode(
                     freshlyPressedNotesRef.current.add(nextNoteNumber);
                   }
                 }
-                if (anticipationIdx >= end) {
-                  const startTime = attemptStartTimeRef.current;
-                  if (startTime !== null) {
-                    recordCompletion({
-                      wrongNotes: wrongNoteCountRef.current,
-                      elapsedMs: now - startTime,
-                      totalPoints: end - first,
-                    });
-                  }
-                  wrongNoteCountRef.current = 0;
-                  attemptStartTimeRef.current = null;
-                  pointIndexRef.current = first;
-                  setPointIndex(first);
-                  const targetBeat = waitPointCursorBeat(
-                    points[first],
-                    ctrl.measureStartBeats,
-                  );
-                  ctrl.setCursor(targetBeat, "jump");
-                  ctrl.player.seek(targetBeat);
-                } else {
-                  pointIndexRef.current = anticipationIdx;
-                  setPointIndex(anticipationIdx);
-                  const targetBeat = waitPointCursorBeat(
-                    anticipatedWp,
-                    ctrl.measureStartBeats,
-                  );
-                  ctrl.setCursor(targetBeat, "jump");
-                  ctrl.player.seek(targetBeat);
-                }
+                pointIndexRef.current = anticipationIdx;
+                setPointIndex(anticipationIdx);
+                const targetBeat = waitPointCursorBeat(
+                  anticipatedWp,
+                  ctrl.measureStartBeats,
+                );
+                ctrl.setCursor(targetBeat, "jump");
+                ctrl.player.seek(targetBeat);
                 ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
               } else {
                 ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
