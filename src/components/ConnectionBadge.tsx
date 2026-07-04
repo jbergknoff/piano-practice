@@ -81,21 +81,14 @@ function unsupportedBody(accent: string) {
   );
 }
 
-function errorBody(
-  accent: string,
-  source: PianoSource | null,
-  canRetryOtherTransport: boolean,
-) {
+function errorBody(accent: string, source: PianoSource | null) {
   if (source === "midi") {
     return (
       <span>
         No MIDI device was found. Connect your piano over USB, or pair it in
         your operating system's Bluetooth settings first — on Linux, BlueZ
-        bridges a paired BLE piano to a MIDI port this app can then use.{" "}
-        {canRetryOtherTransport
-          ? '"Try again" below will attempt a Bluetooth connection instead.'
-          : "Then try again."}{" "}
-        See the {compatibilityLink(accent, "compatibility page ↗")} for what's
+        bridges a paired BLE piano to a MIDI port this app can then use. See the{" "}
+        {compatibilityLink(accent, "compatibility page ↗")} for what's
         supported.
       </span>
     );
@@ -113,12 +106,10 @@ function errorBody(
           <code style={{ fontSize: 11 }}>chrome://flags</code> and enable both{" "}
           <strong>Experimental Web Platform features</strong> and{" "}
           <strong>Use the new permissions backend for Web Bluetooth</strong>,
-          then relaunch.
+          then relaunch. If pairing still fails, try connecting over USB or Web
+          MIDI instead.
         </>
-      )}{" "}
-      {canRetryOtherTransport
-        ? 'If your piano is connected over USB, "Try again" below will attempt a Web MIDI connection instead.'
-        : "If pairing still fails, try connecting over USB or Web MIDI instead."}
+      )}
     </span>
   );
 }
@@ -137,6 +128,7 @@ export function ConnectionBadge({
   const [showUnsupportedModal, setShowUnsupportedModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showChooserModal, setShowChooserModal] = useState(false);
 
   const connected = piano.status === "connected";
   const connecting = piano.status === "connecting";
@@ -182,19 +174,13 @@ export function ConnectionBadge({
     />
   );
 
-  const canRetryOtherTransport =
-    (piano.lastFailedSource === "bluetooth" && piano.midiSupported) ||
-    (piano.lastFailedSource === "midi" && piano.bluetoothSupported);
-
   const title = connected
     ? `Connected · ${piano.deviceName}`
     : connecting
       ? "Connecting…"
       : hasError
         ? (piano.error ?? "Connection failed")
-        : canRetryOtherTransport
-          ? `Connect a piano (click again to try ${piano.lastFailedSource === "bluetooth" ? "Web MIDI" : "Bluetooth"})`
-          : "Connect a piano";
+        : "Connect a piano";
 
   function handleClick() {
     if (!supported) {
@@ -205,8 +191,15 @@ export function ConnectionBadge({
       setShowStatusModal(true);
       return;
     }
-    // Auto-selects MIDI vs Bluetooth so the user doesn't have to choose.
-    piano.connect();
+    if (piano.bluetoothSupported && piano.midiSupported) {
+      setShowChooserModal(true);
+      return;
+    }
+    if (piano.bluetoothSupported) {
+      piano.connectBluetooth();
+      return;
+    }
+    piano.connectMidi();
   }
 
   const modalBaseStyle = {
@@ -325,6 +318,78 @@ export function ConnectionBadge({
         </>
       )}
 
+      {showChooserModal && (
+        <>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
+          <div
+            style={backdropStyle}
+            onClick={() => setShowChooserModal(false)}
+          />
+          <div style={modalBaseStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span style={serifTitle(theme, 20)}>Connect a piano</span>
+              <button
+                type="button"
+                onClick={() => setShowChooserModal(false)}
+                style={closeButtonStyle}
+              >
+                ✕
+              </button>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: theme.inkSoft,
+                lineHeight: 1.6,
+              }}
+            >
+              How is your piano connected?
+            </p>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChooserModal(false);
+                  piano.connectBluetooth();
+                }}
+                style={{
+                  ...modalActionButtonStyle(theme, "accent", accent),
+                  width: "100%",
+                }}
+              >
+                Bluetooth
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChooserModal(false);
+                  piano.connectMidi();
+                }}
+                style={{
+                  ...modalActionButtonStyle(theme, "accent", accent),
+                  width: "100%",
+                }}
+              >
+                USB (Web MIDI)
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {showStatusModal && (
         <>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
@@ -414,7 +479,7 @@ export function ConnectionBadge({
                 lineHeight: 1.6,
               }}
             >
-              {errorBody(accent, piano.source, canRetryOtherTransport)}
+              {errorBody(accent, piano.source)}
             </p>
             <div
               style={{
@@ -443,13 +508,10 @@ export function ConnectionBadge({
             >
               <button
                 type="button"
-                onClick={() => {
-                  setShowErrorModal(false);
-                  piano.connect();
-                }}
+                onClick={() => setShowErrorModal(false)}
                 style={modalActionButtonStyle(theme, "accent", accent)}
               >
-                Try again
+                Okay
               </button>
             </div>
           </div>

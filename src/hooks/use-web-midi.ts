@@ -8,45 +8,6 @@ import type { BtStatus } from "./use-bluetooth";
 import type { PianoTransport } from "./use-piano";
 
 /**
- * Enumerate connectable MIDI input ports, excluding the virtual "MIDI Through"
- * loopback. Used to decide whether the Web MIDI transport has anything to
- * connect to (drives auto transport selection in `usePiano`).
- */
-export async function listMidiInputs(): Promise<MIDIInput[]> {
-  if (typeof navigator === "undefined" || !navigator.requestMIDIAccess) {
-    return [];
-  }
-  try {
-    const access = await navigator.requestMIDIAccess({ sysex: false });
-    return [...access.inputs.values()].filter((i) => !isThroughPort(i.name));
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Whether the page already holds (or has been denied) MIDI permission,
- * checked via the Permissions API so it never shows a prompt. `connect()` in
- * `usePiano` uses this to decide whether probing for a USB/bridged MIDI
- * device is "free" (permission already granted, so `requestMIDIAccess`
- * resolves instantly) versus something that would pop a permission dialog —
- * which, on a fresh page, can eat the user-activation gesture before it gets
- * a chance to fall back to `navigator.bluetooth.requestDevice()`, leaving
- * that call to fail with a "not handling a user gesture" error.
- */
-export async function hasMidiPermission(): Promise<boolean> {
-  if (typeof navigator === "undefined" || !navigator.permissions) {
-    return false;
-  }
-  try {
-    const status = await navigator.permissions.query({ name: "midi" });
-    return status.state === "granted";
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Web MIDI input/output transport. Sees any MIDI device Chrome exposes —
  * USB-connected pianos and, on Linux, BLE pianos that BlueZ bridges to ALSA
  * (which Web Bluetooth itself can't reach once BlueZ claims the GATT service).
