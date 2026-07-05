@@ -1,5 +1,40 @@
 import type { PlaybackNote } from "../musicxml/musicxml-playback";
 
+// A note whose sounding ends within this many beats of the seek/start point is
+// treated as already finished, not still ringing. A note ending exactly on a
+// measure boundary (e.g. the last chord before a focus range) can have
+// `startBeat + durationBeats` float-overshoot that boundary by an ULP — the sum
+// walks a different division sequence than the measure-start beats accumulate —
+// so a strict `> fromBeat` test pulls it into the play queue and sounds it at
+// the start of the focus range (its onset is in the past, so Web Audio plays it
+// immediately). This tolerance is far below any real note length yet far above
+// the ULP overshoot, so it drops only the boundary artifact. The beat-based
+// player has no measure grid to key on the way the highlight filter does, so a
+// small tolerance is the right tool here.
+const SEEK_END_TOLERANCE_BEATS = 1e-6;
+
+/**
+ * The notes still sounding after `fromBeat` — the subset the player must
+ * (re)schedule when it starts or seeks to that beat — sorted by onset. A note
+ * qualifies when its sounding span extends past `fromBeat` by more than
+ * `SEEK_END_TOLERANCE_BEATS` (see that constant for the focus-range boundary
+ * this guards). Tie-continuations (`tieStop`) never begin a fresh sound, so they
+ * are excluded.
+ */
+export function notesSoundingAfter(
+  notes: PlaybackNote[],
+  fromBeat: number,
+): PlaybackNote[] {
+  return notes
+    .filter(
+      (note) =>
+        !note.tieStop &&
+        note.startBeat + note.durationBeats >
+          fromBeat + SEEK_END_TOLERANCE_BEATS,
+    )
+    .sort((a, b) => a.startBeat - b.startBeat);
+}
+
 // How far ahead (seconds) to schedule notes in each scheduler tick.
 const SCHEDULE_AHEAD = 0.3;
 // Scheduler tick interval (ms).
@@ -137,9 +172,7 @@ export class MidiPlayer {
     this.resumeBeat = fromBeat;
 
     // Build a sorted queue of notes that haven't finished yet.
-    this.playQueue = this.notes
-      .filter((n) => !n.tieStop && n.startBeat + n.durationBeats > fromBeat)
-      .sort((a, b) => a.startBeat - b.startBeat);
+    this.playQueue = notesSoundingAfter(this.notes, fromBeat);
     this.playQueueIndex = 0;
 
     this.scheduleUpcoming();
