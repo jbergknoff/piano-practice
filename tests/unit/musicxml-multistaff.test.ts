@@ -255,3 +255,106 @@ describe("multi-staff parsing", () => {
     }
   });
 });
+
+describe("clef changes", () => {
+  // Two staves, two measures. Staff 2 opens in bass, changes to treble mid-way
+  // through measure 1 (a new <attributes>/<clef> block after two quarter notes),
+  // then changes back to bass at the start of measure 2. Mirrors the Debussy
+  // Arabesque, whose left hand crosses between bass and treble mid-measure.
+  const MID_MEASURE_CLEF = `<?xml version="1.0"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions><key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note>
+      <backup><duration>16</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch><duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>
+      <attributes><clef number="2"><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>
+    </measure>
+    <measure number="2">
+      <attributes><clef number="2"><sign>F</sign><line>4</line></clef></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note>
+      <backup><duration>16</duration></backup>
+      <note><pitch><step>G</step><octave>2</octave></pitch><duration>16</duration><voice>5</voice><type>whole</type><staff>2</staff></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+  test("a mid-measure clef change tags only the chords after it", () => {
+    const bass = parseScore(MID_MEASURE_CLEF).parts[1];
+    const events = bass.measures[0].events as ChordGroup[];
+    // The measure starts in bass (F clef), so its start clef is F4 and the first
+    // two chords (before the change) carry no clef override.
+    expect(bass.measures[0].clef).toMatchObject({ sign: "F", line: 4 });
+    expect(events[0].clef).toBeUndefined();
+    expect(events[1].clef).toBeUndefined();
+    // The chords after the mid-measure change are tagged with the new (treble) clef.
+    expect(events[2].clef).toMatchObject({ sign: "G", line: 2 });
+    expect(events[3].clef).toMatchObject({ sign: "G", line: 2 });
+    // A mid-measure change is not a barline change, so no clefChange glyph fires.
+    expect(bass.measures[0].clefChange).toBeUndefined();
+  });
+
+  test("the running clef carries the last mid-measure clef into the next measure", () => {
+    const bass = parseScore(MID_MEASURE_CLEF).parts[1];
+    // Measure 1 ends in treble (the mid-measure change); measure 2 re-declares
+    // bass at its barline, so it starts in bass and records a clefChange.
+    expect(bass.measures[1].clef).toMatchObject({ sign: "F", line: 4 });
+    expect(bass.measures[1].clefChange).toMatchObject({ sign: "F", line: 4 });
+    // The unchanged treble staff never records a clef change.
+    const treble = parseScore(MID_MEASURE_CLEF).parts[0];
+    expect(treble.measures[1].clefChange).toBeUndefined();
+    expect(treble.measures[1].clef).toMatchObject({ sign: "G", line: 2 });
+  });
+
+  test("the initial part clef is the first declared clef, not a default", () => {
+    const score = parseScore(MID_MEASURE_CLEF);
+    expect(score.parts[0].clef).toMatchObject({ sign: "G", line: 2 });
+    expect(score.parts[1].clef).toMatchObject({ sign: "F", line: 4 });
+  });
+
+  test("a single-staff part resolves a measure-start clef change", () => {
+    // A cello-style single-staff part that switches to treble for a high
+    // passage in measure 2, then back to bass in measure 3.
+    const xml = `<?xml version="1.0"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Cello</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions><key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <attributes><clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>16</duration><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const part = parseScore(xml).parts[0];
+    expect(part.clef).toMatchObject({ sign: "F", line: 4 });
+    expect(part.measures[0].clef).toMatchObject({ sign: "F", line: 4 });
+    // Measure 2 switches to treble and records the change...
+    expect(part.measures[1].clef).toMatchObject({ sign: "G", line: 2 });
+    expect(part.measures[1].clefChange).toMatchObject({ sign: "G", line: 2 });
+    // ...and measure 3 carries the treble clef forward (it declares none).
+    expect(part.measures[2].clef).toMatchObject({ sign: "G", line: 2 });
+    expect(part.measures[2].clefChange).toBeUndefined();
+  });
+});

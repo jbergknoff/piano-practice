@@ -1195,23 +1195,33 @@ describe("keyChangeGlyphs", () => {
 describe("beamStemDirection", () => {
   test("all notes below middle line → stem up", () => {
     const chords = [chord([p("E", 4)], "eighth"), chord([p("F", 4)], "eighth")];
-    expect(beamStemDirection(chords, TREBLE)).toBe("up");
+    expect(beamStemDirection(chords, () => TREBLE)).toBe("up");
   });
 
   test("all notes above middle line → stem down", () => {
     const chords = [chord([p("D", 5)], "eighth"), chord([p("E", 5)], "eighth")];
-    expect(beamStemDirection(chords, TREBLE)).toBe("down");
+    expect(beamStemDirection(chords, () => TREBLE)).toBe("down");
   });
 
   test("farthest note from middle determines direction", () => {
     // E4 is 4 steps below B4 (middle); D5 is only 2 steps above → stem up
     const chords = [chord([p("E", 4)], "eighth"), chord([p("D", 5)], "eighth")];
-    expect(beamStemDirection(chords, TREBLE)).toBe("up");
+    expect(beamStemDirection(chords, () => TREBLE)).toBe("up");
   });
 
   test("bass clef: notes below middle (D3) → stem up", () => {
     const chords = [chord([p("G", 2)], "eighth"), chord([p("A", 2)], "eighth")];
-    expect(beamStemDirection(chords, BASS)).toBe("up");
+    expect(beamStemDirection(chords, () => BASS)).toBe("up");
+  });
+
+  test("a beam group spanning a clef change measures each chord against its own clef", () => {
+    // G2 sits 4 steps below bass-middle (D3); C5 sits 1 step above treble-middle
+    // (B4). With each chord read in its own clef the farthest note is the low
+    // G2, so the group stems up. Reading both in a single (bass) clef would put
+    // C5 far above middle and flip the group to stem down — the old bug.
+    const chords = [chord([p("G", 2)], "eighth"), chord([p("C", 5)], "eighth")];
+    const clefs = [BASS, TREBLE];
+    expect(beamStemDirection(chords, (i) => clefs[i])).toBe("up");
   });
 });
 

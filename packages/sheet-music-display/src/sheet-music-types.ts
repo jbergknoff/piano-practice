@@ -63,6 +63,13 @@ export interface ChordGroup {
   /** Grace note groups that precede this chord, in display order (left to right). */
   gracesBefore?: GraceGroup[];
   /**
+   * The clef in effect at this chord's onset, set by the parser only when a
+   * mid-measure clef change makes it differ from the measure's start clef
+   * (`ParsedMeasure.clef`). Consumers use `clef ?? measure.clef` to position
+   * this chord's noteheads. Absent on the common case (no mid-measure change).
+   */
+  clef?: { sign: "G" | "F"; line: number };
+  /**
    * Actual sounding duration in the measure's divisions, when it differs from
    * `duration`. Set by the MIDI-to-MusicXML converter (via `<play-duration>`)
    * when the real note length is shorter than the space to the next onset.
@@ -83,7 +90,15 @@ export interface ParsedMeasure {
   timeSig?: { beats: number; beatType: number };
   /** The key signature declared in this measure's <attributes>, if any. */
   keySig?: { fifths: number; mode: string };
+  /** The clef in effect at the start of this measure. During parsing this holds
+   *  the clef declared in the measure's first <attributes> (undefined if none);
+   *  the parser then resolves it to the running clef carried forward from the
+   *  last measure that declared one (like `activeFifths` for key signatures). */
   clef?: { sign: "G" | "F"; line: number };
+  /** Present only when this measure starts a new clef different from the running
+   *  one (and it isn't the first measure, which uses the header). Drives the
+   *  mid-staff clef-change glyph drawn just after the barline. */
+  clefChange?: { sign: "G" | "F"; line: number };
   /** The key signature in effect for this measure (carried forward from the
    *  last measure that declared one). Resolved by the parser for every measure. */
   activeFifths: number;

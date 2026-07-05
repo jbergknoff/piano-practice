@@ -73,15 +73,37 @@ function emptyPart(id: string): ParsedPart {
 
 function parseSingleStaffPart(partEl: Element, id: string): ParsedPart {
   const measures = parseMeasures(partEl);
+  const initialClef = measures[0]?.clef ?? { sign: "G", line: 2 };
   resolvePartMeasures(measures);
-  const first = measures[0];
+  resolveClefs(measures, initialClef);
   return {
     id,
     measures,
-    clef: first?.clef ?? { sign: "G", line: 2 },
-    timeSig: first?.timeSig ?? { beats: 4, beatType: 4 },
-    keySig: first?.keySig ?? { fifths: 0, mode: "major" },
+    clef: initialClef,
+    timeSig: measures[0]?.timeSig ?? { beats: 4, beatType: 4 },
+    keySig: measures[0]?.keySig ?? { fifths: 0, mode: "major" },
   };
+}
+
+// Resolve, for every measure in a single-staff part, the running clef (carried
+// forward from the last measure that declared one) and the mid-staff clef
+// changes — mirroring the running-key resolution in resolvePartMeasures. On
+// entry `measure.clef` holds the clef declared in that measure (or undefined);
+// on exit it holds the running clef in effect at the measure's start. Only
+// measure-start clef changes are handled here (parseMeasure reads a single clef
+// per measure); mid-measure changes are a multi-staff concern.
+function resolveClefs(measures: ParsedMeasure[], initialClef: Clef): void {
+  let runningClef: Clef = measures[0]?.clef ?? initialClef;
+  measures.forEach((measure, m) => {
+    const declared = measure.clef;
+    if (m === 0) {
+      runningClef = declared ?? runningClef;
+    } else if (declared && !clefEqual(declared, runningClef)) {
+      measure.clefChange = declared;
+      runningClef = declared;
+    }
+    measure.clef = runningClef;
+  });
 }
 
 // Resolve, for every measure in a part, the running key signature and divisions
@@ -265,6 +287,56 @@ function collectStaffItems(measureEl: Element): StaffItem[] {
   return items;
 }
 
+// A clef declaration within a measure, tagged with the staff it applies to and
+// the time cursor (in the file's own divisions) at which it takes effect. A clef
+// in the measure's opening <attributes> lands at onset 0; a clef in a later
+// <attributes> block (a mid-measure change) lands at the current cursor.
+interface ClefChange {
+  staff: number;
+  onset: number;
+  clef: Clef;
+}
+
+// Walk a measure's children in document order tracking the same time cursor as
+// collectStaffItems, recording every <clef> (with its staff number and onset).
+function collectClefChanges(measureEl: Element): ClefChange[] {
+  const changes: ClefChange[] = [];
+  let cursor = 0;
+  for (const child of Array.from(measureEl.children)) {
+    const tag = child.tagName.toLowerCase();
+    if (tag === "note") {
+      const isChord = child.querySelector("chord") !== null;
+      const isGrace = child.querySelector("grace") !== null;
+      if (!isChord && !isGrace) {
+        cursor += Number.parseInt(
+          child.querySelector("duration")?.textContent ?? "0",
+          10,
+        );
+      }
+    } else if (tag === "backup") {
+      cursor -= Number.parseInt(
+        child.querySelector("duration")?.textContent ?? "0",
+        10,
+      );
+    } else if (tag === "forward") {
+      cursor += Number.parseInt(
+        child.querySelector("duration")?.textContent ?? "0",
+        10,
+      );
+    } else if (tag === "attributes") {
+      for (const clefEl of Array.from(child.querySelectorAll("clef"))) {
+        const staff = Number.parseInt(clefEl.getAttribute("number") ?? "1", 10);
+        changes.push({
+          staff,
+          onset: cursor,
+          clef: parseClefElement(clefEl),
+        });
+      }
+    }
+  }
+  return changes;
+}
+
 function restEvent(duration: number, fullMeasure = false): ParsedRest {
   return { kind: "rest", duration, type: "quarter", dot: false, fullMeasure };
 }
@@ -314,6 +386,11 @@ function buildStaffEvents(
   staffContentEndReal: number,
   globalContentEndReal: number,
   scale: number,
+  // The clef in effect at this staff's measure start, plus the active clef at an
+  // arbitrary onset (in the file's own divisions). A ChordGroup is tagged with
+  // its clef only when a mid-measure change makes it differ from `startClef`.
+  startClef?: Clef,
+  clefForOnset?: (onset: number) => Clef,
 ): MeasureEvent[] {
   if (items.length === 0) {
     return globalContentEndReal > 0
@@ -372,6 +449,7 @@ function buildStaffEvents(
     const representative = noteItems.reduce((best, it) =>
       it.durationReal > best.durationReal ? it : best,
     ).parsed as ParsedNote;
+    const activeClef = clefForOnset?.(onset);
     events.push({
       notes,
       duration,
@@ -379,6 +457,13 @@ function buildStaffEvents(
       dot: representative.dot,
       noteIndex: -1,
       gracesBefore: graces.get(onset),
+      // Only tag chords whose clef differs from the measure's start clef, so the
+      // common (no-change) case keeps `clef` undefined and consumers fall back
+      // to `measure.clef`.
+      clef:
+        activeClef && !clefEqual(activeClef, startClef)
+          ? activeClef
+          : undefined,
     });
   }
 
@@ -401,6 +486,11 @@ function parseMultiStaffPart(partEl: Element, id: string): ParsedPart[] {
     Number.parseInt(partEl.querySelector("staves")?.textContent ?? "1", 10),
   );
   const clefs = clefsByStaff(partEl, staffCount);
+  // The clef in effect entering each measure, per staff — seeded with the
+  // initial clefs and advanced by every clef change (including mid-measure ones)
+  // as the measures are walked, so a clef declared in one measure carries into
+  // the next just like the running key signature does.
+  const runningClefByStaff = clefs.map((clef) => ({ ...clef }));
   const measuresByStaff: ParsedMeasure[][] = Array.from(
     { length: staffCount },
     () => [],
@@ -432,6 +522,7 @@ function parseMultiStaffPart(partEl: Element, id: string): ParsedPart[] {
     const keySig = attrEl ? parseKeySig(attrEl) : undefined;
 
     const items = collectStaffItems(measureEl);
+    const clefChanges = collectClefChanges(measureEl);
     const scale = NORMALIZED_DIVISIONS / runningDivisions;
     const globalContentEndReal = items.reduce(
       (end, it) => Math.max(end, it.onset + it.durationReal),
@@ -444,22 +535,60 @@ function parseMultiStaffPart(partEl: Element, id: string): ParsedPart[] {
         (end, it) => Math.max(end, it.onset + it.durationReal),
         0,
       );
+
+      // Clef changes for this staff, in time order. A change at onset 0 is the
+      // measure's start clef; anything later is a mid-measure change.
+      const staffChanges = clefChanges
+        .filter((change) => change.staff === s + 1)
+        .sort((a, b) => a.onset - b.onset);
+      const prevClef = runningClefByStaff[s];
+      const startClef =
+        staffChanges.length > 0 && staffChanges[0].onset === 0
+          ? staffChanges[0].clef
+          : prevClef;
+      const clefForOnset = (onset: number): Clef => {
+        let active = startClef;
+        for (const change of staffChanges) {
+          if (change.onset <= onset) {
+            active = change.clef;
+          } else {
+            break;
+          }
+        }
+        return active;
+      };
+
       const events = buildStaffEvents(
         staffItems,
         staffContentEndReal,
         globalContentEndReal,
         scale,
+        startClef,
+        clefForOnset,
       );
       assignNoteIndices(events);
       measuresByStaff[s].push({
         number,
         timeSig,
         keySig,
-        clef: clefs[s],
+        clef: startClef,
+        // A clef change at the barline (start clef differs from the clef carried
+        // in from the previous measure), for the mid-staff clef glyph. The first
+        // measure uses the header, so it never gets one.
+        clefChange:
+          measuresByStaff[s].length > 0 && !clefEqual(startClef, prevClef)
+            ? startClef
+            : undefined,
         events,
         divisions: NORMALIZED_DIVISIONS,
         activeFifths: keySig?.fifths ?? 0,
       });
+
+      // Carry the last clef in this measure into the next one.
+      runningClefByStaff[s] =
+        staffChanges.length > 0
+          ? staffChanges[staffChanges.length - 1].clef
+          : startClef;
     }
   }
 
@@ -509,17 +638,24 @@ function parseKeySig(
   return { fifths, mode };
 }
 
-function parseClef(el: Element): { sign: "G" | "F"; line: number } | undefined {
-  const clefEl = el.querySelector("clef");
-  if (!clefEl) {
-    return undefined;
-  }
+type Clef = { sign: "G" | "F"; line: number };
+
+function parseClefElement(clefEl: Element): Clef {
   const sign = (clefEl.querySelector("sign")?.textContent ?? "G") as "G" | "F";
   const line = Number.parseInt(
     clefEl.querySelector("line")?.textContent ?? "2",
     10,
   );
   return { sign, line };
+}
+
+function parseClef(el: Element): Clef | undefined {
+  const clefEl = el.querySelector("clef");
+  return clefEl ? parseClefElement(clefEl) : undefined;
+}
+
+function clefEqual(a: Clef | undefined, b: Clef | undefined): boolean {
+  return a?.sign === b?.sign && a?.line === b?.line;
 }
 
 function parseRawNote(el: Element): ParsedNote | ParsedRest {
