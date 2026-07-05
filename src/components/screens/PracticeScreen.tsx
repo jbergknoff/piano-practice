@@ -301,7 +301,7 @@ export function PracticeScreen({
 
   const wait = useWaitMode(control, {
     noteSensitivityMilliseconds,
-    bpm,
+    baseBpm,
     accent,
     theme,
   });
