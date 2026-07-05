@@ -2284,9 +2284,10 @@ function Measure({
               <Clef
                 key={`clef-${key}`}
                 clef={eventClef}
-                // Sits in the additive slot the spine reserved ahead of this
-                // onset (MID_CLEF_ADVANCE_FACTOR), left-margined off the notehead.
-                x={ex - staffSpace * (MID_CLEF_ADVANCE_FACTOR - 0.3)}
+                // Centred in the additive slot the spine reserved ahead of this
+                // onset (MID_CLEF_ADVANCE_FACTOR), leaving a clear margin between
+                // the glyph and the noteheads on either side.
+                x={ex - staffSpace * (MID_CLEF_ADVANCE_FACTOR - 1.3)}
                 staffBottomY={staffBottomY}
                 staffSpace={staffSpace}
                 inkColor={inkColor}

@@ -380,10 +380,10 @@ export function clefChangeWidth(staffSpace: number): number {
   return (CLEF_CHANGE_LEAD_FACTOR + CLEF_CHANGE_GLYPH_FACTOR) * staffSpace;
 }
 // Additive width (× staffSpace) reserved in the rhythm spine ahead of a
-// mid-measure clef change, so its glyph has real space instead of overlapping
-// the previous notehead. Shared with the renderer, which places the glyph
-// within this reserved slot.
-export const MID_CLEF_ADVANCE_FACTOR = 2.6;
+// mid-measure clef change, so its glyph has real space with clear margins on
+// both sides rather than crowding the neighbouring noteheads. Shared with the
+// renderer, which centres the glyph within this reserved slot.
+export const MID_CLEF_ADVANCE_FACTOR = 4;
 
 // Lead and trailing gaps (× staffSpace) bracketing the key-change glyphs so they
 // clear the barline on the left and the noteheads on the right.
