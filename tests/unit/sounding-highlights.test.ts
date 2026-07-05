@@ -3,10 +3,12 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
 import { musicXmlToConversion } from "../../lib/musicxml/musicxml-playback";
 import { extractMusicXmlFromMxl } from "../../lib/musicxml/mxl";
-import { soundingHighlights } from "../../src/modes/use-listen-mode";
+import { soundingHighlights } from "../../src/modes/note-colors";
 
-// Reported bug (Debussy Arabesque No. 1): focusing measure 6 in listen mode
-// highlights notes just left of the focus range as a phantom first chord.
+// Reported bug (Debussy Arabesque No. 1): focusing measure 6 highlights notes
+// just left of the focus range as a phantom first chord. `soundingHighlights`
+// is the shared basis for listen mode's highlighting and playalong's
+// idle/count-in highlighting, so this guards both call sites.
 //
 // Measure 5 ends with a triplet whose final notes land exactly on the measure
 // 5/6 barline (beat 20). Because a note's end is `startBeat + durationBeats` —

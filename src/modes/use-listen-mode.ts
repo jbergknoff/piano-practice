@@ -1,54 +1,10 @@
 import { useCallback, useMemo, useRef } from "preact/hooks";
-import {
-  type PlaybackNote,
-  playbackNoteId,
-} from "../../lib/musicxml/musicxml-playback";
-import {
-  type MeasureRange,
-  measureInRange,
-  selectionStartBeat,
-} from "../selection";
+import { selectionStartBeat } from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
-import { useStableHighlights } from "./note-colors";
+import { soundingHighlights, useStableHighlights } from "./note-colors";
 
 export interface ListenModeSettings {
   accent: string;
-}
-
-/**
- * The notes sounding at `currentBeat`, as score highlights. A note is sounding
- * when the beat falls in its half-open `[startBeat, startBeat + durationBeats)`
- * span, and — crucially — its rendered measure lies within the focus range.
- *
- * The measure filter is what keeps a note ending exactly on the barline where
- * the focus range begins from leaking in as a phantom first chord: its end beat
- * can float-overshoot the range-start beat by an ULP, so the raw sounding test
- * alone would highlight it. Filtering by measure (see `measureInRange`) mirrors
- * the way wait mode constrains its wait points to the range.
- */
-export function soundingHighlights(
-  notes: PlaybackNote[],
-  currentBeat: number,
-  range: MeasureRange | null,
-  accent: string,
-): NoteHighlight[] {
-  const highlights: NoteHighlight[] = [];
-  for (const note of notes) {
-    if (!measureInRange(note.measureIndex + 1, range)) {
-      continue;
-    }
-    if (
-      note.startBeat <= currentBeat &&
-      currentBeat < note.startBeat + note.durationBeats
-    ) {
-      highlights.push({
-        kind: "score",
-        id: playbackNoteId(note),
-        color: accent,
-      });
-    }
-  }
-  return highlights;
 }
 
 export function useListenMode(
