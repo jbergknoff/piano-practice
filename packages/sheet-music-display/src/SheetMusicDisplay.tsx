@@ -28,14 +28,13 @@ import type { NoteHighlight } from "./highlights";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
-  CLEF_CHANGE_GLYPH_FACTOR,
+  CLEF_CHANGE_FONT_FACTOR,
   CLEF_CHANGE_LEAD_FACTOR,
   DIVISIONS,
   FLAT_POSITIONS,
   GRACE_NOTE_ADVANCE,
   KEY_CHANGE_GLYPH_SPACING_FACTOR,
   KEY_CHANGE_LEAD_FACTOR,
-  MID_CLEF_ADVANCE_FACTOR,
   MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
   accidentalColumns,
@@ -2233,7 +2232,7 @@ function Measure({
           staffBottomY={staffBottomY}
           staffSpace={staffSpace}
           inkColor={inkColor}
-          fontSize={staffSpace * CLEF_CHANGE_GLYPH_FACTOR * 1.6}
+          fontSize={staffSpace * CLEF_CHANGE_FONT_FACTOR}
         />
       )}
       {!isFirstMeasure && measure.keyChange && (
@@ -2280,18 +2279,21 @@ function Measure({
           const group = event as ChordGroup;
           const eventClef = group.clef ?? measureClef;
           if (!clefEqual(eventClef, runningClef)) {
+            // Centre the glyph in the widened gap between the previous note and
+            // this one (the spine reserved MID_CLEF_ADVANCE_FACTOR of extra
+            // space here), so its margins are symmetric rather than piling up on
+            // one side.
+            const previousX = ei > 0 ? eventXs[ei - 1] : ex - staffSpace;
             elements.push(
               <Clef
                 key={`clef-${key}`}
                 clef={eventClef}
-                // Centred in the additive slot the spine reserved ahead of this
-                // onset (MID_CLEF_ADVANCE_FACTOR), leaving a clear margin between
-                // the glyph and the noteheads on either side.
-                x={ex - staffSpace * (MID_CLEF_ADVANCE_FACTOR - 1.3)}
+                x={(previousX + ex) / 2}
+                anchor="middle"
                 staffBottomY={staffBottomY}
                 staffSpace={staffSpace}
                 inkColor={inkColor}
-                fontSize={staffSpace * CLEF_CHANGE_GLYPH_FACTOR * 1.6}
+                fontSize={staffSpace * CLEF_CHANGE_FONT_FACTOR}
               />,
             );
             runningClef = eventClef;
@@ -2331,6 +2333,7 @@ function Clef({
   staffSpace,
   inkColor,
   fontSize,
+  anchor = "start",
 }: {
   clef: { sign: "G" | "F" };
   x: number;
@@ -2340,6 +2343,9 @@ function Clef({
   /** Override the inherited glyph size — used to draw a smaller mid-staff clef
    *  change than the full-size clef in a measure header. */
   fontSize?: number;
+  /** Horizontal anchor. "middle" centres the glyph on `x` (used to centre a
+   *  mid-measure clef change in the gap between two notes). */
+  anchor?: "start" | "middle";
 }) {
   const char = clef.sign === "G" ? G.gClef : G.fClef;
   // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
@@ -2349,7 +2355,13 @@ function Clef({
       ? staffBottomY - staffSpace
       : staffBottomY - 3 * staffSpace;
   return (
-    <text x={x + 2} y={y} fill={inkColor} font-size={fontSize}>
+    <text
+      x={anchor === "middle" ? x : x + 2}
+      y={y}
+      fill={inkColor}
+      font-size={fontSize}
+      text-anchor={anchor === "middle" ? "middle" : undefined}
+    >
       {char}
     </text>
   );

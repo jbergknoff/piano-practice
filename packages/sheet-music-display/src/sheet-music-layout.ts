@@ -376,14 +376,17 @@ export function headerWidth(fifths: number): number {
 // renderer (to place the glyph) so they stay in sync.
 export const CLEF_CHANGE_LEAD_FACTOR = 0.5;
 export const CLEF_CHANGE_GLYPH_FACTOR = 2.2;
+// Font size of a clef-change glyph, as a multiple of staffSpace. The full-size
+// header clef is 4× staffSpace; a change clef is drawn at the conventional 75%.
+export const CLEF_CHANGE_FONT_FACTOR = 3;
 export function clefChangeWidth(staffSpace: number): number {
   return (CLEF_CHANGE_LEAD_FACTOR + CLEF_CHANGE_GLYPH_FACTOR) * staffSpace;
 }
 // Additive width (× staffSpace) reserved in the rhythm spine ahead of a
 // mid-measure clef change, so its glyph has real space with clear margins on
 // both sides rather than crowding the neighbouring noteheads. Shared with the
-// renderer, which centres the glyph within this reserved slot.
-export const MID_CLEF_ADVANCE_FACTOR = 4;
+// renderer, which centres the glyph in the widened gap between the two notes.
+export const MID_CLEF_ADVANCE_FACTOR = 3.2;
 
 // Lead and trailing gaps (× staffSpace) bracketing the key-change glyphs so they
 // clear the barline on the left and the noteheads on the right.
