@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   type ChordGroup,
+  eventXsFromSpine,
   isRest,
   parseScore,
+  resolveLayout,
 } from "@jbergknoff/sheet-music-display";
 import { musicXmlToConversion } from "../../lib/musicxml/musicxml-playback";
 
@@ -180,6 +182,77 @@ describe("multi-staff parsing", () => {
     expect(isRest(bass[0])).toBe(true);
     expect(isRest(bass[1])).toBe(false);
     expect((bass[1] as ChordGroup).notes[0].pitch.step).toBe("C");
+  });
+
+  test("a 3-against-2 measure aligns simultaneous triplet and eighth notes on one column", () => {
+    // Debussy Arabesque measure 6, reduced to the essential cross-rhythm: a 4/4
+    // bar (divisions=6) whose treble is a quarter rest then triplet eighths
+    // (duration 2 → 4/3 of a normalized division) over beats 1–3, while the bass
+    // is straight eighths (duration 3 → 2 normalized). On beat 2 the treble note
+    // (normalized onset 4 + 4/3 + 4/3 + 4/3) and the bass note (normalized onset
+    // 2·4) are simultaneous, but those float onset sums land on 7.999999999999999
+    // vs 8 — one ULP apart. Before quantization the layout's onset Set treated
+    // them as two columns MIN_EVENT_ADVANCE (18px) apart, drawing the noteheads
+    // misaligned even though wait mode (which uses exact-tick playback beats)
+    // correctly required them together. They must share one x column. (Beats 1
+    // and 3 don't drift — their sums land back exactly on 4 and 12 — so beat 2 is
+    // the one that regresses.)
+    const xml = `<?xml version="1.0"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>6</divisions><key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <note><rest/><duration>6</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>C</step><alter>1</alter><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>C</step><alter>1</alter><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>G</step><alter>1</alter><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><staff>1</staff></note>
+      <backup><duration>24</duration></backup>
+      <note><pitch><step>E</step><octave>2</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>B</step><octave>2</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>G</step><alter>1</alter><octave>3</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>B</step><octave>3</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>G</step><alter>1</alter><octave>3</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>E</step><octave>3</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+      <note><pitch><step>B</step><octave>2</octave></pitch><duration>3</duration><voice>5</voice><type>eighth</type><staff>2</staff></note>
+    </measure>
+  </part>
+</score-partwise>`;
+    const score = parseScore(xml);
+    const layout = resolveLayout(score);
+    const spine = layout.measureSpines[0];
+
+    const trebleXs = eventXsFromSpine(score.parts[0].measures[0].events, spine);
+    const bassXs = eventXsFromSpine(score.parts[1].measures[0].events, spine);
+
+    // Treble events: [rest, t1..t9]. The beat-2 downbeat is the 4th triplet,
+    // event index 4. Bass events: 8 eighths; beat 2 is the 5th, event index 4.
+    // These are simultaneous and must render at the same x.
+    expect(trebleXs[4]).toBe(bassXs[4]);
+
+    // Beats 1 and 3 coincidences too (treble indices 1 and 7, bass indices 2 and
+    // 6), plus the downbeat (bass index 0, treble rest occupies beat 0).
+    expect(trebleXs[1]).toBe(bassXs[2]);
+    expect(trebleXs[7]).toBe(bassXs[6]);
+
+    // The spine must have no near-duplicate columns: every gap between adjacent
+    // onsets is a real musical gap, not an ULP-sized sliver.
+    for (let k = 1; k < spine.divs.length; k++) {
+      expect(spine.divs[k] - spine.divs[k - 1]).toBeGreaterThan(1e-3);
+    }
   });
 });
 
