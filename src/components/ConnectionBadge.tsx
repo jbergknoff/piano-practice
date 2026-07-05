@@ -85,20 +85,19 @@ function errorBody(accent: string, source: PianoSource | null) {
   if (source === "midi") {
     return (
       <span>
-        No MIDI device was found. Connect your piano over USB, or pair it in
-        your operating system's Bluetooth settings first — on Linux, BlueZ
-        bridges a paired BLE piano to a MIDI port this app can then use. See the{" "}
-        {compatibilityLink(accent, "compatibility page ↗")} for what's
-        supported.
+        No USB MIDI device was found. Make sure your piano is connected and
+        powered on, then try again. This error comes from your browser's Web
+        MIDI API.
       </span>
     );
   }
   return (
     <span>
-      The browser couldn't connect to the selected device. Not every browser and
+      The browser couldn't connect to the selected device over Bluetooth. This
+      error comes from your browser's Web Bluetooth API. Not every browser and
       operating system fully supports BLE MIDI — see the{" "}
-      {compatibilityLink(accent, "compatibility page ↗")} for what's known to
-      work.
+      {compatibilityLink(accent, "Web Bluetooth compatibility matrix ↗")} for
+      what's known to work.
       {IS_CHROMIUM && (
         <>
           {" "}
@@ -106,8 +105,7 @@ function errorBody(accent: string, source: PianoSource | null) {
           <code style={{ fontSize: 11 }}>chrome://flags</code> and enable both{" "}
           <strong>Experimental Web Platform features</strong> and{" "}
           <strong>Use the new permissions backend for Web Bluetooth</strong>,
-          then relaunch. If pairing still fails, try connecting over USB or Web
-          MIDI instead.
+          then relaunch.
         </>
       )}
     </span>
