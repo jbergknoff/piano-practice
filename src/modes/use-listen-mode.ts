@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useRef } from "preact/hooks";
-import { playbackNoteId } from "../../lib/musicxml/musicxml-playback";
 import { selectionStartBeat } from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
-import { useStableHighlights } from "./note-colors";
+import { soundingHighlights, useStableHighlights } from "./note-colors";
 
 export interface ListenModeSettings {
   accent: string;
@@ -64,21 +63,18 @@ export function useListenMode(
     if (!musicxml || currentBeat === 0) {
       return [];
     }
-    const highlights: NoteHighlight[] = [];
-    for (const note of musicxml.notes) {
-      if (
-        note.startBeat <= currentBeat &&
-        currentBeat < note.startBeat + note.durationBeats
-      ) {
-        highlights.push({
-          kind: "score",
-          id: playbackNoteId(note),
-          color: settings.accent,
-        });
-      }
-    }
-    return highlights;
-  }, [control.musicxml, control.currentBeat, settings.accent]);
+    return soundingHighlights(
+      musicxml.notes,
+      currentBeat,
+      control.measureRange,
+      settings.accent,
+    );
+  }, [
+    control.musicxml,
+    control.currentBeat,
+    control.measureRange,
+    settings.accent,
+  ]);
   const noteHighlights = useStableHighlights(computedHighlights);
 
   return {

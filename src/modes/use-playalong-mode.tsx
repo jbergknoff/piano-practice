@@ -32,7 +32,7 @@ import {
 import type { ThemeTokens } from "../theme";
 import { blurFilter } from "../theme";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
-import { useStableHighlights } from "./note-colors";
+import { soundingHighlights, useStableHighlights } from "./note-colors";
 
 export type PlayalongPhase =
   | "idle"
@@ -528,25 +528,25 @@ export function usePlayalongMode(
     } else if (control.currentBeat > 0) {
       // Idle / counting-in: behave like listen mode — highlight sounding notes.
       // Skip when the cursor is at the very start so the first note doesn't
-      // pre-highlight before playback begins.
-      for (const note of musicxml.notes) {
-        if (
-          note.startBeat <= control.currentBeat &&
-          control.currentBeat < note.startBeat + note.durationBeats
-        ) {
-          scoreHighlights.push({
-            kind: "score",
-            id: playbackNoteId(note),
-            color: settings.accent,
-          });
-        }
-      }
+      // pre-highlight before playback begins. Shares listen mode's
+      // `soundingHighlights` so the focus-range measure filter (which stops a
+      // prior-measure note ending on the barline from leaking in) is applied
+      // here too, not just in listen mode.
+      scoreHighlights.push(
+        ...soundingHighlights(
+          musicxml.notes,
+          control.currentBeat,
+          control.measureRange,
+          settings.accent,
+        ),
+      );
     }
 
     return scoreHighlights.concat(playerMarkers);
   }, [
     control.musicxml,
     control.currentBeat,
+    control.measureRange,
     phase,
     hitNoteIds,
     playerMarkers,
