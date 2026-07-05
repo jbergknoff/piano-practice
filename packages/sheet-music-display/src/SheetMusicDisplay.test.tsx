@@ -186,6 +186,25 @@ function clefChangeScoreXml(): string {
   return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
 }
 
+// Two-staff score whose bass staff plays four quarter notes; when `withChange`
+// is set it declares a mid-measure clef change (bass → treble) after the second
+// note. Both variants have identical pitches, so any layout difference is the
+// reserved space for the clef glyph alone.
+function midMeasureClefScoreXml(withChange: boolean): string {
+  const header =
+    '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes>';
+  const treble =
+    '<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note>';
+  const q = (step: string, octave: number) =>
+    `<note><pitch><step>${step}</step><octave>${octave}</octave></pitch><duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>`;
+  const midClef = withChange
+    ? '<attributes><clef number="2"><sign>G</sign><line>2</line></clef></attributes>'
+    : "";
+  const staff2 = `${q("C", 3)}${q("E", 3)}${midClef}${q("G", 3)}${q("B", 3)}`;
+  const body = `<measure number="1">${header}${treble}<backup><duration>16</duration></backup>${staff2}</measure>`;
+  return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
+}
+
 const QUARTER = (step: string, octave: number, alter = 0): NoteSpec => ({
   step,
   octave,
@@ -450,6 +469,21 @@ describe("clef changes", () => {
     // (bass) clef would bury C5 under a stack of ledger lines.
     const { linesWithStrokeWidth } = renderSheetMusic(clefChangeScoreXml());
     expect(linesWithStrokeWidth(LEDGER_WIDTH)).toHaveLength(0);
+  });
+
+  test("a mid-measure clef change reserves horizontal space for its glyph", () => {
+    const withChange = renderSheetMusic(midMeasureClefScoreXml(true));
+    const without = renderSheetMusic(midMeasureClefScoreXml(false));
+    // The clef glyph gets its own slot in the rhythm spine, so the changed score
+    // lays out wider than the identical one without the change.
+    expect(Number(withChange.svg.getAttribute("width"))).toBeGreaterThan(
+      Number(without.svg.getAttribute("width")),
+    );
+    // ...and it draws an extra treble clef (the mid-measure one) beyond the
+    // header's staff-1 treble clef.
+    expect(withChange.textsWith(G.gClef).length).toBeGreaterThan(
+      without.textsWith(G.gClef).length,
+    );
   });
 });
 

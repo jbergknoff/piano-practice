@@ -35,6 +35,7 @@ import {
   GRACE_NOTE_ADVANCE,
   KEY_CHANGE_GLYPH_SPACING_FACTOR,
   KEY_CHANGE_LEAD_FACTOR,
+  MID_CLEF_ADVANCE_FACTOR,
   MIN_EVENT_ADVANCE,
   SHARP_POSITIONS,
   accidentalColumns,
@@ -164,14 +165,18 @@ function computeBeamGroups(
 
   return groupBeamableEvents(events, beatDivisions).map((indices) => {
     const chords = indices.map((i) => events[i] as ChordGroup);
-    const stemDir = beamStemDirection(chords, clef);
+    // Resolve each chord's own clef so a beam group spanning a mid-measure clef
+    // change measures every chord against the clef it is actually drawn in
+    // (otherwise stems land on the wrong side after the change).
+    const chordClef = (g: ChordGroup) => g.clef ?? clef;
+    const stemDir = beamStemDirection(chords, (i) => chordClef(chords[i]));
 
     // Reference Y for each chord: the notehead the beam must clear, i.e. the
     // outermost note in the beam direction (top note for stem-up, bottom note
     // for stem-down). The natural beam position sits stemLength beyond this.
     const referenceYs = chords.map((g) => {
       const ys = g.notes.map((n) =>
-        noteY(n.pitch, clef, staffBottomY, staffSpace),
+        noteY(n.pitch, chordClef(g), staffBottomY, staffSpace),
       );
       return stemDir === "up" ? Math.min(...ys) : Math.max(...ys);
     });
@@ -2279,7 +2284,9 @@ function Measure({
               <Clef
                 key={`clef-${key}`}
                 clef={eventClef}
-                x={ex - staffSpace * (CLEF_CHANGE_GLYPH_FACTOR + 0.3)}
+                // Sits in the additive slot the spine reserved ahead of this
+                // onset (MID_CLEF_ADVANCE_FACTOR), left-margined off the notehead.
+                x={ex - staffSpace * (MID_CLEF_ADVANCE_FACTOR - 0.3)}
                 staffBottomY={staffBottomY}
                 staffSpace={staffSpace}
                 inkColor={inkColor}

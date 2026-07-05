@@ -271,9 +271,14 @@ export function buildMeasureSpine(
   // notes are. Using max() here would let a large natural gap absorb the
   // grace space, causing the grace notehead to land on top of the previous note.
   const graceAdvByDiv = new Map<number, number>();
+  // A mid-measure clef change reserves its own additive slot (like a grace note)
+  // so the clef glyph sits in real space ahead of the chord it precedes, rather
+  // than overlapping the previous notehead.
+  const clefAdvByDiv = new Map<number, number>();
   let contentEnd = 0; // last division any part's notes actually reach
   for (const measure of measures) {
     let pos = 0;
+    let runningClef = measure.clef;
     for (const event of measure.events) {
       onsets.add(pos);
       if (!isRest(event)) {
@@ -292,6 +297,18 @@ export function buildMeasureSpine(
             Math.max(graceAdvByDiv.get(pos) ?? 0, graceAdv),
           );
         }
+        const chordClef = chord.clef ?? measure.clef;
+        if (
+          chordClef &&
+          (chordClef.sign !== runningClef?.sign ||
+            chordClef.line !== runningClef?.line)
+        ) {
+          clefAdvByDiv.set(
+            pos,
+            Math.max(clefAdvByDiv.get(pos) ?? 0, staffSpace * MID_CLEF_ADVANCE_FACTOR),
+          );
+          runningClef = chordClef;
+        }
       }
       pos += isRest(event) ? event.duration : (event as ChordGroup).duration;
     }
@@ -307,7 +324,8 @@ export function buildMeasureSpine(
       const gap = eventAdvance(divs[k] - divs[k - 1], noteUnitWidth);
       x +=
         Math.max(gap, accAdvanceByDiv.get(divs[k]) ?? 0) +
-        (graceAdvByDiv.get(divs[k]) ?? 0);
+        (graceAdvByDiv.get(divs[k]) ?? 0) +
+        (clefAdvByDiv.get(divs[k]) ?? 0);
     }
     xs.push(x);
   }
@@ -361,6 +379,11 @@ export const CLEF_CHANGE_GLYPH_FACTOR = 2.2;
 export function clefChangeWidth(staffSpace: number): number {
   return (CLEF_CHANGE_LEAD_FACTOR + CLEF_CHANGE_GLYPH_FACTOR) * staffSpace;
 }
+// Additive width (× staffSpace) reserved in the rhythm spine ahead of a
+// mid-measure clef change, so its glyph has real space instead of overlapping
+// the previous notehead. Shared with the renderer, which places the glyph
+// within this reserved slot.
+export const MID_CLEF_ADVANCE_FACTOR = 2.6;
 
 // Lead and trailing gaps (× staffSpace) bracketing the key-change glyphs so they
 // clear the barline on the left and the noteheads on the right.
@@ -588,21 +611,24 @@ export function groupBeamableEvents(
 
 /**
  * Determine a unified stem direction for a beam group by finding the note
- * farthest from the clef's middle line across all chords in the group.
+ * farthest from the clef's middle line across all chords in the group. The clef
+ * is resolved per chord (via `clefForIndex`) so a beam group that spans a
+ * mid-measure clef change still measures each chord against its own clef.
  */
 export function beamStemDirection(
   groups: ChordGroup[],
-  clef: { sign: "G" | "F" },
+  clefForIndex: (index: number) => { sign: "G" | "F" },
 ): "up" | "down" {
-  const middleRef = clef.sign === "G" ? TREBLE_MIDDLE : BASS_MIDDLE;
   let farthestSteps = 0;
-  for (const group of groups) {
+  groups.forEach((group, groupIndex) => {
+    const middleRef =
+      clefForIndex(groupIndex).sign === "G" ? TREBLE_MIDDLE : BASS_MIDDLE;
     for (const note of group.notes) {
       const steps = diatonicIndex(note.pitch) - middleRef;
       if (Math.abs(steps) > Math.abs(farthestSteps)) {
         farthestSteps = steps;
       }
     }
-  }
+  });
   return farthestSteps <= 0 ? "up" : "down";
 }
