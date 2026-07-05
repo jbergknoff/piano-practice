@@ -813,7 +813,11 @@ export function PracticeScreen({
       {/* Mode-owned overlay (e.g. playalong count-in) */}
       {active.overlay}
 
-      {/* BOTTOM RIGHT: bluetooth + gear */}
+      {/* BOTTOM RIGHT: bluetooth + gear.
+          z-index 4 (above the other chrome, which is 2) so the Help and
+          "Connect a piano" modals these badges open — rendered inside this
+          row, so capped by its stacking context — clear the playback cursor
+          bar, which leaks into the root stacking context at z-index 3. */}
       <div
         style={{
           position: "absolute",
@@ -822,7 +826,7 @@ export function PracticeScreen({
           display: "flex",
           alignItems: "center",
           gap: 10,
-          zIndex: 2,
+          zIndex: 4,
         }}
       >
         <HelpBadge
