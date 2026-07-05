@@ -287,7 +287,7 @@ export function ConnectionBadge({
             style={backdropStyle}
             onClick={() => setShowUnsupportedModal(false)}
           />
-          <div data-testid="connection-modal" style={modalBaseStyle}>
+          <div style={modalBaseStyle}>
             <div
               style={{
                 display: "flex",
@@ -325,7 +325,7 @@ export function ConnectionBadge({
             style={backdropStyle}
             onClick={() => setShowChooserModal(false)}
           />
-          <div data-testid="connection-modal" style={modalBaseStyle}>
+          <div style={modalBaseStyle}>
             <div
               style={{
                 display: "flex",
@@ -407,7 +407,7 @@ export function ConnectionBadge({
             style={backdropStyle}
             onClick={() => setShowStatusModal(false)}
           />
-          <div data-testid="connection-modal" style={modalBaseStyle}>
+          <div style={modalBaseStyle}>
             <div
               style={{
                 display: "flex",
@@ -464,7 +464,7 @@ export function ConnectionBadge({
         <>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
           <div style={backdropStyle} onClick={() => setShowErrorModal(false)} />
-          <div data-testid="connection-modal" style={modalBaseStyle}>
+          <div style={modalBaseStyle}>
             <div
               style={{
                 display: "flex",
