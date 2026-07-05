@@ -184,6 +184,38 @@ this, every held note rendered as a second unconnected notehead, reading as a
 fresh attack (the renderer draws no slurs; only ties). Tie paths carry a
 `data-tie` attribute for test selection.
 
+### Clef changes
+
+Clef is resolved **per measure** (and, within a staff, **per chord** for
+mid-measure changes) — not per part — mirroring the running-key-signature model.
+The parser (`musicxml-parser.ts`) carries a running clef forward across measures
+just like `activeFifths`:
+
+- `ParsedMeasure.clef` is the clef in effect at the **measure's start** (resolved
+  by carry-forward; on entry it holds only the clef declared in that measure, if
+  any). `ParsedMeasure.clefChange` is set when a measure starts a new clef
+  different from the one carried in (the analog of `keyChange`), driving a smaller
+  clef glyph drawn just after the barline.
+- `ChordGroup.clef` is set **only** when a mid-measure clef change (a later
+  `<attributes>`/`<clef>` block) makes a chord's clef differ from its measure's
+  start clef. `collectClefChanges` walks the measure with the same time cursor as
+  `collectStaffItems`; `buildStaffEvents` tags each chord via `clefForOnset`. The
+  multi-staff path (`parseMultiStaffPart`) owns this fully (clef changes are
+  **per-staff**, unlike key changes); the single-staff path uses `resolveClefs`
+  for measure-start changes only.
+- Consumers read `group.clef ?? measure.clef ?? part.clef`. In `SheetMusicDisplay`
+  this threads through `Measure` (note positioning + a mid-measure clef glyph
+  drawn where the clef changes), `computeNoteRenderInfos` (highlight geometry),
+  `computeTieArcs`, the player-marker overlay (clef at the marker's beat), and the
+  sticky signature panel (clef at the scrolled-to measure). The layout
+  (`sheet-music-layout.ts`) reserves lead width for a barline clef change via
+  `clefChangeWidth` (checked across all staves, since the change is per-staff);
+  mid-measure clef glyphs are drawn in the existing gap without widening the
+  spine. `part.clef` remains the piece's opening clef (fallback + empty parts).
+- Clefs are **display-only**: playback derives pitch from `<step>`/`<octave>`/
+  `<alter>` (clef-independent), so a clef change never affects sounding notes,
+  only where noteheads sit on the staff.
+
 ### Glyph font bundling
 
 The notation is drawn with SMuFL glyphs (Unicode Private-Use-Area codepoints) that only render in a SMuFL font, so `sheet-music-display` ships its own. There is **no `glyphFontFamily` prop** — the package fully owns the glyph font; a consumer gets working notation with zero setup.

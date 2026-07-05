@@ -12,6 +12,7 @@ import {
   EMBEDDED_GLYPH_FONT_BASE64,
   GLYPH_FONT_FAMILY,
 } from "./embedded-glyph-font";
+import { G } from "./glyphs";
 import { computeMeasureStartBeats } from "./measure-beats";
 import { parseScore } from "./musicxml-parser";
 import {
@@ -168,6 +169,20 @@ function keyChangeScoreXml(openFifths: number, changeFifths: number): string {
   const m2Attr = `<attributes><key><fifths>${changeFifths}</fifths><mode>major</mode></key></attributes>`;
   const note = noteXml({ step: "B", octave: 4, duration: 16, type: "whole" });
   const body = `<measure number="1">${m1Attr}${note}</measure><measure number="2">${m2Attr}${note}</measure>`;
+  return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
+}
+
+// Two-measure one-part score: measure 1 in bass (F) clef, measure 2 declares a
+// clef change to treble (G) via a clef-only <attributes> block. Exercises the
+// mid-staff clef-change glyph and the running-clef carry-forward.
+function clefChangeScoreXml(): string {
+  const m1Attr =
+    "<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>F</sign><line>4</line></clef></attributes>";
+  const m2Attr =
+    "<attributes><clef><sign>G</sign><line>2</line></clef></attributes>";
+  const low = noteXml({ step: "C", octave: 3, duration: 16, type: "whole" });
+  const high = noteXml({ step: "C", octave: 5, duration: 16, type: "whole" });
+  const body = `<measure number="1">${m1Attr}${low}</measure><measure number="2">${m2Attr}${high}</measure>`;
   return `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>P</part-name></score-part></part-list><part id="P1">${body}</part></score-partwise>`;
 }
 
@@ -404,6 +419,40 @@ describe("SheetMusicDisplay geometry", () => {
   });
 });
 
+// ── Clef changes ──────────────────────────────────────────────────────────────
+
+describe("clef changes", () => {
+  test("a mid-piece clef change draws a second clef glyph in the changing measure", () => {
+    const { textsWith } = renderSheetMusic(clefChangeScoreXml());
+    // The static notation layer shows the header F clef plus the treble clef the
+    // change introduces at measure 2 (the sticky overlay is a separate <svg>).
+    expect(textsWith(G.fClef)).toHaveLength(1);
+    expect(textsWith(G.gClef)).toHaveLength(1);
+  });
+
+  test("the clef-change glyph sits just right of the changing measure's barline", () => {
+    const { textsWith, barlineXs } = renderSheetMusic(clefChangeScoreXml());
+    const measure2BarlineX = barlineXs()[1];
+    const changeClef = textsWith(G.gClef)[0];
+    const clefX = Number(changeClef.getAttribute("x"));
+    expect(clefX).toBeGreaterThan(measure2BarlineX);
+    // ...and ahead of the measure's notehead.
+    const measure2NoteX = renderSheetMusic(clefChangeScoreXml())
+      .noteheads()
+      .map((n) => n.x)
+      .filter((x) => x > measure2BarlineX)[0];
+    expect(clefX).toBeLessThan(measure2NoteX);
+  });
+
+  test("notes after a clef change are positioned for the new clef (no ledger pile-up)", () => {
+    // C3 in bass then C5 in treble both sit inside their staff, so a correctly
+    // clef-aware render draws no ledger lines. Rendering measure 2 in the old
+    // (bass) clef would bury C5 under a stack of ledger lines.
+    const { linesWithStrokeWidth } = renderSheetMusic(clefChangeScoreXml());
+    expect(linesWithStrokeWidth(LEDGER_WIDTH)).toHaveLength(0);
+  });
+});
+
 // ── Grace note highlighting ───────────────────────────────────────────────────
 
 describe("grace note highlighting", () => {
@@ -535,6 +584,9 @@ const SNAPSHOT_CASES: Array<[string, string]> = [
   // Mid-piece key change (A major → C major): three naturals cancel the
   // outgoing sharps at the start of measure 2. Mirrors Rondo Alla Turca.
   ["key-change", keyChangeScoreXml(3, 0)],
+  // Mid-piece clef change (bass → treble at measure 2): the changing measure
+  // draws a smaller clef after its barline and repositions its notes.
+  ["clef-change", clefChangeScoreXml()],
 ];
 
 describe("SheetMusicDisplay SVG snapshots", () => {

@@ -238,12 +238,18 @@ function measureLeadIn(
   const hdrW = isFirst && ref ? headerWidth(ref.activeFifths) : 0;
   const keyChangeW =
     !isFirst && ref?.keyChange ? keyChangeWidth(ref.keyChange, staffSpace) : 0;
+  // A clef change at the barline is per-staff (unlike a key change, which is
+  // shared), so reserve room if any part changes clef here.
+  const clefChangeW =
+    !isFirst && measures.some((m) => m.clefChange)
+      ? clefChangeWidth(staffSpace)
+      : 0;
   const leftPad = measures.length
     ? Math.max(
         ...measures.map((m) => measureLeftPad(m.events, isFirst, staffSpace)),
       )
     : MEASURE_PADDING_LEFT;
-  return hdrW + keyChangeW + leftPad;
+  return hdrW + keyChangeW + clefChangeW + leftPad;
 }
 
 // Build one measure's shared rhythm spine from the onsets of every part (the
@@ -346,6 +352,15 @@ export function headerWidth(fifths: number): number {
 }
 
 // ── Mid-staff key changes ─────────────────────────────────────────────────────
+
+// Lead gap (× staffSpace) before a mid-staff clef-change glyph, plus the glyph's
+// own reserved width — shared by the layout (to widen the measure) and the
+// renderer (to place the glyph) so they stay in sync.
+export const CLEF_CHANGE_LEAD_FACTOR = 0.5;
+export const CLEF_CHANGE_GLYPH_FACTOR = 2.2;
+export function clefChangeWidth(staffSpace: number): number {
+  return (CLEF_CHANGE_LEAD_FACTOR + CLEF_CHANGE_GLYPH_FACTOR) * staffSpace;
+}
 
 // Lead and trailing gaps (× staffSpace) bracketing the key-change glyphs so they
 // clear the barline on the left and the noteheads on the right.

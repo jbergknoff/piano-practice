@@ -1,3 +1,4 @@
+import type { VNode } from "preact";
 import { memo } from "preact/compat";
 import {
   useCallback,
@@ -27,6 +28,8 @@ import type { NoteHighlight } from "./highlights";
 import {
   ACCIDENTAL_BASE_OFFSET_FACTOR,
   ACCIDENTAL_COLUMN_WIDTH_FACTOR,
+  CLEF_CHANGE_GLYPH_FACTOR,
+  CLEF_CHANGE_LEAD_FACTOR,
   DIVISIONS,
   FLAT_POSITIONS,
   GRACE_NOTE_ADVANCE,
@@ -36,6 +39,7 @@ import {
   SHARP_POSITIONS,
   accidentalColumns,
   beamStemDirection,
+  clefChangeWidth,
   eventXsFromSpine,
   groupBeamableEvents,
   headerWidth,
@@ -348,6 +352,25 @@ function secondaryBeamSegments(
 
 // ── Cursor position helper ────────────────────────────────────────────────────
 
+// Largest index i where measureStartBeats[i] <= beat — the measure containing
+// `beat`. Handles pickup measures and any irregular measure lengths.
+function measureIndexForBeat(
+  measureStartBeats: number[],
+  beat: number,
+): number {
+  let low = 0;
+  let high = measureStartBeats.length - 1;
+  while (low < high) {
+    const mid = Math.floor((low + high + 1) / 2);
+    if (measureStartBeats[mid] <= beat) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return Math.max(0, low);
+}
+
 export function computeCursorX(
   beat: number,
   score: ParsedScore,
@@ -575,15 +598,18 @@ function computeNoteRenderInfos(
 
   score.parts.forEach((part, p) => {
     const staffBottomY = staffBottomYs[p];
-    const clef = part.clef;
     const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
 
     part.measures.forEach((measure, m) => {
+      // The measure's start clef (and, per chord, its own clef after a
+      // mid-measure change) must match what the renderer draws so highlight and
+      // marker geometry lands on the right notehead.
+      const measureClef = measure.clef ?? part.clef;
       const eventXs = eventXsFromSpine(measure.events, measureSpines[m]);
       const { beamOverrideMap } = beamStemOverrides(
         measure.events,
         eventXs,
-        clef,
+        measureClef,
         staffBottomY,
         staffSpace,
         beatDivisions,
@@ -594,6 +620,7 @@ function computeNoteRenderInfos(
           return;
         }
         const group = event as ChordGroup;
+        const clef = group.clef ?? measureClef;
         const stemDir =
           beamOverrideMap.get(ei)?.stemDir ?? stemDirection(group, clef);
         for (const info of chordNoteGeometry(
@@ -653,7 +680,6 @@ export function computeTieArcs(
 
   score.parts.forEach((part, p) => {
     const staffBottomY = staffBottomYs[p];
-    const clef = part.clef;
     const beatDivisions = beamUnitDivisions(part.timeSig.beatType);
     // Ties curve opposite the stem: a notehead at or above the staff's middle
     // line (stem down) gets an arc above it (bulges up); one below the middle
@@ -663,11 +689,12 @@ export function computeTieArcs(
     const openTies = new Map<string, { x: number; y: number }>();
 
     part.measures.forEach((measure, m) => {
+      const measureClef = measure.clef ?? part.clef;
       const eventXs = eventXsFromSpine(measure.events, measureSpines[m]);
       const { beamOverrideMap } = beamStemOverrides(
         measure.events,
         eventXs,
-        clef,
+        measureClef,
         staffBottomY,
         staffSpace,
         beatDivisions,
@@ -678,6 +705,7 @@ export function computeTieArcs(
           return;
         }
         const group = event as ChordGroup;
+        const clef = group.clef ?? measureClef;
         const stemDir =
           beamOverrideMap.get(ei)?.stemDir ?? stemDirection(group, clef);
         const geom = chordNoteGeometry(
@@ -783,20 +811,28 @@ const PlayerMarkerOverlay = memo(function PlayerMarkerOverlay({
           return null;
         }
         const pitch = midiNumberToPitch(marker.noteNumber);
+        // Use the clef in effect at this beat (measure granularity) so a marker
+        // in a clef-changed section lands on the right staff and height.
+        const mi = measureIndexForBeat(measureStartBeats, marker.beat);
+        const clefAt = (i: number) =>
+          score.parts[i].measures[mi]?.clef ?? score.parts[i].clef;
         let bestStaff = visibleIndices[0];
         let bestDistance = Number.POSITIVE_INFINITY;
         for (const i of visibleIndices) {
-          const clef = score.parts[i].clef;
           const middleY = staffBottomYs[i] - 2 * staffSpace;
-          const y = noteY(pitch, clef, staffBottomYs[i], staffSpace);
+          const y = noteY(pitch, clefAt(i), staffBottomYs[i], staffSpace);
           const distance = Math.abs(y - middleY);
           if (distance < bestDistance) {
             bestDistance = distance;
             bestStaff = i;
           }
         }
-        const clef = score.parts[bestStaff].clef;
-        const y = noteY(pitch, clef, staffBottomYs[bestStaff], staffSpace);
+        const y = noteY(
+          pitch,
+          clefAt(bestStaff),
+          staffBottomYs[bestStaff],
+          staffSpace,
+        );
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: marker list is append-only during a session
           <g key={index}>
@@ -1636,10 +1672,15 @@ export function SheetMusicDisplay({
               const staffBottomY = layout.staffBottomYs[partIndex];
               const activeFifths =
                 part.measures[stickyMeasureIndex]?.activeFifths ?? 0;
+              // Reflect the clef in effect at the scrolled-to measure, not just
+              // the piece's opening clef, so the overlay stays correct through
+              // clef changes.
+              const stickyClef =
+                part.measures[stickyMeasureIndex]?.clef ?? part.clef;
               return (
                 <g key={part.id}>
                   <Clef
-                    clef={part.clef}
+                    clef={stickyClef}
                     x={2}
                     staffBottomY={staffBottomY}
                     staffSpace={layout.staffSpace}
@@ -1647,7 +1688,7 @@ export function SheetMusicDisplay({
                   />
                   <KeySig
                     keySig={{ fifths: activeFifths }}
-                    clef={part.clef}
+                    clef={stickyClef}
                     x={34}
                     staffBottomY={staffBottomY}
                     staffSpace={layout.staffSpace}
@@ -2063,6 +2104,13 @@ function LedgerLines({
 
 // ── Measure ───────────────────────────────────────────────────────────────────
 
+function clefEqual(
+  a: { sign: "G" | "F"; line: number } | undefined,
+  b: { sign: "G" | "F"; line: number } | undefined,
+): boolean {
+  return a?.sign === b?.sign && a?.line === b?.line;
+}
+
 interface MeasureProps {
   measure: ParsedMeasure;
   measureIndex: number;
@@ -2092,6 +2140,9 @@ function Measure({
 }: MeasureProps) {
   const { staffSpace } = layout;
   const spine = layout.measureSpines[measureIndex];
+  // The clef in effect at the measure's start (resolved by the parser); falls
+  // back to the part clef for scores whose measures carry no resolved clef.
+  const measureClef = measure.clef ?? clef;
 
   // Note positions and beam geometry depend only on the score + layout, never
   // on note colors. Memoize so color changes during playback don't recompute
@@ -2102,13 +2153,20 @@ function Measure({
     const { beamGroups, beamOverrideMap } = beamStemOverrides(
       measure.events,
       eventXs,
-      clef,
+      measureClef,
       staffBottomY,
       staffSpace,
       beatDivisions,
     );
     return { eventXs, beamGroups, beamOverrideMap };
-  }, [measure.events, spine, staffSpace, clef, staffBottomY, beatDivisions]);
+  }, [
+    measure.events,
+    spine,
+    staffSpace,
+    measureClef,
+    staffBottomY,
+    beatDivisions,
+  ]);
 
   const clefX = x + 2;
   const keySigX = clefX + 32;
@@ -2137,7 +2195,7 @@ function Measure({
       {isFirstMeasure && (
         <>
           <Clef
-            clef={clef}
+            clef={measureClef}
             x={clefX}
             staffBottomY={staffBottomY}
             staffSpace={staffSpace}
@@ -2145,7 +2203,7 @@ function Measure({
           />
           <KeySig
             keySig={{ fifths: measure.activeFifths }}
-            clef={clef}
+            clef={measureClef}
             x={keySigX}
             staffBottomY={staffBottomY}
             staffSpace={staffSpace}
@@ -2160,11 +2218,28 @@ function Measure({
           />
         </>
       )}
+      {/* A clef change at the barline: drawn just after it, ahead of the notes
+          (which the layout has shifted right to make room). A simultaneous key
+          change is pushed further right so the two don't overlap. */}
+      {!isFirstMeasure && measure.clefChange && (
+        <Clef
+          clef={measure.clefChange}
+          x={x + staffSpace * CLEF_CHANGE_LEAD_FACTOR}
+          staffBottomY={staffBottomY}
+          staffSpace={staffSpace}
+          inkColor={inkColor}
+          fontSize={staffSpace * CLEF_CHANGE_GLYPH_FACTOR * 1.6}
+        />
+      )}
       {!isFirstMeasure && measure.keyChange && (
         <KeySigChange
           keyChange={measure.keyChange}
-          clef={clef}
-          x={x + staffSpace * KEY_CHANGE_LEAD_FACTOR}
+          clef={measureClef}
+          x={
+            x +
+            staffSpace * KEY_CHANGE_LEAD_FACTOR +
+            (measure.clefChange ? clefChangeWidth(staffSpace) : 0)
+          }
           staffBottomY={staffBottomY}
           staffSpace={staffSpace}
           inkColor={inkColor}
@@ -2172,7 +2247,12 @@ function Measure({
       )}
       {(() => {
         let beatOffset = 0;
-        return measure.events.map((event, ei) => {
+        // Track the clef as we walk the events so a mid-measure change draws a
+        // small clef glyph at the point it takes effect and shifts every later
+        // notehead onto the new clef.
+        let runningClef = measureClef;
+        const elements: VNode[] = [];
+        measure.events.forEach((event, ei) => {
           const key = `o${beatOffset}`;
           const dur = isRest(event)
             ? event.duration
@@ -2180,7 +2260,7 @@ function Measure({
           beatOffset += dur;
           const ex = eventXs[ei];
           if (isRest(event)) {
-            return (
+            elements.push(
               <RestEl
                 key={key}
                 rest={event}
@@ -2188,25 +2268,42 @@ function Measure({
                 staffBottomY={staffBottomY}
                 staffSpace={staffSpace}
                 inkColor={inkColor}
-              />
+              />,
             );
+            return;
           }
           const group = event as ChordGroup;
-          return (
+          const eventClef = group.clef ?? measureClef;
+          if (!clefEqual(eventClef, runningClef)) {
+            elements.push(
+              <Clef
+                key={`clef-${key}`}
+                clef={eventClef}
+                x={ex - staffSpace * (CLEF_CHANGE_GLYPH_FACTOR + 0.3)}
+                staffBottomY={staffBottomY}
+                staffSpace={staffSpace}
+                inkColor={inkColor}
+                fontSize={staffSpace * CLEF_CHANGE_GLYPH_FACTOR * 1.6}
+              />,
+            );
+            runningClef = eventClef;
+          }
+          elements.push(
             <ChordGroupEl
               key={key}
               group={group}
               x={ex}
               staffBottomY={staffBottomY}
-              clef={clef}
+              clef={eventClef}
               partIndex={partIndex}
               measureNumber={measure.number}
               staffSpace={staffSpace}
               beamStemOverride={beamOverrideMap.get(ei)}
               inkColor={inkColor}
-            />
+            />,
           );
         });
+        return elements;
       })()}
       <BeamLines
         beamGroups={beamGroups}
@@ -2225,12 +2322,16 @@ function Clef({
   staffBottomY,
   staffSpace,
   inkColor,
+  fontSize,
 }: {
   clef: { sign: "G" | "F" };
   x: number;
   staffBottomY: number;
   staffSpace: number;
   inkColor: string;
+  /** Override the inherited glyph size — used to draw a smaller mid-staff clef
+   *  change than the full-size clef in a measure header. */
+  fontSize?: number;
 }) {
   const char = clef.sign === "G" ? G.gClef : G.fClef;
   // SMuFL origins: G clef baseline sits on the G line (2nd line = 1 staffSpace up);
@@ -2240,7 +2341,7 @@ function Clef({
       ? staffBottomY - staffSpace
       : staffBottomY - 3 * staffSpace;
   return (
-    <text x={x + 2} y={y} fill={inkColor}>
+    <text x={x + 2} y={y} fill={inkColor} font-size={fontSize}>
       {char}
     </text>
   );
