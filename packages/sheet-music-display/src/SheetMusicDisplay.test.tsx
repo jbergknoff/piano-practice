@@ -194,7 +194,7 @@ function midMeasureClefScoreXml(withChange: boolean): string {
   const header =
     '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes>';
   const treble =
-    '<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note>';
+    "<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note>";
   const q = (step: string, octave: number) =>
     `<note><pitch><step>${step}</step><octave>${octave}</octave></pitch><duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>`;
   const midClef = withChange
