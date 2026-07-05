@@ -87,9 +87,7 @@ function errorBody(accent: string, source: PianoSource | null) {
       <span>
         No USB MIDI device was found. Make sure your piano is connected and
         powered on, then try again. This error comes from your browser's Web
-        MIDI API — see the{" "}
-        {compatibilityLink(accent, "compatibility page ↗")} for what's
-        supported.
+        MIDI API.
       </span>
     );
   }
@@ -98,8 +96,8 @@ function errorBody(accent: string, source: PianoSource | null) {
       The browser couldn't connect to the selected device over Bluetooth. This
       error comes from your browser's Web Bluetooth API. Not every browser and
       operating system fully supports BLE MIDI — see the{" "}
-      {compatibilityLink(accent, "compatibility page ↗")} for what's known to
-      work.
+      {compatibilityLink(accent, "Web Bluetooth compatibility matrix ↗")} for
+      what's known to work.
       {IS_CHROMIUM && (
         <>
           {" "}
