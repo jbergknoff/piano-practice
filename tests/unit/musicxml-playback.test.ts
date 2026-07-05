@@ -256,3 +256,35 @@ describe("staccato – durationBeats uses display duration", () => {
     }
   });
 });
+
+describe("totalBeats – derived from note content, not the measure formula", () => {
+  // The measure-count formula assumes every measure is full, so for a pickup
+  // (anacrusis) piece it overcounts by the pickup beats. totalBeats must be the
+  // end beat of the last-finishing note instead, or the cursor plays a beat of
+  // silence past the end and a focus range on the final measure stops a beat
+  // late (the flake behind focus-range.spec.ts's "listen mode stops and resets"
+  // test: the stop landed a beat past the last note, so the assertion sat in a
+  // dead-zone with no note sounding and only passed by racing the render).
+  test("pickup piece: totalBeats is the last note's end, not measures × beats", () => {
+    const xml = readFileSync(
+      "tests/fixtures/pickup-measure-melody.musicxml",
+      "utf8",
+    );
+    const { totalBeats, notes, measureStartBeats } = musicXmlToConversion(xml);
+
+    // 4 measures of 2/4 would be 8 beats by the naive formula, but measure 1 is
+    // a one-beat pickup, so the real content ends at beat 7.
+    expect(totalBeats).toBe(7);
+
+    // It must equal the maximum note end beat exactly.
+    const lastNoteEnd = Math.max(
+      ...notes.map((n) => n.startBeat + n.durationBeats),
+    );
+    expect(totalBeats).toBe(lastNoteEnd);
+
+    // Guards the focus-range-end fallback: selectionEndBeat for a range ending
+    // on the last measure has no measureStartBeats[range.to] entry and falls
+    // back to totalBeats, which must be the true end (7), not 8.
+    expect(measureStartBeats).toEqual([0, 1, 3, 5]);
+  });
+});
