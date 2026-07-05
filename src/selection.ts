@@ -32,6 +32,31 @@ export function selectionEndBeat(
 }
 
 /**
+ * Whether a note or event belongs to a selection, tested by its 1-based
+ * rendered measure number (`measureIndex + 1`) — the same coordinate the focus
+ * range's `from`/`to` are expressed in. `null` (whole piece) contains every
+ * measure.
+ *
+ * Membership is deliberately by *measure*, not by comparing beats against the
+ * range's start/end beat. A beat comparison is fragile at a range boundary:
+ * `startBeat + durationBeats` for a note ending exactly on a barline can
+ * overshoot the true beat by a floating-point ULP (the sum is accumulated over
+ * a different sequence of divisions than `computeMeasureStartBeats` walks), so a
+ * note that ends precisely where the focus range begins reads as still sounding
+ * and leaks in. Keying on the integer measure number sidesteps that entirely —
+ * the same reason wait mode's `rangeBounds` filters wait points by `measure`.
+ */
+export function measureInRange(
+  measure: number,
+  range: MeasureRange | null,
+): boolean {
+  if (!range) {
+    return true;
+  }
+  return measure >= range.from && measure <= range.to;
+}
+
+/**
  * localStorage key fragment identifying a selection. Shared by wait-mode and
  * playalong attempt history and custom ranges — must stay stable, since it is
  * itself persisted as (part of) a storage key.
