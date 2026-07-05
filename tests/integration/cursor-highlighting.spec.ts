@@ -136,6 +136,44 @@ test("multi-staff piece highlights notes in both staves simultaneously (regressi
   expect(partsHighlighted.has("p1")).toBe(true);
 });
 
+test("grace notes are highlighted during listen-mode playback alongside notes sustained from the previous chord", async ({
+  page,
+}) => {
+  await loadFile(page, "rondo-alla-turca-clip.mxl");
+  await waitForMockBluetoothConnected(page);
+
+  await startListenPlayback(page);
+
+  // rondo-alla-turca-clip.mxl is 120 bpm. The two-grace flourish (G5, A5)
+  // opening the measure labelled "6" (measureNumber 5) sits at beats
+  // 8.8–8.9 (p0-m5-n0-v0) and 8.9–9.0 (p0-m5-n1-v0), each 0.1 beat long,
+  // overlapping notes sustained from the previous chord (p0-m4-n2-v0,
+  // p1-m4-n3-v0/v1). MidiPlayer's elapsedBeat = (currentTime - LOOKAHEAD) *
+  // bpm/60, so landing on beat 8.85 (the first grace's midpoint) takes 4.475s
+  // of audio time from a fresh Play.
+  await advanceAudioTime(page, 4.475);
+  await waitForHighlightedNoteIds(page, [
+    "p0-m4-n2-v0",
+    "p0-m5-n0-v0",
+    "p1-m4-n3-v0",
+    "p1-m4-n3-v1",
+  ]);
+
+  // Advance into the second grace's window (beat 8.95) — it replaces the
+  // first grace but the sustained notes remain highlighted.
+  await advanceAudioTime(page, 0.05);
+  await waitForHighlightedNoteIds(page, [
+    "p0-m4-n2-v0",
+    "p0-m5-n1-v0",
+    "p1-m4-n3-v0",
+    "p1-m4-n3-v1",
+  ]);
+
+  // Advance well past both graces onto the main chord they ornament.
+  await advanceAudioTime(page, 0.1);
+  await waitForHighlightedNoteIds(page, ["p0-m5-n2-v0", "p1-m5-n0-v0"]);
+});
+
 test("multi-staff piece screenshot mid-playback (regression #43, #44, #48)", async ({
   page,
 }) => {

@@ -73,8 +73,16 @@ test("measure 6 chord-by-chord progression keeps each beat's set intact", async 
       expected: ["p0-m6-n4-v0", "p0-m6-n4-v1", "p1-m6-n2-v0", "p1-m6-n2-v1"],
     },
     {
+      // This step's chord duration overlaps the second grace note leading
+      // into measure 7 (p0-m7-n1-v0), so it is highlighted alongside it.
       advanceSeconds: 0.25,
-      expected: ["p0-m6-n5-v0", "p0-m6-n5-v1", "p1-m6-n3-v0", "p1-m6-n3-v1"],
+      expected: [
+        "p0-m6-n5-v0",
+        "p0-m6-n5-v1",
+        "p0-m7-n1-v0",
+        "p1-m6-n3-v0",
+        "p1-m6-n3-v1",
+      ],
     },
   ];
 
@@ -97,10 +105,13 @@ test("measure 5 multi-voice chord beats also stay grouped", async ({
     "p1-m5-n1-v1",
   ]);
 
+  // This chord's duration overlaps the first grace note leading into measure
+  // 6 (p0-m6-n1-v0), so it is highlighted alongside it.
   await advanceAudioTime(page, 0.5);
   await waitForHighlightedNoteIds(page, [
     "p0-m5-n5-v0",
     "p0-m5-n5-v1",
+    "p0-m6-n1-v0",
     "p1-m5-n3-v0",
     "p1-m5-n3-v1",
   ]);
