@@ -68,8 +68,8 @@ export interface WaitPoint {
 
 export interface WaitModeSettings {
   noteSensitivityMilliseconds: number;
-  /** Current BPM — used to compute expected attempt duration for scoring. */
-  bpm: number;
+  /** The piece's own default tempo — used to compute expected attempt duration for scoring, independent of any BPM the user dialed in for listen/playalong. */
+  baseBpm: number;
   accent: string;
   theme: ThemeTokens;
 }
@@ -788,7 +788,7 @@ export function useWaitMode(
     const selectionBeats =
       selectionEndBeat(range, measureStartBeats, mx.totalBeats) -
       selectionStartBeat(range, measureStartBeats);
-    const bpm = settingsRef.current.bpm;
+    const bpm = settingsRef.current.baseBpm;
     const expectedDurationMs = bpm > 0 ? (selectionBeats / bpm) * 60_000 : 0;
 
     const accuracy =
