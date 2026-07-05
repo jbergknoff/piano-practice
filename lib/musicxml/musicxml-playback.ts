@@ -212,19 +212,27 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
   });
 
   const timeSig = score.parts[0]?.timeSig ?? { beats: 4, beatType: 4 };
-  // The formula-based estimate overcounts for pickup (anacrusis) measures,
-  // because it assumes every measure is full. Derive the actual total from
-  // the notes themselves when available; fall back to the formula for empty
-  // scores (no notes). A loop is used instead of Math.max(...spread) to
-  // avoid stack overflows on very large scores.
+  // The measure-count formula assumes every measure is full, so it overcounts
+  // by the pickup (anacrusis) beats: a piece whose last note ends on beat 7
+  // reports 8 when its first measure is a one-beat pickup. That extra beat is a
+  // phantom tail — the cursor plays a beat of silence past the last note before
+  // stopping, and a focus range ending on the final measure (whose end beat
+  // falls back to totalBeats) stops a beat late. So derive the total from the
+  // note content itself: the end beat of the last-finishing note. Fall back to
+  // the formula only for an empty score, where there are no notes to measure. A
+  // loop is used instead of Math.max(...spread) to avoid stack overflows on
+  // very large scores.
   const formulaTotalBeats =
     (score.numMeasures * timeSig.beats * 4) / timeSig.beatType;
-  let totalBeats = formulaTotalBeats;
+  let totalBeats = 0;
   for (const note of notes) {
     const end = note.startBeat + note.durationBeats;
     if (end > totalBeats) {
       totalBeats = end;
     }
+  }
+  if (notes.length === 0) {
+    totalBeats = formulaTotalBeats;
   }
 
   return {
