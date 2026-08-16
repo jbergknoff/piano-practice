@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#FAF1DD" />
     <title>Piano Practice</title>
+    <!-- Installed on Android, the manifest's "orientation": "landscape" locks
+         the app to landscape with no in-app control. Everywhere else, the
+         fullscreen button does it (iOS honours neither). -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg" />
     <link rel="preload" href="dist/geist-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="dist/geist-500.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="dist/geist-600.woff2" as="font" type="font/woff2" crossorigin />
