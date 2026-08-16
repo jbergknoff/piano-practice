@@ -7,33 +7,45 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
       - name: Machine info
         run: |
-          echo "--- nproc ---"; nproc
-          echo "--- lscpu ---"; lscpu
-          echo "--- meminfo ---"; head -3 /proc/meminfo
+          echo "MACHINE: $(nproc) cpus, $(lscpu | grep 'Model name' | sed 's/.*: *//'), $(head -1 /proc/meminfo)"
       - name: Pull Docker images
         run: docker compose pull --quiet
       - name: Build
         run: make build
-      - name: Repeat screenshot specs
+      - name: Repeat the full integration suite
         run: |
-          docker compose run --rm playwright node_modules/.bin/playwright test \
-            tests/integration/jump-to-measure.spec.ts \
-            tests/integration/modal-layering.spec.ts \
-            tests/integration/custom-ranges.spec.ts \
-            tests/integration/sheet-music.spec.ts \
-            --repeat-each=10 --reporter=line
+          mkdir -p /tmp/failures
+          for i in 1 2 3; do
+            echo "########## iteration $i ##########"
+            rm -rf tests/integration/results
+            mkdir -p tests/integration/results
+            if docker compose run --rm playwright node_modules/.bin/playwright test --reporter=line; then
+              echo "iteration $i: PASS"
+            else
+              echo "iteration $i: FAIL"
+              cp -r tests/integration/results "/tmp/failures/iteration-$i" || true
+            fi
+          done
+          if [ -n "$(ls -A /tmp/failures 2>/dev/null)" ]; then
+            echo "::error::at least one iteration failed"
+            exit 1
+          fi
       - name: Dump failure images
         if: failure()
         run: |
-          find tests/integration/results -type f -name '*.png' | sort | while read f; do
-            echo "===== BEGIN $f ($(stat -c%s "$f") bytes) ====="
-            base64 -w 200 "$f"
-            echo "===== END $f ====="
-          done
-          find tests/integration/results -type f -name '*.md' | sort | while read f; do
+          find /tmp/failures -type f -name '*.md' | sort | while read f; do
             echo "===== $f ====="; cat "$f"; echo
+          done
+          find /tmp/failures -type f -name '*.png' | sort | while read f; do
+            echo "===== BEGIN $f ($(stat -c%s "$f") bytes) ====="
+            base64 -w 500 "$f"
+            echo "===== END $f ====="
           done
