@@ -11,7 +11,7 @@ import {
   radius,
   serifTitle,
 } from "../theme";
-import { BluetoothIcon, UsbIcon } from "./icons";
+import { BluetoothIcon, PianoIcon, UsbIcon } from "./icons";
 
 // Coarse browser detection — only used to tailor the unsupported message.
 const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
@@ -172,10 +172,17 @@ export function ConnectionBadge({
     />
   );
 
-  // Reflect the transport in play: the one connected, or the one a tap would
-  // try first. Showing a Bluetooth icon for a USB piano is just misleading.
-  const shownSource = piano.source ?? piano.suggestedSource;
-  const TransportIcon = shownSource === "midi" ? UsbIcon : BluetoothIcon;
+  // The badge speaks for both transports, so until one is actually connected it
+  // wears the neutral piano mark — a Bluetooth bolt on a badge that also does
+  // USB reads as being locked to Bluetooth. Once connected, the transport's own
+  // icon answers "how am I hooked up right now?" at a glance. Deliberately not
+  // keyed on `suggestedSource`: a remembered transport is a shortcut, not a
+  // commitment, and the icon shouldn't announce one before it connects.
+  const TransportIcon = !connected
+    ? PianoIcon
+    : piano.source === "midi"
+      ? UsbIcon
+      : BluetoothIcon;
 
   const title = connected
     ? `Connected · ${piano.deviceName}`
@@ -183,11 +190,7 @@ export function ConnectionBadge({
       ? "Connecting…"
       : hasError
         ? (piano.error ?? "Connection failed")
-        : piano.suggestedSource === "midi"
-          ? "Reconnect USB piano"
-          : piano.suggestedSource === "bluetooth"
-            ? "Reconnect Bluetooth piano"
-            : "Connect a piano";
+        : "Connect a piano";
 
   function handleClick() {
     if (!supported) {

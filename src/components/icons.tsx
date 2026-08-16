@@ -81,6 +81,39 @@ export function BluetoothIcon({ size = 12 }: { size?: number }) {
   );
 }
 
+/**
+ * Transport-agnostic mark for the piano connection: a keyboard reduced to its
+ * outline and two black keys. The badge covers both Bluetooth and USB, so
+ * wearing either one's mark before a transport is in use reads as being locked
+ * to it.
+ *
+ * Deliberately this sparse — it renders at 11px, where the white-key splits an
+ * earlier version drew smeared into the black keys and left a grey smudge.
+ */
+export function PianoIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="3"
+        y="6"
+        width="18"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        stroke-width="1.8"
+      />
+      {/* Black keys, hanging from the top edge. */}
+      <path d="M9 6.9v6.4M15 6.9v6.4" stroke="currentColor" stroke-width="3" />
+    </svg>
+  );
+}
+
 export function UsbIcon({ size = 12 }: { size?: number }) {
   return (
     <svg

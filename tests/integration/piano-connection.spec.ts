@@ -86,8 +86,9 @@ test("a remembered transport is tried on the first tap, and a cancelled attempt 
     midiPermission: "prompt",
   });
 
-  // The badge advertises the remembered transport rather than a generic prompt.
-  await page.getByTitle("Reconnect Bluetooth piano").click();
+  // The badge stays neutrally labelled — the remembered transport is a
+  // shortcut, not something the button should commit itself to.
+  await page.getByTitle("Connect a piano").click();
 
   // The tap went straight to the Bluetooth picker — no "which transport?" step.
   await expect.poll(() => bleRequestDeviceCount(page)).toBe(1);
@@ -113,7 +114,7 @@ test("a remembered transport that connects is kept, and the chooser stays out of
 }) => {
   await setup(page, { preferredSource: "bluetooth", midiPermission: "prompt" });
 
-  await page.getByTitle("Reconnect Bluetooth piano").click();
+  await page.getByTitle("Connect a piano").click();
 
   await expect(page.getByTitle("Connected · Mock Piano")).toBeVisible();
   await expect(page.getByText("How is your piano connected?")).toBeHidden();
