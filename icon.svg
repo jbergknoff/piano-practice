@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Piano Practice">
+  <!-- Full-bleed background: required for the "maskable" icon purpose, which
+       lets the platform crop this to any shape. Keyboard art stays inside the
+       centred 80% safe zone so no crop clips it. -->
+  <rect width="512" height="512" fill="#FAF1DD" />
+  <g stroke="#2F2417" stroke-width="10" stroke-linecap="round">
+    <rect x="116" y="156" width="280" height="200" rx="16" fill="#FFF7E5" />
+    <path d="M156 161V351M196 161V351M236 161V351M276 161V351M316 161V351M356 161V351" />
+  </g>
+  <g fill="#2F2417">
+    <rect x="143" y="161" width="26" height="112" rx="7" />
+    <rect x="183" y="161" width="26" height="112" rx="7" />
+    <rect x="263" y="161" width="26" height="112" rx="7" />
+    <rect x="303" y="161" width="26" height="112" rx="7" />
+    <rect x="343" y="161" width="26" height="112" rx="7" />
+  </g>
+</svg>

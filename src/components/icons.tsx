@@ -196,6 +196,48 @@ export function HomeIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+export function ExpandIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 9V5a1 1 0 0 1 1-1h4" />
+      <path d="M15 4h4a1 1 0 0 1 1 1v4" />
+      <path d="M20 15v4a1 1 0 0 1-1 1h-4" />
+      <path d="M9 20H5a1 1 0 0 1-1-1v-4" />
+    </svg>
+  );
+}
+
+export function CollapseIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 4v4a1 1 0 0 1-1 1H4" />
+      <path d="M15 4v4a1 1 0 0 0 1 1h4" />
+      <path d="M15 20v-4a1 1 0 0 1 1-1h4" />
+      <path d="M9 20v-4a1 1 0 0 0-1-1H4" />
+    </svg>
+  );
+}
+
 export function OpenFileIcon({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 512 347.28" aria-hidden="true">

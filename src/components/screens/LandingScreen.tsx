@@ -14,6 +14,7 @@ import {
   serifTitle,
 } from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
+import { FullscreenButton } from "../FullscreenButton";
 import { formatDate, ScoreChip } from "../ResultModal";
 import { HelpBadge } from "../HelpBadge";
 import { OpenFileIcon, TrashIcon } from "../icons";
@@ -165,6 +166,11 @@ export function LandingScreen({
             "radial-gradient(circle at 30% 20%, rgba(0,0,0,0.04) 0px, transparent 60%), radial-gradient(circle at 70% 80%, rgba(0,0,0,0.04) 0px, transparent 60%)",
         }}
       />
+
+      {/* Fullscreen toggle — top right, matching practice screen */}
+      <div style={{ position: "absolute", top: 18, right: 22, zIndex: 3 }}>
+        <FullscreenButton theme={theme} />
+      </div>
 
       {/* Connection badge + help — bottom right, matching practice screen */}
       <div

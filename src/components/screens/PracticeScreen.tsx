@@ -39,6 +39,7 @@ import {
 } from "../../theme";
 import { BpmInputModal } from "../BpmInputModal";
 import { ConnectionBadge } from "../ConnectionBadge";
+import { FullscreenButton } from "../FullscreenButton";
 import { HelpBadge } from "../HelpBadge";
 import { MeasureJumpModal } from "../MeasureJumpModal";
 import { RangeNameModal } from "../RangeNameModal";
@@ -605,6 +606,20 @@ export function PracticeScreen({
           </button>
         </div>
       )}
+
+      {/* TOP RIGHT: fullscreen toggle. The only corner with no other chrome,
+          which matters in portrait where the top-left row (home + open +
+          title) already runs out of width on a phone. */}
+      <div
+        style={{
+          position: "absolute",
+          top: 18,
+          right: 22,
+          zIndex: 2,
+        }}
+      >
+        <FullscreenButton theme={theme} />
+      </div>
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
       <div

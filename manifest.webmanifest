@@ -1,0 +1,25 @@
+{
+  "name": "Piano Practice",
+  "short_name": "Piano",
+  "description": "Load sheet music, connect a digital piano, and practice.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#FAF1DD",
+  "theme_color": "#FAF1DD",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
