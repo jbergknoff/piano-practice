@@ -102,7 +102,7 @@ export async function getMostRecentlyOpenedEntry(): Promise<LibraryEntry | null>
 }
 
 // Removes only the cached file bytes for a hash — FileHistory, attempts, and
-// custom ranges are left alone, so reopening the same file later (which
+// bookmarks are left alone, so reopening the same file later (which
 // recreates the library entry under the same hash) brings its old practice
 // history back automatically.
 export async function deleteLibraryEntry(hash: string): Promise<void> {

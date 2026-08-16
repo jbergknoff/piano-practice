@@ -35,7 +35,7 @@ export async function waitForFonts(page: Page): Promise<void> {
  * for non-secure HTTP origins (e.g. http://server:3456 inside Docker).
  * Browsers only expose SubtleCrypto and randomUUID in secure contexts;
  * localhost qualifies automatically but other hostnames do not, so the app's
- * file-hashing logic (crypto.subtle) and custom-range id generation
+ * file-hashing logic (crypto.subtle) and bookmark id generation
  * (crypto.randomUUID) would both throw without this.
  *
  * crypto.subtle.digest is bridged to Node's crypto module (via

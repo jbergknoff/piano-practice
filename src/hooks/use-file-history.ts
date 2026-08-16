@@ -160,22 +160,26 @@ export function clearPlayalongAttempts(
   playalongAttempts.clearMatching(hash, selectionKey, (a) => a.bpm === bpm);
 }
 
-export interface CustomRange {
+/** A user-named measure range — surfaced in the UI as a "bookmark". */
+export interface Bookmark {
   id: string;
   name: string;
   from: number;
   to: number;
 }
 
-const CUSTOM_RANGES_PREFIX = "piano-practice:custom-ranges:";
+// Deliberately still says "custom-ranges": the feature was renamed to
+// "bookmarks" in the UI, but the storage key must stay as-is or every user's
+// existing bookmarks would disappear on upgrade.
+const BOOKMARKS_PREFIX = "piano-practice:custom-ranges:";
 
-export function loadCustomRanges(hash: string): CustomRange[] {
-  const parsed = loadJson<unknown>(CUSTOM_RANGES_PREFIX + hash, []);
-  return Array.isArray(parsed) ? (parsed as CustomRange[]) : [];
+export function loadBookmarks(hash: string): Bookmark[] {
+  const parsed = loadJson<unknown>(BOOKMARKS_PREFIX + hash, []);
+  return Array.isArray(parsed) ? (parsed as Bookmark[]) : [];
 }
 
-export function saveCustomRanges(hash: string, ranges: CustomRange[]): void {
-  saveJson(CUSTOM_RANGES_PREFIX + hash, ranges);
+export function saveBookmarks(hash: string, bookmarks: Bookmark[]): void {
+  saveJson(BOOKMARKS_PREFIX + hash, bookmarks);
 }
 
 export interface GlobalPreferences {
