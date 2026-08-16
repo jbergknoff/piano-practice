@@ -20,19 +20,22 @@ jobs:
         run: docker compose pull --quiet
       - name: Build
         run: make build
-      - name: Hammer the two modal screenshot specs
+      - name: Repeat the full integration suite
         run: |
           sudo mkdir -p /tmp/failures
-          sudo rm -rf tests/integration/results
-          mkdir -p tests/integration/results
-          if docker compose run --rm playwright node_modules/.bin/playwright test \
-            tests/integration/jump-to-measure.spec.ts \
-            tests/integration/modal-layering.spec.ts \
-            --repeat-each=50 --reporter=line; then
-            echo "PASS"
-          else
-            echo "FAIL"
-            sudo cp -r tests/integration/results /tmp/failures/run || true
+          for i in 1 2 3 4 5; do
+            echo "########## iteration $i ##########"
+            sudo rm -rf tests/integration/results
+            mkdir -p tests/integration/results
+            if docker compose run --rm playwright node_modules/.bin/playwright test --reporter=line; then
+              echo "iteration $i: PASS"
+            else
+              echo "iteration $i: FAIL"
+              sudo cp -r tests/integration/results "/tmp/failures/iteration-$i" || true
+            fi
+          done
+          if [ -n "$(sudo ls -A /tmp/failures 2>/dev/null)" ]; then
+            echo "::error::at least one iteration failed"
             exit 1
           fi
       - name: Analyze failures
