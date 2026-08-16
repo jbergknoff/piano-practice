@@ -22,7 +22,7 @@ App-internal code (under `lib/` and `src/`):
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
-- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `use-wake-lock.ts`, `use-file-history.ts`, `use-file-library.ts`
+- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-file-history.ts`, `use-file-library.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts` (also owns the `PracticeMode` type), `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
 
@@ -166,8 +166,30 @@ bottleneck.)
 ### PracticeScreen control areas
 
 - **Top-left** — home button (back to library), open-file button, piece title (opens info modal on click)
+- **Top-right** — fullscreen/landscape toggle (`FullscreenButton`); chosen because it is the only corner with no other chrome, and the top-left row already runs out of width in portrait on a phone. `LandingScreen` places the same button in the same spot.
 - **Bottom-left** — Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
+
+### Forcing landscape
+
+There is no way to force orientation from a plain browser tab, so the app takes
+the two routes that do work, neither of which helps on iOS:
+
+- `src/hooks/use-fullscreen.ts` — the `FullscreenButton`'s controller. Entering
+  fullscreen and calling `screen.orientation.lock("landscape")` are deliberately
+  one action, because the lock is only permitted while fullscreen. Works on
+  Android Chrome/Firefox (where it overrides even the OS rotation-lock setting);
+  on desktop the fullscreen half works and the lock rejects harmlessly; iPhone
+  Safari has neither API, so `supported` is false and the button renders
+  nothing. The prefixed webkit spellings, and the `ScreenOrientation.lock`/
+  `.unlock` typings that lib.dom omits, are declared in `src/globals.d.ts`.
+- `manifest.webmanifest` — `"orientation": "landscape"` locks an *installed* PWA
+  with no in-app control at all. Android only; iOS home-screen apps ignore the
+  manifest's orientation field. Installability is why `icon.svg` exists.
+
+A "please rotate your device" overlay was considered and rejected: on iOS the
+system rotation lock defeats it anyway, leaving the user stuck behind a blocker
+they can't dismiss.
 
 ### Tie rendering
 
