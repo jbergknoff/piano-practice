@@ -73,6 +73,33 @@ test("deleting a library entry removes it from the list but keeps its practice h
   await expect(page.getByText("wait", { exact: true })).toBeVisible();
 });
 
+test("opening a second file from the practice screen never flashes the landing screen", async ({
+  page,
+}) => {
+  await loadFile(page, "c-major-melody.mid");
+
+  // A MutationObserver (not polling) is what catches the flash: the landing
+  // screen used to be committed in its own render, between the state reset
+  // and the parsed file landing, so it could come and go inside a frame.
+  await page.evaluate(() => {
+    (window as Window & { __landingSeen?: boolean }).__landingSeen = false;
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes("Drop a piece here")) {
+        (window as Window & { __landingSeen?: boolean }).__landingSeen = true;
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+
+  await loadFile(page, "g-major-melody.mid");
+  await expect(page.getByText("g major melody")).toBeVisible();
+
+  expect(
+    await page.evaluate(
+      () => (window as Window & { __landingSeen?: boolean }).__landingSeen,
+    ),
+  ).toBe(false);
+});
+
 test("auto-resume picks the more recently opened of two pieces, and the older one stays in the library", async ({
   page,
 }) => {
