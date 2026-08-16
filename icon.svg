@@ -1,8 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Piano Practice">
-  <!-- Full-bleed background: required for the "maskable" icon purpose, which
-       lets the platform crop this to any shape. Keyboard art stays inside the
-       centred 80% safe zone so no crop clips it. -->
-  <rect width="512" height="512" fill="#FAF1DD" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="103 103 306 306" width="306" height="306" role="img" aria-label="Piano Practice">
+  <!-- Transparent background, so the favicon and the manifest's "any" icon sit
+       on whatever the browser/launcher paints behind them. The viewBox is
+       cropped to the keyboard art (plus a little padding) so it stays legible
+       at 16px without a background tile to fill the square.
+       icon-maskable.svg is the full-bleed variant for the "maskable" purpose,
+       which requires an opaque background the platform can crop to any shape. -->
   <g stroke="#2F2417" stroke-width="10" stroke-linecap="round">
     <rect x="116" y="156" width="280" height="200" rx="16" fill="#FFF7E5" />
     <path d="M156 161V351M196 161V351M236 161V351M276 161V351M316 161V351M356 161V351" />
