@@ -257,6 +257,13 @@ export function App() {
   // Reset all file-derived state — shared by loading a new file (name set)
   // and returning to the library, which is effectively "no file loaded"
   // (name null).
+  //
+  // On the load paths this must be called only AFTER all the async work for
+  // the new file is done, in the same synchronous block as the writes that
+  // install it (Preact batches those into one render). Calling it up front
+  // instead — as this used to — leaves midiData/loadedXml null across the
+  // await, which renders LandingScreen for a frame: the flash of the home
+  // screen when opening a second file while one is already loaded.
   function resetForNewFile(name: string | null) {
     setFileName(name);
     setFileError(null);
@@ -286,7 +293,6 @@ export function App() {
   }
 
   async function parseMusicXmlFile(file: File) {
-    resetForNewFile(file.name);
     try {
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -296,16 +302,20 @@ export function App() {
         : new TextDecoder().decode(bytes);
       parseScore(xml); // throws on invalid MusicXML
       const hash = await hashFileBytes(bytes);
-      setFileHash(hash);
-      void putLibraryEntry(hash, file.name, bytes);
-
       const tempo = getMusicXmlTempo(xml);
       const history = loadFileHistory(hash);
+      void putLibraryEntry(hash, file.name, bytes);
 
+      // Single batched swap from the old piece (if any) to the new one.
+      resetForNewFile(file.name);
+      setFileHash(hash);
       setLoadedXml(xml);
       setBaseBpm(tempo);
       applyFileHistory(history, tempo);
     } catch (err) {
+      // A file that fails to parse leaves no piece loaded, so the error is
+      // reported on the landing screen.
+      resetForNewFile(file.name);
       setFileError(String(err));
     } finally {
       setIsRestoringRecentFile(false);
@@ -313,37 +323,39 @@ export function App() {
   }
 
   async function parseMidiFile(file: File) {
-    resetForNewFile(file.name);
-
     try {
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
       const hash = await hashFileBytes(bytes);
-      setFileHash(hash);
-      void putLibraryEntry(hash, file.name, bytes);
-
       const parsed = parseMidi(bytes);
       const trackList = getMidiTracks(parsed);
       const tempo = getMidiTempo(parsed);
       const history = loadFileHistory(hash);
+      void putLibraryEntry(hash, file.name, bytes);
 
-      setMidiData(parsed);
-      setTracks(trackList);
-      setBaseBpm(tempo);
-
+      let trackSelection = trackList.map((t) => t.index);
       if (history) {
         const knownIndices = new Set(trackList.map((t) => t.index));
         const validTracks = history.selectedTrackIndices.filter((i) =>
           knownIndices.has(i),
         );
-        setSelectedTracks(
-          validTracks.length > 0 ? validTracks : trackList.map((t) => t.index),
-        );
-      } else {
-        setSelectedTracks(trackList.map((t) => t.index));
+        if (validTracks.length > 0) {
+          trackSelection = validTracks;
+        }
       }
+
+      // Single batched swap from the old piece (if any) to the new one.
+      resetForNewFile(file.name);
+      setFileHash(hash);
+      setMidiData(parsed);
+      setTracks(trackList);
+      setSelectedTracks(trackSelection);
+      setBaseBpm(tempo);
       applyFileHistory(history, tempo);
     } catch (err) {
+      // A file that fails to parse leaves no piece loaded, so the error is
+      // reported on the landing screen.
+      resetForNewFile(file.name);
       setFileError(String(err));
     } finally {
       setIsRestoringRecentFile(false);
@@ -475,7 +487,13 @@ export function App() {
         onChange={handleFileInput}
         style={{ display: "none" }}
       />
+      {/* Keyed on the file so switching pieces remounts the practice session
+          (open drawers/modals, cursor, mode-hook internals all start fresh).
+          That remount used to happen implicitly, because loading a file
+          bounced through the landing screen; now that it doesn't, the key is
+          what keeps one piece's session state from leaking into the next. */}
       <PracticeScreen
+        key={fileHash}
         theme={theme}
         accent={accent}
         fileName={fileName ?? ""}

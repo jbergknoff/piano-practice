@@ -32,6 +32,8 @@ File naming: components are `PascalCase`; everything else is `kebab-case`.
 
 The app renders either `LandingScreen` (file picker + file library) or `PracticeScreen` (practice view), driven by whether a file is loaded (either `midiData` from a MIDI file or `loadedXml` from a MusicXML/`.mxl` file). `App.tsx` is a session shell — it owns file loading + persistence + bluetooth + the persisted settings (mode, BPM, range, etc.) and routes between the two screens. `PracticeScreen` owns everything that runs the practice session: the `MidiPlayer`, the live cursor, the three mode hooks, the result modals, and the count-in overlay. The top-left corner has two buttons: a home button (`onGoToLanding`) that returns to `LandingScreen`'s file library, and an open-file button (`onOpenFile`) that still opens the OS file picker directly.
 
+**Loading a file never bounces through the landing screen.** `parseMidiFile`/`parseMusicXmlFile` do all their async work (read bytes → unzip/decode → parse → hash → load history) *before* touching any state, then call `resetForNewFile` plus the writes that install the new piece in one synchronous block, which Preact batches into a single render. Resetting up front instead — as an earlier version did — left `midiData`/`loadedXml` null across the `await`, rendering `LandingScreen` for a frame: a visible flash of the home screen when opening a second piece while one is already loaded. Regression: `tests/integration/file-collection.spec.ts` ("never flashes the landing screen"), which uses a `MutationObserver` because the flash lives inside a frame and polling can miss it. Because that round trip used to unmount `PracticeScreen` implicitly, `App` now gives it `key={fileHash}` so switching pieces still remounts the practice session (cursor, open drawers/modals, mode-hook internals) rather than carrying one piece's state into the next. A file that fails to parse still clears the loaded piece, so its error surfaces on the landing screen.
+
 ### Data pipeline
 
 The MusicXML string is the single source of playback metadata. Conversion and
@@ -186,7 +188,16 @@ the two routes that do work, neither of which helps on iOS:
   `.unlock` typings that lib.dom omits, are declared in `src/globals.d.ts`.
 - `manifest.webmanifest` — `"orientation": "landscape"` locks an *installed* PWA
   with no in-app control at all. Android only; iOS home-screen apps ignore the
-  manifest's orientation field. Installability is why `icon.svg` exists.
+  manifest's orientation field. Installability is why the icons exist: there
+  are two, and they are deliberately not interchangeable. `icon.svg` has a
+  transparent background and a viewBox cropped to the keyboard art — it is the
+  favicon and the manifest's `"purpose": "any"` icon, where the browser paints
+  its own backdrop and a full-bleed tile would just look like a coloured square
+  at 16px. `icon-maskable.svg` keeps the opaque full-bleed background (art
+  inside the centred 80% safe zone) because the `"maskable"` purpose lets the
+  platform crop the icon to any shape, which requires a background to crop; it
+  is also the `apple-touch-icon`, since iOS composites a transparent icon onto
+  black. Edit both when the artwork changes.
 
 A "please rotate your device" overlay was considered and rejected: on iOS the
 system rotation lock defeats it anyway, leaving the user stuck behind a blocker
