@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import type { RangeEditorState } from "../hooks/use-custom-ranges";
 import { selectionLabelForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
@@ -44,7 +44,9 @@ export function RangeNameModal({
   accent,
 }: RangeNameModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
+  // Layout effect, not a plain effect — see MeasureJumpModal for why the
+  // focus/select has to land in the same commit as the first render.
+  useLayoutEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);

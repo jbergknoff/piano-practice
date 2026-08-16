@@ -46,4 +46,4 @@ jobs:
           done
           sudo cp -r /tmp/failures ./failures
           sudo chmod -R a+rX ./failures
-          docker compose run --rm main bun scripts/analyze-screenshot-diff.ts failures
+          docker compose run --rm main bun scripts/analyze-screenshot-diff.ts failures 2>&1 | tail -120

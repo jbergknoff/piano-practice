@@ -121,6 +121,7 @@ function walk(directory: string, out: string[]): void {
 const root = process.argv[2];
 const expectedFiles: string[] = [];
 walk(root, expectedFiles);
+const summary: string[] = [];
 
 for (const expectedPath of expectedFiles) {
   const actualPath = expectedPath.replace(/-expected\.png$/, "-actual.png");
@@ -178,6 +179,9 @@ for (const expectedPath of expectedFiles) {
   console.log(
     `size ${expected.width}x${expected.height}; ${any} pixels differ at all; ${over} exceed threshold`,
   );
+  summary.push(
+    `${expectedPath.split("/").pop()}: ${over} over threshold, box x ${minX}..${maxX} y ${minY}..${maxY}`,
+  );
   if (over === 0) {
     continue;
   }
@@ -194,4 +198,9 @@ for (const expectedPath of expectedFiles) {
       console.log(`y=${String(r * cell).padStart(3)} ${line}`);
     }
   }
+}
+
+console.log("\n########## SUMMARY ##########");
+for (const line of summary) {
+  console.log(line);
 }

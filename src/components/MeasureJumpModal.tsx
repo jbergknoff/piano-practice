@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -28,7 +28,12 @@ export function MeasureJumpModal({
   const [draft, setDraft] = useState(String(currentMeasure));
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // Layout effect, not a plain effect: this must run in the same commit as the
+  // modal's first render. A deferred useEffect leaves a window (up to a frame)
+  // in which the input is mounted and typeable but not yet focused/selected,
+  // so a keystroke that lands in that window is retroactively selected by the
+  // late select() and replaced by the next one.
+  useLayoutEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);

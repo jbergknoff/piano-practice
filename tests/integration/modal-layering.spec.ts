@@ -42,7 +42,11 @@ test("the playback cursor does not render above the piano-connection modal", asy
   // beat 0, before we open the modal.
   await page.locator("svg[role='img']").click({ button: "right" });
   await page.getByRole("button", { name: "Jump to measure…" }).click();
-  await page.locator('input[type="number"]').fill("60");
+  const measureInput = page.locator('input[type="number"]');
+  // See jump-to-measure.spec.ts: wait out the modal's focus()+select() before
+  // typing, so the two can't race.
+  await expect(measureInput).toBeFocused();
+  await measureInput.fill("60");
   await page.getByRole("button", { name: "Go" }).click();
   const cursor = page.locator('[data-cursor="true"]');
   await expect(cursor).toBeVisible();
