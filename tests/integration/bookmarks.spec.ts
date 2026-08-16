@@ -11,33 +11,31 @@ test.beforeEach(async ({ page }) => {
 const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
 
 // simple-grand-piano.musicxml has 8 measures.
-test("creating a custom range via the drawer's + button with explicit bounds", async ({
+test("creating a bookmark via the drawer's + button with explicit bounds", async ({
   page,
 }) => {
   await loadFile(page, "simple-grand-piano.musicxml");
 
   await page.getByTitle("Select range").click();
-  await expect(page.getByText("Custom", { exact: true })).toBeVisible();
-  await expect(page.getByText("No custom ranges yet")).toBeVisible();
+  await expect(page.getByText("Bookmarks", { exact: true })).toBeVisible();
+  await expect(page.getByText("No bookmarks yet")).toBeVisible();
 
-  const newButton = page.getByTitle("New custom range");
+  const newButton = page.getByTitle("New bookmark");
   await expect(newButton).toBeVisible();
   if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot("custom-ranges-drawer-empty.png");
+    await expect(page).toHaveScreenshot("bookmarks-drawer-empty.png");
   }
   await newButton.click();
 
   // Modal opens with editable From/To bounds (not a static label),
   // defaulting to the whole piece since no focus range is active.
-  await expect(page.getByText("Name this range")).toBeVisible();
+  await expect(page.getByText("Bookmark this range")).toBeVisible();
   const fromInput = page.locator("label", { hasText: "From" }).locator("input");
   const toInput = page.locator("label", { hasText: "To" }).locator("input");
   await expect(fromInput).toHaveValue("1");
   await expect(toInput).toHaveValue("8");
   if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot(
-      "custom-ranges-modal-default-bounds.png",
-    );
+    await expect(page).toHaveScreenshot("bookmarks-modal-default-bounds.png");
   }
 
   const nameInput = page.getByPlaceholder("e.g. Tricky run");
@@ -59,24 +57,24 @@ test("creating a custom range via the drawer's + button with explicit bounds", a
   await toInput.fill("7");
   await expect(saveButton).toBeEnabled();
   await saveButton.click();
-  await expect(page.getByText("Name this range")).toHaveCount(0);
+  await expect(page.getByText("Bookmark this range")).toHaveCount(0);
 
-  // The new range appears in the Custom list with the correct bounds, and
+  // The new bookmark appears in the Bookmarks list with the correct bounds, and
   // saving it also makes it the active focus range immediately (matching
   // whatever bounds were just saved, not left on "Whole piece").
   await page.getByTitle("Select range").click();
-  const customButton = page.getByRole("button", { name: "Tricky run" });
-  await expect(customButton).toBeVisible();
-  await expect(customButton.getByText("mm. 3–7")).toBeVisible();
+  const bookmarkButton = page.getByRole("button", { name: "Tricky run" });
+  await expect(bookmarkButton).toBeVisible();
+  await expect(bookmarkButton.getByText("mm. 3–7")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Whole piece" }),
   ).toHaveAttribute("aria-pressed", "false");
   if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot("custom-ranges-drawer-with-range.png");
+    await expect(page).toHaveScreenshot("bookmarks-drawer-with-range.png");
   }
 });
 
-test("context menu offers Rename (not Edit) for an already-named range, and Rename doesn't expose bounds fields", async ({
+test("context menu offers Rename (not Edit) for an already-bookmarked range, and Rename doesn't expose bounds fields", async ({
   page,
 }) => {
   await loadFile(page, "simple-grand-piano.musicxml");
@@ -90,12 +88,12 @@ test("context menu offers Rename (not Edit) for an already-named range, and Rena
   await container.click({ button: "right", position: clickPosition });
   await page.getByRole("button", { name: /Focus measure/ }).click();
 
-  // Not yet named: the option reads "Name this range".
+  // Not yet named: the option reads "Bookmark this range".
   await container.click({ button: "right", position: clickPosition });
   await expect(
-    page.getByRole("button", { name: "Name this range" }),
+    page.getByRole("button", { name: "Bookmark this range" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Name this range" }).click();
+  await page.getByRole("button", { name: "Bookmark this range" }).click();
   await page.getByPlaceholder("e.g. Tricky run").fill("My Range");
   await page.getByRole("button", { name: "Save" }).click();
 
@@ -107,23 +105,21 @@ test("context menu offers Rename (not Edit) for an already-named range, and Rena
   });
   await expect(renameOption).toBeVisible();
   if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot(
-      "custom-ranges-context-menu-rename.png",
-    );
+    await expect(page).toHaveScreenshot("bookmarks-context-menu-rename.png");
   }
 
   // The rename flow only offers the name field — no From/To bounds, unlike
-  // the drawer's "New custom range" creation flow.
+  // the drawer's "New bookmark" creation flow.
   await renameOption.click();
-  await expect(page.getByText("Rename range")).toBeVisible();
+  await expect(page.getByText("Rename bookmark")).toBeVisible();
   await expect(page.locator("label", { hasText: "From" })).toHaveCount(0);
   await expect(page.locator("label", { hasText: "To" })).toHaveCount(0);
   if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot("custom-ranges-rename-modal.png");
+    await expect(page).toHaveScreenshot("bookmarks-rename-modal.png");
   }
 });
 
-test("widening the bounds while naming a focused range updates the active focus to match", async ({
+test("widening the bounds while bookmarking a focused range updates the active focus to match", async ({
   page,
 }) => {
   await loadFile(page, "simple-grand-piano.musicxml");
@@ -136,9 +132,9 @@ test("widening the bounds while naming a focused range updates the active focus 
   await page.getByRole("button", { name: /Focus measure/ }).click();
   const singleMeasureWidth = await focusRect.getAttribute("width");
 
-  // Open "Name this range": defaults to the single focused measure.
+  // Open "Bookmark this range": defaults to the single focused measure.
   await container.click({ button: "right", position: clickPosition });
-  await page.getByRole("button", { name: "Name this range" }).click();
+  await page.getByRole("button", { name: "Bookmark this range" }).click();
   const fromInput = page.locator("label", { hasText: "From" }).locator("input");
   const toInput = page.locator("label", { hasText: "To" }).locator("input");
   const focusedMeasure = Number(await fromInput.inputValue());
@@ -151,17 +147,17 @@ test("widening the bounds while naming a focused range updates the active focus 
   const saveButton = page.getByRole("button", { name: "Save" });
   await expect(saveButton).toBeEnabled();
   await saveButton.click();
-  await expect(page.getByText("Name this range")).toHaveCount(0);
+  await expect(page.getByText("Bookmark this range")).toHaveCount(0);
 
   // The active focus range (the sheet music's orange overlay) should now
   // match the widened bounds just saved, not the original single measure.
   const widenedWidth = await focusRect.getAttribute("width");
   expect(Number(widenedWidth)).toBeGreaterThan(Number(singleMeasureWidth));
 
-  // The drawer's custom range list confirms the same widened bounds.
+  // The drawer's bookmark list confirms the same widened bounds.
   await page.getByTitle("Select range").click();
-  const customButton = page.getByRole("button", { name: "Widened" });
+  const bookmarkButton = page.getByRole("button", { name: "Widened" });
   await expect(
-    customButton.getByText(`mm. ${focusedMeasure}–${widenedTo}`),
+    bookmarkButton.getByText(`mm. ${focusedMeasure}–${widenedTo}`),
   ).toBeVisible();
 });

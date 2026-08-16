@@ -11,7 +11,7 @@ import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
 import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { PianoController } from "../../hooks/use-piano";
-import { useCustomRanges } from "../../hooks/use-custom-ranges";
+import { useBookmarks } from "../../hooks/use-bookmarks";
 import {
   type BluetoothHandle,
   type ModeControl,
@@ -42,10 +42,11 @@ import { ConnectionBadge } from "../ConnectionBadge";
 import { FullscreenButton } from "../FullscreenButton";
 import { HelpBadge } from "../HelpBadge";
 import { MeasureJumpModal } from "../MeasureJumpModal";
-import { RangeNameModal } from "../RangeNameModal";
+import { BookmarkModal } from "../BookmarkModal";
 import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
 import {
+  BookmarkIcon,
   GearIcon,
   HomeIcon,
   OpenFileIcon,
@@ -53,7 +54,6 @@ import {
   PencilIcon,
   PlayIcon,
   ResetIcon,
-  SectionsIcon,
   StopIcon,
 } from "../icons";
 
@@ -390,11 +390,7 @@ export function PracticeScreen({
   } | null>(null);
 
   const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
-  const customRanges = useCustomRanges(
-    fileHash,
-    totalMeasures,
-    onMeasureRangeChange,
-  );
+  const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
 
   const handleModeChange = (newMode: PracticeMode) => {
     if (newMode === mode) {
@@ -414,10 +410,10 @@ export function PracticeScreen({
     onModeChange(newMode);
   };
 
-  // The custom range, if any, that exactly matches the current selection.
-  const namedRange = measureRange
-    ? (customRanges.ranges.find(
-        (r) => r.from === measureRange.from && r.to === measureRange.to,
+  // The bookmark, if any, that exactly matches the current selection.
+  const activeBookmark = measureRange
+    ? (bookmarks.bookmarks.find(
+        (b) => b.from === measureRange.from && b.to === measureRange.to,
       ) ?? null)
     : null;
 
@@ -427,8 +423,8 @@ export function PracticeScreen({
       | "seek"
       | "jump"
       | "clearFocus"
-      | "saveCustom"
-      | "editCustom",
+      | "saveBookmark"
+      | "editBookmark",
     measureNumber: number,
     beat: number,
   ) => {
@@ -438,13 +434,13 @@ export function PracticeScreen({
       setMeasureJumpDefault(measureNumber);
     } else if (action === "clearFocus") {
       onMeasureRangeChange(null);
-    } else if (action === "saveCustom") {
+    } else if (action === "saveBookmark") {
       if (measureRange) {
-        customRanges.openCreate(measureRange);
+        bookmarks.openCreate(measureRange);
       }
-    } else if (action === "editCustom") {
-      if (namedRange) {
-        customRanges.openEdit(namedRange);
+    } else if (action === "editBookmark") {
+      if (activeBookmark) {
+        bookmarks.openEdit(activeBookmark);
       }
     } else {
       handleSeek(beat);
@@ -635,7 +631,7 @@ export function PracticeScreen({
               style={cornerButtonStyle(theme)}
               title="Select range"
             >
-              <SectionsIcon />
+              <BookmarkIcon />
             </button>
           )}
           {mode !== "playalong" && (
@@ -924,14 +920,14 @@ export function PracticeScreen({
                 },
                 ...(measureRange
                   ? [
-                      namedRange
+                      activeBookmark
                         ? {
-                            label: `Rename “${namedRange.name}”`,
-                            action: "editCustom" as const,
+                            label: `Rename “${activeBookmark.name}”`,
+                            action: "editBookmark" as const,
                           }
                         : {
-                            label: "Name this range",
-                            action: "saveCustom" as const,
+                            label: "Bookmark this range",
+                            action: "saveBookmark" as const,
                           },
                       { label: "Clear focus", action: "clearFocus" as const },
                     ]
@@ -943,8 +939,8 @@ export function PracticeScreen({
                   | "seek"
                   | "jump"
                   | "clearFocus"
-                  | "saveCustom"
-                  | "editCustom";
+                  | "saveBookmark"
+                  | "editBookmark";
               }[]
             ).map(({ label, action }) => (
               <button
@@ -978,21 +974,21 @@ export function PracticeScreen({
         </>
       )}
 
-      {/* Range-naming modal */}
-      {customRanges.editor && (
-        <RangeNameModal
-          editor={customRanges.editor}
-          nameDraft={customRanges.nameDraft}
-          onNameDraftChange={customRanges.setNameDraft}
-          fromDraft={customRanges.fromDraft}
-          onFromDraftChange={customRanges.setFromDraft}
-          toDraft={customRanges.toDraft}
-          onToDraftChange={customRanges.setToDraft}
-          boundsValid={customRanges.boundsValid}
+      {/* Bookmark naming/renaming modal */}
+      {bookmarks.editor && (
+        <BookmarkModal
+          editor={bookmarks.editor}
+          nameDraft={bookmarks.nameDraft}
+          onNameDraftChange={bookmarks.setNameDraft}
+          fromDraft={bookmarks.fromDraft}
+          onFromDraftChange={bookmarks.setFromDraft}
+          toDraft={bookmarks.toDraft}
+          onToDraftChange={bookmarks.setToDraft}
+          boundsValid={bookmarks.boundsValid}
           totalMeasures={totalMeasures}
-          onSave={customRanges.saveEditor}
-          onCancel={customRanges.closeEditor}
-          onDelete={customRanges.deleteEditing}
+          onSave={bookmarks.saveEditor}
+          onCancel={bookmarks.closeEditor}
+          onDelete={bookmarks.deleteEditing}
           theme={theme}
           accent={accent}
         />
@@ -1086,16 +1082,14 @@ export function PracticeScreen({
         onMeasureRangeChange={onMeasureRangeChange}
         fileHash={fileHash}
         markedBpm={baseBpm}
-        customRanges={customRanges.ranges}
-        onEditCustomRange={(range) => {
+        bookmarks={bookmarks.bookmarks}
+        onEditBookmark={(bookmark) => {
           setRangesDrawerOpen(false);
-          customRanges.openEdit(range);
+          bookmarks.openEdit(bookmark);
         }}
-        onCreateCustomRange={() => {
+        onCreateBookmark={() => {
           setRangesDrawerOpen(false);
-          customRanges.openCreate(
-            measureRange ?? { from: 1, to: totalMeasures },
-          );
+          bookmarks.openCreate(measureRange ?? { from: 1, to: totalMeasures });
         }}
         repeatSections={musicxml?.repeatSections ?? []}
       />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { RepeatSection } from "../../lib/musicxml/musicxml-playback";
 import {
-  type CustomRange,
+  type Bookmark,
   type PlayalongAttempt,
   type WaitModeAttempt,
   loadAttemptHistory,
@@ -22,9 +22,9 @@ interface SelectionRangesDrawerProps {
   onMeasureRangeChange: (r: MeasureRange | null) => void;
   fileHash: string | null;
   markedBpm: number;
-  customRanges: CustomRange[];
-  onEditCustomRange: (range: CustomRange) => void;
-  onCreateCustomRange: () => void;
+  bookmarks: Bookmark[];
+  onEditBookmark: (bookmark: Bookmark) => void;
+  onCreateBookmark: () => void;
   repeatSections: RepeatSection[];
 }
 
@@ -121,9 +121,9 @@ export function SelectionRangesDrawer({
   onMeasureRangeChange,
   fileHash,
   markedBpm,
-  customRanges,
-  onEditCustomRange,
-  onCreateCustomRange,
+  bookmarks,
+  onEditBookmark,
+  onCreateBookmark,
   repeatSections,
 }: SelectionRangesDrawerProps) {
   const n = totalMeasures;
@@ -260,37 +260,37 @@ export function SelectionRangesDrawer({
           </button>
         </div>
 
-        {/* Custom ranges */}
+        {/* Bookmarks */}
         <Section
-          label="Custom"
+          label="Bookmarks"
           theme={theme}
           action={
             <button
               type="button"
-              onClick={onCreateCustomRange}
-              title="New custom range"
+              onClick={onCreateBookmark}
+              title="New bookmark"
               style={miniButtonStyle(theme)}
             >
               <PlusIcon />
             </button>
           }
         >
-          {customRanges.length === 0 ? (
+          {bookmarks.length === 0 ? (
             <span style={{ fontSize: 11, color: theme.inkFaint }}>
-              No custom ranges yet
+              No bookmarks yet
             </span>
           ) : (
-            customRanges.map((cr) => {
-              const range = { from: cr.from, to: cr.to };
+            bookmarks.map((bookmark) => {
+              const range = { from: bookmark.from, to: bookmark.to };
               const active = rangesEqual(measureRange, range);
               return (
-                <CustomRangeButton
-                  key={cr.id}
-                  label={cr.name}
+                <BookmarkButton
+                  key={bookmark.id}
+                  label={bookmark.name}
                   sublabel={
-                    cr.from === cr.to
-                      ? `m. ${cr.from}`
-                      : `mm. ${cr.from}–${cr.to}`
+                    bookmark.from === bookmark.to
+                      ? `m. ${bookmark.from}`
+                      : `mm. ${bookmark.from}–${bookmark.to}`
                   }
                   best={bestForRange(range)}
                   bestPlayalong={bestPlayalongForRange(range)}
@@ -299,15 +299,15 @@ export function SelectionRangesDrawer({
                   theme={theme}
                   miniBar={
                     <MiniBar
-                      from={cr.from}
-                      to={cr.to}
+                      from={bookmark.from}
+                      to={bookmark.to}
                       total={n}
                       accent={accent}
                       active={active}
                     />
                   }
                   onClick={() => handleSelect(range)}
-                  onEdit={() => onEditCustomRange(cr)}
+                  onEdit={() => onEditBookmark(bookmark)}
                 />
               );
             })
@@ -623,7 +623,7 @@ function PresetButton({
   );
 }
 
-function CustomRangeButton({
+function BookmarkButton({
   label,
   sublabel,
   best,
@@ -691,7 +691,7 @@ function CustomRangeButton({
       <button
         type="button"
         onClick={onEdit}
-        title="Rename"
+        title="Rename bookmark"
         style={{
           display: "flex",
           alignItems: "center",
