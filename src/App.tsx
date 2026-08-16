@@ -248,9 +248,9 @@ export function App() {
   // Route a dropped/selected/restored file to the right parser by extension.
   function loadFile(file: File) {
     if (isMusicXmlFile(file.name)) {
-      void parseMusicXmlFile(file);
+      parseMusicXmlFile(file);
     } else {
-      void parseMidiFile(file);
+      parseMidiFile(file);
     }
   }
 
