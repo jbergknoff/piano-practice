@@ -187,7 +187,16 @@ the two routes that do work, neither of which helps on iOS:
   `.unlock` typings that lib.dom omits, are declared in `src/globals.d.ts`.
 - `manifest.webmanifest` — `"orientation": "landscape"` locks an *installed* PWA
   with no in-app control at all. Android only; iOS home-screen apps ignore the
-  manifest's orientation field. Installability is why `icon.svg` exists.
+  manifest's orientation field. Installability is why the icons exist: there
+  are two, and they are deliberately not interchangeable. `icon.svg` has a
+  transparent background and a viewBox cropped to the keyboard art — it is the
+  favicon and the manifest's `"purpose": "any"` icon, where the browser paints
+  its own backdrop and a full-bleed tile would just look like a coloured square
+  at 16px. `icon-maskable.svg` keeps the opaque full-bleed background (art
+  inside the centred 80% safe zone) because the `"maskable"` purpose lets the
+  platform crop the icon to any shape, which requires a background to crop; it
+  is also the `apple-touch-icon`, since iOS composites a transparent icon onto
+  black. Edit both when the artwork changes.
 
 A "please rotate your device" overlay was considered and rejected: on iOS the
 system rotation lock defeats it anyway, leaving the user stuck behind a blocker

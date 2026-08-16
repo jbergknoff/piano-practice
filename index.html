@@ -12,7 +12,9 @@
          fullscreen button does it (iOS honours neither). -->
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg" />
+    <!-- iOS composites a transparent icon onto black, so the home-screen icon
+         uses the opaque full-bleed variant rather than the transparent favicon. -->
+    <link rel="apple-touch-icon" href="icon-maskable.svg" />
     <link rel="preload" href="dist/geist-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="dist/geist-500.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="dist/geist-600.woff2" as="font" type="font/woff2" crossorigin />
