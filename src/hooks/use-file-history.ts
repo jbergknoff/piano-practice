@@ -168,12 +168,40 @@ export interface Bookmark {
   to: number;
 }
 
-// Deliberately still says "custom-ranges": the feature was renamed to
-// "bookmarks" in the UI, but the storage key must stay as-is or every user's
-// existing bookmarks would disappear on upgrade.
-const BOOKMARKS_PREFIX = "piano-practice:custom-ranges:";
+const BOOKMARKS_PREFIX = "piano-practice:bookmarks:";
+
+// The prefix bookmarks were stored under before the feature was renamed from
+// "custom ranges" to "bookmarks".
+// TODO(after August 2026): delete LEGACY_BOOKMARKS_PREFIX and
+// migrateLegacyBookmarks, and drop the migrate call from loadBookmarks.
+const LEGACY_BOOKMARKS_PREFIX = "piano-practice:custom-ranges:";
+
+/**
+ * Moves a hash's bookmarks from the old "custom-ranges" key to the new
+ * "bookmarks" one, once, on first read after the rename. Runs only when the
+ * new key is *absent* — an empty array written under the new key is a real
+ * value (the user deleted their last bookmark) and must not be re-seeded from
+ * the stale legacy copy.
+ */
+function migrateLegacyBookmarks(hash: string): void {
+  try {
+    if (localStorage.getItem(BOOKMARKS_PREFIX + hash) !== null) {
+      return;
+    }
+    const legacy = localStorage.getItem(LEGACY_BOOKMARKS_PREFIX + hash);
+    if (legacy === null) {
+      return;
+    }
+    localStorage.setItem(BOOKMARKS_PREFIX + hash, legacy);
+    localStorage.removeItem(LEGACY_BOOKMARKS_PREFIX + hash);
+  } catch {
+    // best-effort (private mode, quota exceeded, etc.) — a failed migration
+    // just means the load below falls back to an empty list.
+  }
+}
 
 export function loadBookmarks(hash: string): Bookmark[] {
+  migrateLegacyBookmarks(hash);
   const parsed = loadJson<unknown>(BOOKMARKS_PREFIX + hash, []);
   return Array.isArray(parsed) ? (parsed as Bookmark[]) : [];
 }
