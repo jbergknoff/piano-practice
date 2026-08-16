@@ -328,19 +328,28 @@ a keystroke landing in that window gets retroactively selected and replaced by
 the next one — and the specs `await expect(input).toBeFocused()` before typing,
 so the ordering is asserted rather than assumed. Confirmed by 600 CI executions
 of the spec across 12 runners plus 36 full-suite runs with zero failures.
+Note the failure rate is per-runner, not uniform: the sibling scroll race below
+failed 5 out of 5 iterations on one runner and 0 out of 55 on the other eleven,
+which is why "re-run it and it passed" is such a misleading signal here — you
+are mostly re-rolling the machine, not the race.
 
 A general lesson from both: `await expect(x).toBeVisible()` is only a
 synchronization point if `x` was *not already visible*. `modal-layering.spec.ts`
 waited on the playback cursor's visibility after a jump, but the cursor is
 visible at beat 0 too, so the wait passed instantly and the following
 `scrollIntoView` could beat the jump's own snap effect to `scrollLeft`. Gate on
-the thing that actually has to change. That one is a genuine hole in the spec
-and is now gated properly, but note it is *not* confirmed to be what failed:
-`modal-layering-connection-modal.png` did fail in CI a handful of times and
-never reproduced under 600 targeted executions, so if it recurs, capture the
-expected/actual pair the same way. Its distinguishing signature is known — the
-regression the spec exists to catch moves ~300 pixels in a 2px-wide column, so
-a heat map will tell the two apart immediately.)
+the thing that actually has to change. That hole was the *second* root cause
+here — `modal-layering-connection-modal.png`'s own intermittent failure — and
+it is worth knowing how it was pinned down, because the same trick generalises:
+the two candidate explanations were measured locally first, by rendering the
+page in each hypothesised state and counting over-threshold pixels. A cursor
+bar painting above the modal (the regression the spec exists to catch) moves
+302 pixels in a 2px-wide column; a scroll offset one page-turn off moves ~2150
+across the full width, in a box of x 103..801, y 107..242. When CI finally
+produced a failure it reported 2215 pixels in exactly that box — the scroll
+race, not a layering regression. So: before hunting a pixel diff, work out what
+each hypothesis would *cost* in pixels. The number and bounding box identify
+the cause on sight.)
 
 ## Local development
 
