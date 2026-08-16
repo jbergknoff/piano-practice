@@ -172,13 +172,22 @@ export function ConnectionBadge({
     />
   );
 
+  // Reflect the transport in play: the one connected, or the one a tap would
+  // try first. Showing a Bluetooth icon for a USB piano is just misleading.
+  const shownSource = piano.source ?? piano.suggestedSource;
+  const TransportIcon = shownSource === "midi" ? UsbIcon : BluetoothIcon;
+
   const title = connected
     ? `Connected · ${piano.deviceName}`
     : connecting
       ? "Connecting…"
       : hasError
         ? (piano.error ?? "Connection failed")
-        : "Connect a piano";
+        : piano.suggestedSource === "midi"
+          ? "Reconnect USB piano"
+          : piano.suggestedSource === "bluetooth"
+            ? "Reconnect Bluetooth piano"
+            : "Connect a piano";
 
   function handleClick() {
     if (!supported) {
@@ -187,6 +196,18 @@ export function ConnectionBadge({
     }
     if (connected) {
       setShowStatusModal(true);
+      return;
+    }
+    // Go straight to the transport that worked last time. `suggestedSource`
+    // clears itself after a failed attempt, so cancelling the picker (or any
+    // other failure) drops the next tap back to the chooser below — that's how
+    // the user switches from the remembered transport to the other one.
+    if (piano.suggestedSource === "bluetooth") {
+      piano.connectBluetooth();
+      return;
+    }
+    if (piano.suggestedSource === "midi") {
+      piano.connectMidi();
       return;
     }
     if (piano.bluetoothSupported && piano.midiSupported) {
@@ -245,7 +266,7 @@ export function ConnectionBadge({
             >
           }
         >
-          <BluetoothIcon size={11} />
+          <TransportIcon size={11} />
           {dot}
         </button>
       ) : (
@@ -263,7 +284,7 @@ export function ConnectionBadge({
           }
         >
           {dot}
-          <BluetoothIcon size={11} />
+          <TransportIcon size={11} />
           <span
             style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: "0.01em" }}
           >

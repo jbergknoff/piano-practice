@@ -73,6 +73,28 @@ export function useWebMidi(
     };
   }
 
+  /**
+   * Requests access and attaches to every real input port. Returns null on
+   * success, or a human-readable reason on failure — leaving it to the caller
+   * to decide whether that failure is worth surfacing (an explicit Connect tap)
+   * or should stay silent (auto-reconnect on load).
+   */
+  async function attemptConnect(): Promise<string | null> {
+    try {
+      const access = await navigator.requestMIDIAccess({ sysex: false });
+      const inputs = [...access.inputs.values()].filter(
+        (i) => !isThroughPort(i.name),
+      );
+      if (inputs.length === 0) {
+        return "No MIDI input devices found";
+      }
+      attach(access, inputs);
+      return null;
+    } catch (err) {
+      return String(err);
+    }
+  }
+
   async function connect(): Promise<boolean> {
     if (typeof navigator === "undefined" || !navigator.requestMIDIAccess) {
       setError("Web MIDI not available");
@@ -81,24 +103,50 @@ export function useWebMidi(
     }
     setStatus("connecting");
     setError(null);
-    try {
-      const access = await navigator.requestMIDIAccess({ sysex: false });
-      const inputs = [...access.inputs.values()].filter(
-        (i) => !isThroughPort(i.name),
-      );
-      if (inputs.length === 0) {
-        setError("No MIDI input devices found");
-        setStatus("error");
-        return false;
-      }
-      attach(access, inputs);
-      return true;
-    } catch (err) {
-      setError(String(err));
+    const failure = await attemptConnect();
+    if (failure !== null) {
+      setError(failure);
       setStatus("error");
       return false;
     }
+    return true;
   }
+
+  // On mount, silently reattach when this origin already holds the MIDI
+  // permission. Unlike Web Bluetooth's per-device grant, the Web MIDI
+  // permission is persistent and origin-scoped, and `requestMIDIAccess` needs
+  // no user gesture — so once the user has granted it, a USB piano can
+  // reconnect with zero taps. Gating on an already-"granted" permission is what
+  // keeps this silent: we never trigger a permission prompt from page load.
+  // attemptConnect only closes over refs and stable state setters, so it's safe
+  // to omit from deps and run this effect exactly once.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attemptConnect is stable
+  useEffect(() => {
+    async function tryAutoReconnect() {
+      if (typeof navigator === "undefined" || !navigator.requestMIDIAccess) {
+        return;
+      }
+      // Browsers that don't expose the "midi" permission descriptor throw here;
+      // skip auto-reconnect rather than risk an unprompted permission request.
+      try {
+        const permission = await navigator.permissions.query({
+          name: "midi",
+        } as PermissionDescriptor);
+        if (permission.state !== "granted") {
+          return;
+        }
+      } catch {
+        return;
+      }
+      setStatus("connecting");
+      if ((await attemptConnect()) !== null) {
+        // No piano plugged in, or access failed — fail silently back to idle so
+        // no error modal appears on load.
+        setStatus("idle");
+      }
+    }
+    tryAutoReconnect();
+  }, []);
 
   function sendNote(
     note: number,
