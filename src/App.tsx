@@ -33,6 +33,7 @@ import {
   migrateRecentFileToLibrary,
   putLibraryEntry,
 } from "./hooks/use-file-library";
+import { preserveFullscreenAcrossPicker } from "./hooks/use-fullscreen";
 import { usePiano } from "./hooks/use-piano";
 import {
   computeLibrarySummary,
@@ -484,6 +485,7 @@ export function App() {
         ref={openFileInputRef}
         type="file"
         accept=".mid,.midi,audio/midi,.musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml"
+        onClick={preserveFullscreenAcrossPicker}
         onChange={handleFileInput}
         style={{ display: "none" }}
       />

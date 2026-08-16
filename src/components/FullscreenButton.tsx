@@ -18,6 +18,9 @@ export function FullscreenButton({ theme }: { theme: ThemeTokens }) {
   return (
     <button
       type="button"
+      // Marks this button as the one place a tap means "fullscreen, my call" —
+      // `preserveFullscreenAcrossPicker`'s restore stands aside for it.
+      data-fullscreen-toggle
       onClick={toggle}
       style={cornerButtonStyle(theme)}
       title={isFullscreen ? "Exit fullscreen" : "Fullscreen (landscape)"}

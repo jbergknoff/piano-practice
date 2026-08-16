@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import type { LibrarySummary } from "../../hooks/use-file-history";
 import type { LibraryEntry } from "../../hooks/use-file-library";
+import { preserveFullscreenAcrossPicker } from "../../hooks/use-fullscreen";
 import type { PianoController } from "../../hooks/use-piano";
 import { prettyTitle } from "../../pretty-title";
 import type { ThemeTokens } from "../../theme";
@@ -243,6 +244,7 @@ export function LandingScreen({
           <input
             type="file"
             accept=".mid,.midi,audio/midi,.musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml"
+            onClick={preserveFullscreenAcrossPicker}
             onChange={onFile}
             style={{
               position: "absolute",

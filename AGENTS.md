@@ -203,6 +203,23 @@ A "please rotate your device" overlay was considered and rejected: on iOS the
 system rotation lock defeats it anyway, leaving the user stuck behind a blocker
 they can't dismiss.
 
+**Surviving the file picker.** On Android the native file picker is a separate
+system activity, so opening it drops the page out of fullscreen — and out of the
+landscape lock with it — before the page sees anything it could veto. It cannot
+be prevented, so `use-fullscreen.ts` exports `preserveFullscreenAcrossPicker()`,
+which both `<input type="file">` call sites (`App.tsx`'s hidden input and
+`LandingScreen`'s drop-zone input) call from `onClick`, i.e. immediately before
+the picker opens. If the page is fullscreen at that moment it arms a restore:
+fullscreen is re-entered when the page returns to the foreground, and — since
+`requestFullscreen` needs transient activation, which returning from another
+activity does not supply — otherwise on the user's next tap or keypress
+(`pointerup`/`keydown`, capture phase, where the activation is still live). The
+arming expires after a minute, is spent once, is skipped entirely when the page
+was not fullscreen to begin with (so leaving via Escape/back/the button is never
+undone), and stands aside for a tap on the `FullscreenButton` itself — which is
+what the button's `data-fullscreen-toggle` attribute marks. Regressions:
+`tests/integration/fullscreen.spec.ts`.
+
 ### Tie rendering
 
 `computeTieArcs(score, layout)` in `SheetMusicDisplay.tsx` resolves every tie to
