@@ -10,11 +10,28 @@
  *
  * Must be installed via page.addInitScript() before page.goto().
  */
-export function bluetoothMockInitScript(deviceName = "Mock Piano"): string {
-  return `(${bluetoothMockBody.toString()})(${JSON.stringify(deviceName)});`;
+export function bluetoothMockInitScript(
+  deviceName = "Mock Piano",
+  options: {
+    /** Whether getDevices() reports a previously-authorized device, i.e.
+     * whether the mount-time auto-reconnect finds anything. */
+    autoConnect?: boolean;
+    /** When set, requestDevice() rejects with this message instead of
+     * resolving — e.g. to simulate the user dismissing the device picker. */
+    requestDeviceError?: string;
+  } = {},
+): string {
+  const config = {
+    autoConnect: options.autoConnect ?? true,
+    requestDeviceError: options.requestDeviceError ?? null,
+  };
+  return `(${bluetoothMockBody.toString()})(${JSON.stringify(deviceName)}, ${JSON.stringify(config)});`;
 }
 
-function bluetoothMockBody(deviceName: string) {
+function bluetoothMockBody(
+  deviceName: string,
+  config: { autoConnect: boolean; requestDeviceError: string | null },
+) {
   type Listener = (event: { target: { value: DataView } }) => void;
   const listeners: Listener[] = [];
 
@@ -54,11 +71,16 @@ function bluetoothMockBody(deviceName: string) {
     addEventListener() {},
   };
 
+  let requestDeviceCount = 0;
   const fakeBluetooth = {
     getDevices() {
-      return Promise.resolve([fakeDevice]);
+      return Promise.resolve(config.autoConnect ? [fakeDevice] : []);
     },
     requestDevice() {
+      requestDeviceCount += 1;
+      if (config.requestDeviceError !== null) {
+        return Promise.reject(new Error(config.requestDeviceError));
+      }
       return Promise.resolve(fakeDevice);
     },
   };
@@ -78,4 +100,5 @@ function bluetoothMockBody(deviceName: string) {
     }
   };
   w.__bleListenerCount = () => listeners.length;
+  w.__bleRequestDeviceCount = () => requestDeviceCount;
 }
