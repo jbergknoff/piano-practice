@@ -312,7 +312,7 @@ from an agent session (the artifacts API 403s). The way through was to decode
 the `-expected`/`-actual` pair **inside the CI job** and print a textual
 description of the difference — over-threshold pixel count, bounding box,
 sample pixel values, ASCII heat map — so the failure could be read straight out
-of the log. That said: 382 pixels differed, confined to x 408..421, y 186..213 —
+of the log. What it showed: 382 pixels differed, confined to x 408..421, y 186..213 —
 the glyph "2" inside the modal's number input — `expected rgb(255,247,229)` (the
 input's cream background) against `actual rgb(51,102,204)`, Chromium's selection
 blue. The value was *text-selected* in the failing runs. Cause: the modal
@@ -334,7 +334,13 @@ synchronization point if `x` was *not already visible*. `modal-layering.spec.ts`
 waited on the playback cursor's visibility after a jump, but the cursor is
 visible at beat 0 too, so the wait passed instantly and the following
 `scrollIntoView` could beat the jump's own snap effect to `scrollLeft`. Gate on
-the thing that actually has to change.)
+the thing that actually has to change. That one is a genuine hole in the spec
+and is now gated properly, but note it is *not* confirmed to be what failed:
+`modal-layering-connection-modal.png` did fail in CI a handful of times and
+never reproduced under 600 targeted executions, so if it recurs, capture the
+expected/actual pair the same way. Its distinguishing signature is known — the
+regression the spec exists to catch moves ~300 pixels in a 2px-wide column, so
+a heat map will tell the two apart immediately.)
 
 ## Local development
 
