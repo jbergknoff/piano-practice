@@ -1,0 +1,39 @@
+name: Flake probe (temporary)
+
+on:
+  push:
+    branches: [claude/ci-screenshot-flakes-hmcrff]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Machine info
+        run: |
+          echo "--- nproc ---"; nproc
+          echo "--- lscpu ---"; lscpu
+          echo "--- meminfo ---"; head -3 /proc/meminfo
+      - name: Pull Docker images
+        run: docker compose pull --quiet
+      - name: Build
+        run: make build
+      - name: Repeat screenshot specs
+        run: |
+          docker compose run --rm playwright node_modules/.bin/playwright test \
+            tests/integration/jump-to-measure.spec.ts \
+            tests/integration/modal-layering.spec.ts \
+            tests/integration/custom-ranges.spec.ts \
+            tests/integration/sheet-music.spec.ts \
+            --repeat-each=10 --reporter=line
+      - name: Dump failure images
+        if: failure()
+        run: |
+          find tests/integration/results -type f -name '*.png' | sort | while read f; do
+            echo "===== BEGIN $f ($(stat -c%s "$f") bytes) ====="
+            base64 -w 200 "$f"
+            echo "===== END $f ====="
+          done
+          find tests/integration/results -type f -name '*.md' | sort | while read f; do
+            echo "===== $f ====="; cat "$f"; echo
+          done
