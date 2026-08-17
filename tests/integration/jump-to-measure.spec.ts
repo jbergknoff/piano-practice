@@ -25,7 +25,14 @@ test("jump-to-measure focuses the chosen measure", async ({ page }) => {
 
   // Type a fixed target so the screenshot is deterministic regardless of where
   // the right-click landed (the modal defaults to the clicked measure).
+  //
+  // Wait for the modal's own focus()+select() to have landed before typing.
+  // Without this the two race, and the loser decides whether the screenshot
+  // shows the value text-selected (white-on-blue) or not: fill() after
+  // select() leaves a collapsed caret, but select() after fill() highlights
+  // the value permanently, so toHaveScreenshot's retries never converge.
   const input = page.locator('input[type="number"]');
+  await expect(input).toBeFocused();
   await input.fill("2");
 
   if (screenshotsEnabled) {

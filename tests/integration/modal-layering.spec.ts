@@ -42,13 +42,28 @@ test("the playback cursor does not render above the piano-connection modal", asy
   // beat 0, before we open the modal.
   await page.locator("svg[role='img']").click({ button: "right" });
   await page.getByRole("button", { name: "Jump to measure…" }).click();
-  await page.locator('input[type="number"]').fill("60");
+  const measureInput = page.locator('input[type="number"]');
+  // See jump-to-measure.spec.ts: wait out the modal's focus()+select() before
+  // typing, so the two can't race.
+  await expect(measureInput).toBeFocused();
+  await measureInput.fill("60");
+
+  // The cursor is already visible (at beat 0) before the jump, so waiting on
+  // its visibility would not gate anything. What has to have landed before we
+  // re-scroll is the jump's own snap effect, which writes scrollLeft — the
+  // very property scrollIntoView below overwrites. Wait for that write, or the
+  // two race and the sheet ends up scrolled to whichever won.
+  const container = page.getByTestId("sheet-music-scroll-container");
+  const scrollBeforeJump = await container.evaluate((el) => el.scrollLeft);
   await page.getByRole("button", { name: "Go" }).click();
-  const cursor = page.locator('[data-cursor="true"]');
-  await expect(cursor).toBeVisible();
+  await expect
+    .poll(async () => container.evaluate((el) => el.scrollLeft))
+    .not.toBe(scrollBeforeJump);
 
   // Center the cursor horizontally (the reported bug was most visible with
   // the cursor behind the modal panel itself, not just the backdrop).
+  const cursor = page.locator('[data-cursor="true"]');
+  await expect(cursor).toBeVisible();
   await cursor.evaluate((el) =>
     el.scrollIntoView({ block: "nearest", inline: "center" }),
   );

@@ -305,6 +305,56 @@ If a test fails intermittently:
 
 (Worked example: `wait-mode.spec.ts`'s "a key released after the completion modal appears…" test failed intermittently — first only in CI, but it turned out to reproduce locally too once run enough times, even with Playwright fully serialized to one worker. The first hypothesis (CI's 2-vCPU runner starving a worker while `demo-performance.spec.ts` captures a CPU profile) was plausible but wrong — disproven by reproducing the failure with zero parallelism, where no contention is possible. Bisecting with a temporary repeated-test file plus the app's own debug-log buffer (rendered via the Help → Debugging tab) found the real bug: `useWaitMode`'s "range changed while active" `useEffect` reset `pointIndex` back to the range start, but the effect could flush *after* a note sent in the gap had already advanced past it — Preact effects run asynchronously, while the BLE/MIDI note listener fires synchronously outside React's render cycle, so a fast input right after a range change could be judged correctly and then silently overwritten. The fix (`src/modes/use-wait-mode.tsx`'s `applyRangeReset` + `appliedRangeRef`) makes the reset idempotent and calls it synchronously from `onNoteEvent` itself, closing the gap instead of widening a timeout around it — confirmed by 100+ repeats of the regression test at both 1 and the default worker count with zero failures, where it previously failed roughly 1 run in 5.)
 
+(Second worked example, and the one to read first when a *screenshot* flakes:
+`jump-to-measure.spec.ts`'s `jump-to-measure-modal.png` failed roughly one CI
+run in eight — and because several specs shoot a modal over a blurred backdrop,
+it looked like "one random screenshot fails per run". Playwright reported it had
+"captured a stable screenshot", so the page had settled; it had settled into a
+*different* state. Two things made that hard to chase: the failure never
+reproduced locally, and the `playwright-results` artifact is not downloadable
+from an agent session (the artifacts API 403s). The way through was to decode
+the `-expected`/`-actual` pair **inside the CI job** and print a textual
+description of the difference — over-threshold pixel count, bounding box,
+sample pixel values, ASCII heat map — so the failure could be read straight out
+of the log. What it showed: 382 pixels differed, confined to x 408..421, y 186..213 —
+the glyph "2" inside the modal's number input — `expected rgb(255,247,229)` (the
+input's cream background) against `actual rgb(51,102,204)`, Chromium's selection
+blue. The value was *text-selected* in the failing runs. Cause: the modal
+focuses and selects its input from a mount `useEffect`, which Preact defers to
+the next frame, and the spec's `input.fill("2")` raced it. select()-then-fill
+leaves a collapsed caret (what the baseline captured); fill()-then-select
+leaves the value highlighted permanently, so `toHaveScreenshot`'s retries could
+never converge. Fixed on both sides: the three autofocusing modals
+(`MeasureJumpModal`, `BookmarkModal`, `BpmInputModal`) now use
+`useLayoutEffect`, so focus+select lands in the same commit as the first render
+and there is no window left to lose — this is a real user-facing bug too, since
+a keystroke landing in that window gets retroactively selected and replaced by
+the next one — and the specs `await expect(input).toBeFocused()` before typing,
+so the ordering is asserted rather than assumed. Confirmed by 600 CI executions
+of the spec across 12 runners plus 36 full-suite runs with zero failures.
+Note the failure rate is per-runner, not uniform: the sibling scroll race below
+failed 5 out of 5 iterations on one runner and 0 out of 55 on the other eleven,
+which is why "re-run it and it passed" is such a misleading signal here — you
+are mostly re-rolling the machine, not the race.
+
+A general lesson from both: `await expect(x).toBeVisible()` is only a
+synchronization point if `x` was *not already visible*. `modal-layering.spec.ts`
+waited on the playback cursor's visibility after a jump, but the cursor is
+visible at beat 0 too, so the wait passed instantly and the following
+`scrollIntoView` could beat the jump's own snap effect to `scrollLeft`. Gate on
+the thing that actually has to change. That hole was the *second* root cause
+here — `modal-layering-connection-modal.png`'s own intermittent failure — and
+it is worth knowing how it was pinned down, because the same trick generalises:
+the two candidate explanations were measured locally first, by rendering the
+page in each hypothesised state and counting over-threshold pixels. A cursor
+bar painting above the modal (the regression the spec exists to catch) moves
+302 pixels in a 2px-wide column; a scroll offset one page-turn off moves ~2150
+across the full width, in a box of x 103..801, y 107..242. When CI finally
+produced a failure it reported 2215 pixels in exactly that box — the scroll
+race, not a layering regression. So: before hunting a pixel diff, work out what
+each hypothesis would *cost* in pixels. The number and bounding box identify
+the cause on sight.)
+
 ## Local development
 
 The only local requirements are `make` and `docker`. Bun, Node, and Biome are all run inside a Docker container via `docker-compose`; nothing needs to be installed on the host.

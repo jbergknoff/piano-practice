@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -28,7 +28,9 @@ export function BpmInputModal({
   const [draft, setDraft] = useState(String(currentBpm));
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // Layout effect, not a plain effect — see MeasureJumpModal for why the
+  // focus/select has to land in the same commit as the first render.
+  useLayoutEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
