@@ -1,44 +1,44 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { selectionLabelForRange } from "../selection";
 import {
-  type CustomRange,
-  loadCustomRanges,
-  saveCustomRanges,
+  type Bookmark,
+  loadBookmarks,
+  saveBookmarks,
 } from "./use-file-history";
 
-// "create" saves the current selection as a new named range; "edit" renames
-// (or deletes) an existing one.
-export type RangeEditorState =
+// "create" saves the current selection as a new bookmark; "edit" renames (or
+// deletes) an existing one.
+export type BookmarkEditorState =
   | { kind: "create"; from: number; to: number }
-  | { kind: "edit"; range: CustomRange };
+  | { kind: "edit"; bookmark: Bookmark };
 
-// Owns the per-file list of named ranges (persisted in local storage) and the
-// state for the naming/editing modal.
-export function useCustomRanges(
+// Owns the per-file list of bookmarks (persisted in local storage) and the
+// state for the bookmark/rename modal.
+export function useBookmarks(
   fileHash: string | null,
   totalMeasures: number,
-  // Called with the bounds that were just saved for a new ("create") range —
-  // lets the caller sync the active focus range to match, since the create
+  // Called with the bounds that were just saved for a new ("create") bookmark
+  // — lets the caller sync the active focus range to match, since the create
   // modal's From/To fields may have been edited away from whatever range (if
   // any) was focused when the modal was opened.
-  onRangeCreated?: (range: { from: number; to: number }) => void,
+  onBookmarkCreated?: (range: { from: number; to: number }) => void,
 ) {
-  const [ranges, setRanges] = useState<CustomRange[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   useEffect(() => {
-    setRanges(fileHash ? loadCustomRanges(fileHash) : []);
+    setBookmarks(fileHash ? loadBookmarks(fileHash) : []);
   }, [fileHash]);
 
   const persist = useCallback(
-    (next: CustomRange[]) => {
-      setRanges(next);
+    (next: Bookmark[]) => {
+      setBookmarks(next);
       if (fileHash) {
-        saveCustomRanges(fileHash, next);
+        saveBookmarks(fileHash, next);
       }
     },
     [fileHash],
   );
 
-  const [editor, setEditor] = useState<RangeEditorState | null>(null);
+  const [editor, setEditor] = useState<BookmarkEditorState | null>(null);
   const [nameDraft, setNameDraft] = useState("");
   // Only meaningful while editor.kind === "create" — the editable from/to
   // text inputs, kept as strings so the fields can hold intermediate
@@ -53,9 +53,9 @@ export function useCustomRanges(
     setToDraft(String(range.to));
   }, []);
 
-  const openEdit = useCallback((range: CustomRange) => {
-    setEditor({ kind: "edit", range });
-    setNameDraft(range.name);
+  const openEdit = useCallback((bookmark: Bookmark) => {
+    setEditor({ kind: "edit", bookmark });
+    setNameDraft(bookmark.name);
   }, []);
 
   const closeEditor = useCallback(() => setEditor(null), []);
@@ -91,7 +91,7 @@ export function useCustomRanges(
         return;
       }
       persist([
-        ...ranges,
+        ...bookmarks,
         {
           id: crypto.randomUUID(),
           name,
@@ -99,25 +99,27 @@ export function useCustomRanges(
           to: parsedBounds.to,
         },
       ]);
-      onRangeCreated?.(parsedBounds);
+      onBookmarkCreated?.(parsedBounds);
     } else {
       persist(
-        ranges.map((r) => (r.id === editor.range.id ? { ...r, name } : r)),
+        bookmarks.map((b) =>
+          b.id === editor.bookmark.id ? { ...b, name } : b,
+        ),
       );
     }
     setEditor(null);
-  }, [editor, nameDraft, parsedBounds, ranges, persist, onRangeCreated]);
+  }, [editor, nameDraft, parsedBounds, bookmarks, persist, onBookmarkCreated]);
 
   const deleteEditing = useCallback(() => {
     if (editor?.kind !== "edit") {
       return;
     }
-    persist(ranges.filter((r) => r.id !== editor.range.id));
+    persist(bookmarks.filter((b) => b.id !== editor.bookmark.id));
     setEditor(null);
-  }, [editor, ranges, persist]);
+  }, [editor, bookmarks, persist]);
 
   return {
-    ranges,
+    bookmarks,
     editor,
     nameDraft,
     setNameDraft,

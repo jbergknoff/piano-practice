@@ -160,22 +160,54 @@ export function clearPlayalongAttempts(
   playalongAttempts.clearMatching(hash, selectionKey, (a) => a.bpm === bpm);
 }
 
-export interface CustomRange {
+/** A user-named measure range — surfaced in the UI as a "bookmark". */
+export interface Bookmark {
   id: string;
   name: string;
   from: number;
   to: number;
 }
 
-const CUSTOM_RANGES_PREFIX = "piano-practice:custom-ranges:";
+const BOOKMARKS_PREFIX = "piano-practice:bookmarks:";
 
-export function loadCustomRanges(hash: string): CustomRange[] {
-  const parsed = loadJson<unknown>(CUSTOM_RANGES_PREFIX + hash, []);
-  return Array.isArray(parsed) ? (parsed as CustomRange[]) : [];
+// The prefix bookmarks were stored under before the feature was renamed from
+// "custom ranges" to "bookmarks".
+// TODO(after August 2026): delete LEGACY_BOOKMARKS_PREFIX and
+// migrateLegacyBookmarks, and drop the migrate call from loadBookmarks.
+const LEGACY_BOOKMARKS_PREFIX = "piano-practice:custom-ranges:";
+
+/**
+ * Moves a hash's bookmarks from the old "custom-ranges" key to the new
+ * "bookmarks" one, once, on first read after the rename. Runs only when the
+ * new key is *absent* — an empty array written under the new key is a real
+ * value (the user deleted their last bookmark) and must not be re-seeded from
+ * the stale legacy copy.
+ */
+function migrateLegacyBookmarks(hash: string): void {
+  try {
+    if (localStorage.getItem(BOOKMARKS_PREFIX + hash) !== null) {
+      return;
+    }
+    const legacy = localStorage.getItem(LEGACY_BOOKMARKS_PREFIX + hash);
+    if (legacy === null) {
+      return;
+    }
+    localStorage.setItem(BOOKMARKS_PREFIX + hash, legacy);
+    localStorage.removeItem(LEGACY_BOOKMARKS_PREFIX + hash);
+  } catch {
+    // best-effort (private mode, quota exceeded, etc.) — a failed migration
+    // just means the load below falls back to an empty list.
+  }
 }
 
-export function saveCustomRanges(hash: string, ranges: CustomRange[]): void {
-  saveJson(CUSTOM_RANGES_PREFIX + hash, ranges);
+export function loadBookmarks(hash: string): Bookmark[] {
+  migrateLegacyBookmarks(hash);
+  const parsed = loadJson<unknown>(BOOKMARKS_PREFIX + hash, []);
+  return Array.isArray(parsed) ? (parsed as Bookmark[]) : [];
+}
+
+export function saveBookmarks(hash: string, bookmarks: Bookmark[]): void {
+  saveJson(BOOKMARKS_PREFIX + hash, bookmarks);
 }
 
 export interface GlobalPreferences {

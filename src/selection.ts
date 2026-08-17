@@ -2,7 +2,7 @@
 // `null` means the whole piece. Centralized here because the start/end-beat
 // conversion, the localStorage key, and the human-readable label are each
 // computed independently by the three mode hooks, PracticeScreen, and the
-// custom-ranges UI — those strings and beat conversions must agree exactly
+// bookmarks UI — those strings and beat conversions must agree exactly
 // (the key is a persisted storage key; the beat conversion feeds the player
 // and cursor), so one implementation is load-bearing, not just tidiness.
 
@@ -58,7 +58,7 @@ export function measureInRange(
 
 /**
  * localStorage key fragment identifying a selection. Shared by wait-mode and
- * playalong attempt history and custom ranges — must stay stable, since it is
+ * playalong attempt history and bookmarks — must stay stable, since it is
  * itself persisted as (part of) a storage key.
  */
 export function selectionKeyForRange(range: MeasureRange | null): string {

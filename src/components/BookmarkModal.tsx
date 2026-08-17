@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
-import type { RangeEditorState } from "../hooks/use-custom-ranges";
+import type { BookmarkEditorState } from "../hooks/use-bookmarks";
 import { selectionLabelForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
@@ -10,8 +10,8 @@ import {
   serifTitle,
 } from "../theme";
 
-interface RangeNameModalProps {
-  editor: RangeEditorState;
+interface BookmarkModalProps {
+  editor: BookmarkEditorState;
   nameDraft: string;
   onNameDraftChange: (name: string) => void;
   fromDraft: string;
@@ -27,7 +27,7 @@ interface RangeNameModalProps {
   accent: string;
 }
 
-export function RangeNameModal({
+export function BookmarkModal({
   editor,
   nameDraft,
   onNameDraftChange,
@@ -42,7 +42,7 @@ export function RangeNameModal({
   onDelete,
   theme,
   accent,
-}: RangeNameModalProps) {
+}: BookmarkModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   // Layout effect, not a plain effect — see MeasureJumpModal for why the
   // focus/select has to land in the same commit as the first render.
@@ -51,7 +51,7 @@ export function RangeNameModal({
     inputRef.current?.select();
   }, []);
 
-  const range = editor.kind === "create" ? editor : editor.range;
+  const range = editor.kind === "create" ? editor : editor.bookmark;
   const rangeLabel = selectionLabelForRange(range);
   const canSave =
     nameDraft.trim().length > 0 && (editor.kind === "edit" || boundsValid);
@@ -85,7 +85,7 @@ export function RangeNameModal({
         }}
       >
         <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>
-          {editor.kind === "create" ? "Name this range" : "Rename range"}
+          {editor.kind === "create" ? "Bookmark this range" : "Rename bookmark"}
         </div>
         {editor.kind === "create" ? (
           <div

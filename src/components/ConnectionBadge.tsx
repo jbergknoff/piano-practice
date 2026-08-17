@@ -11,7 +11,7 @@ import {
   radius,
   serifTitle,
 } from "../theme";
-import { BluetoothIcon, UsbIcon } from "./icons";
+import { BluetoothIcon, PianoIcon, UsbIcon } from "./icons";
 
 // Coarse browser detection — only used to tailor the unsupported message.
 const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
@@ -172,6 +172,18 @@ export function ConnectionBadge({
     />
   );
 
+  // The badge speaks for both transports, so until one is actually connected it
+  // wears the neutral piano mark — a Bluetooth bolt on a badge that also does
+  // USB reads as being locked to Bluetooth. Once connected, the transport's own
+  // icon answers "how am I hooked up right now?" at a glance. Deliberately not
+  // keyed on `suggestedSource`: a remembered transport is a shortcut, not a
+  // commitment, and the icon shouldn't announce one before it connects.
+  const TransportIcon = !connected
+    ? PianoIcon
+    : piano.source === "midi"
+      ? UsbIcon
+      : BluetoothIcon;
+
   const title = connected
     ? `Connected · ${piano.deviceName}`
     : connecting
@@ -187,6 +199,18 @@ export function ConnectionBadge({
     }
     if (connected) {
       setShowStatusModal(true);
+      return;
+    }
+    // Go straight to the transport that worked last time. `suggestedSource`
+    // clears itself after a failed attempt, so cancelling the picker (or any
+    // other failure) drops the next tap back to the chooser below — that's how
+    // the user switches from the remembered transport to the other one.
+    if (piano.suggestedSource === "bluetooth") {
+      piano.connectBluetooth();
+      return;
+    }
+    if (piano.suggestedSource === "midi") {
+      piano.connectMidi();
       return;
     }
     if (piano.bluetoothSupported && piano.midiSupported) {
@@ -245,7 +269,7 @@ export function ConnectionBadge({
             >
           }
         >
-          <BluetoothIcon size={11} />
+          <TransportIcon size={11} />
           {dot}
         </button>
       ) : (
@@ -263,7 +287,7 @@ export function ConnectionBadge({
           }
         >
           {dot}
-          <BluetoothIcon size={11} />
+          <TransportIcon size={11} />
           <span
             style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: "0.01em" }}
           >

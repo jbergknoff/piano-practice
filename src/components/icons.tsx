@@ -1,5 +1,3 @@
-import { FONT_MONO } from "../theme";
-
 export function PlayIcon({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -83,6 +81,39 @@ export function BluetoothIcon({ size = 12 }: { size?: number }) {
   );
 }
 
+/**
+ * Transport-agnostic mark for the piano connection: a keyboard reduced to its
+ * outline and two black keys. The badge covers both Bluetooth and USB, so
+ * wearing either one's mark before a transport is in use reads as being locked
+ * to it.
+ *
+ * Deliberately this sparse — it renders at 11px, where the white-key splits an
+ * earlier version drew smeared into the black keys and left a grey smudge.
+ */
+export function PianoIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="3"
+        y="6"
+        width="18"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        stroke-width="1.8"
+      />
+      {/* Black keys, hanging from the top edge. */}
+      <path d="M9 6.9v6.4M15 6.9v6.4" stroke="currentColor" stroke-width="3" />
+    </svg>
+  );
+}
+
 export function UsbIcon({ size = 12 }: { size?: number }) {
   return (
     <svg
@@ -99,21 +130,21 @@ export function UsbIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-export function SectionsIcon({ size = 16 }: { size?: number }) {
+export function BookmarkIcon({ size = 16 }: { size?: number }) {
   return (
-    <span
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       aria-hidden="true"
-      style={{
-        fontSize: size * 0.9,
-        lineHeight: 1,
-        fontFamily: FONT_MONO,
-        letterSpacing: "-0.05em",
-        display: "inline-flex",
-        alignItems: "center",
-      }}
     >
-      {"{}"}
-    </span>
+      <path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.5L5 21V4.5a1 1 0 0 1 1-1Z" />
+    </svg>
   );
 }
 
