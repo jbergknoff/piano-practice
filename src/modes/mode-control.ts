@@ -1,7 +1,7 @@
 import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
 import type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 import type { VNode } from "preact";
-import type { MidiPlayer } from "../../lib/midi/midi-player";
+import type { MetronomeTick, MidiPlayer } from "../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
 import type { MeasureRange, NamedRange } from "../selection";
@@ -19,6 +19,12 @@ export interface PlayerHandle {
   seek(beat: number): void;
   setBpm(bpm: number): void;
   state(): "stopped" | "playing" | "paused";
+  /**
+   * The exact playback position, read from the audio clock at call time. Use
+   * this (not `ModeControl.currentBeatRef`, which trails it by up to a
+   * throttled position update) when timing matters, e.g. scoring a note.
+   */
+  currentBeat(): number;
   playCountIn(
     beats: number,
     timeSigNum: number,
@@ -41,6 +47,14 @@ export interface PlayerHandle {
     onNoteScheduled?: (
       notes: { noteNumber: number; velocity: number; durationMs: number }[],
     ) => void;
+  }): () => void;
+  /**
+   * Install a transient metronome: `onTick` fires at each of `ticks` (sorted
+   * by beat) as playback reaches it. Returns an uninstaller.
+   */
+  setMetronome(m: {
+    ticks: MetronomeTick[];
+    onTick: (tick: MetronomeTick) => void;
   }): () => void;
 }
 
@@ -71,6 +85,7 @@ export function createPlayerHandle(
       getPlayer()?.setBpm(bpm);
     },
     state: () => getPlayer()?.state ?? "stopped",
+    currentBeat: () => getPlayer()?.currentBeat ?? 0,
     playCountIn: (beats, timeSigNum, onBeat) => {
       const p = getPlayer();
       if (!p) {
@@ -111,6 +126,20 @@ export function createPlayerHandle(
         if (getPlayer() === p) {
           p.skipWebAudio = prevSkipWebAudio;
           p.onNoteScheduled = prevOnNoteScheduled;
+        }
+      };
+    },
+    setMetronome: (m) => {
+      const p = getPlayer();
+      if (!p) {
+        return () => {};
+      }
+      p.metronomeTicks = m.ticks;
+      p.onMetronomeTick = m.onTick;
+      return () => {
+        if (getPlayer() === p) {
+          p.metronomeTicks = null;
+          p.onMetronomeTick = undefined;
         }
       };
     },

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { BookmarkEditorState } from "../hooks/use-bookmarks";
+import { useEscapeKey } from "../hooks/use-escape-key";
 import { selectionLabelForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
@@ -44,6 +45,7 @@ export function BookmarkModal({
   accent,
 }: BookmarkModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  useEscapeKey(onCancel);
   // Layout effect, not a plain effect — see MeasureJumpModal for why the
   // focus/select has to land in the same commit as the first render.
   useLayoutEffect(() => {
@@ -58,16 +60,8 @@ export function BookmarkModal({
 
   return (
     <>
-      <div
-        role="presentation"
-        style={{ ...dimBackdrop(), zIndex: 199 }}
-        onClick={onCancel}
-        onKeyDown={(e) => {
-          if ((e as unknown as KeyboardEvent).key === "Escape") {
-            onCancel();
-          }
-        }}
-      />
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
+      <div style={{ ...dimBackdrop(), zIndex: 199 }} onClick={onCancel} />
       <div
         style={{
           position: "fixed",

@@ -12,6 +12,7 @@ import { MidiPlayer } from "../../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { PianoController } from "../../hooks/use-piano";
 import { useBookmarks } from "../../hooks/use-bookmarks";
+import { useEscapeKey } from "../../hooks/use-escape-key";
 import {
   type BluetoothHandle,
   type ModeControl,
@@ -412,6 +413,9 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
+
+  useEscapeKey(() => setContextMenu(null), contextMenu !== null);
+  useEscapeKey(() => setPieceInfoOpen(false), pieceInfoOpen);
 
   const handleModeChange = (newMode: PracticeMode) => {
     if (newMode === mode) {
@@ -900,15 +904,10 @@ export function PracticeScreen({
       {/* Context menu (right-click / long-press on sheet music) */}
       {contextMenu && (
         <>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
           <div
-            role="presentation"
             style={{ position: "fixed", inset: 0, zIndex: 99 }}
             onClick={() => setContextMenu(null)}
-            onKeyDown={(e) => {
-              if ((e as unknown as KeyboardEvent).key === "Escape") {
-                setContextMenu(null);
-              }
-            }}
           />
           <div
             style={{
@@ -1018,15 +1017,10 @@ export function PracticeScreen({
       {/* Piece info modal */}
       {pieceInfoOpen && (
         <>
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
           <div
-            role="presentation"
             style={{ ...dimBackdrop(), zIndex: 199 }}
             onClick={() => setPieceInfoOpen(false)}
-            onKeyDown={(e) => {
-              if ((e as unknown as KeyboardEvent).key === "Escape") {
-                setPieceInfoOpen(false);
-              }
-            }}
           />
           <div
             style={{

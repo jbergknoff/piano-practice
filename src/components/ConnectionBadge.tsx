@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { useEscapeKey } from "../hooks/use-escape-key";
 import type { PianoController, PianoSource } from "../hooks/use-piano";
 import type { ThemeTokens } from "../theme";
 import {
@@ -127,6 +128,18 @@ export function ConnectionBadge({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showChooserModal, setShowChooserModal] = useState(false);
+  useEscapeKey(
+    () => {
+      setShowUnsupportedModal(false);
+      setShowStatusModal(false);
+      setShowErrorModal(false);
+      setShowChooserModal(false);
+    },
+    showUnsupportedModal ||
+      showStatusModal ||
+      showErrorModal ||
+      showChooserModal,
+  );
 
   const connected = piano.status === "connected";
   const connecting = piano.status === "connecting";

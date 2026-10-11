@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEscapeKey } from "../hooks/use-escape-key";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -27,6 +28,7 @@ export function BpmInputModal({
 }: BpmInputModalProps) {
   const [draft, setDraft] = useState(String(currentBpm));
   const inputRef = useRef<HTMLInputElement>(null);
+  useEscapeKey(onCancel);
 
   // Layout effect, not a plain effect — see MeasureJumpModal for why the
   // focus/select has to land in the same commit as the first render.
@@ -50,16 +52,8 @@ export function BpmInputModal({
 
   return (
     <>
-      <div
-        role="presentation"
-        style={{ ...dimBackdrop(), zIndex: 199 }}
-        onClick={onCancel}
-        onKeyDown={(e) => {
-          if ((e as unknown as KeyboardEvent).key === "Escape") {
-            onCancel();
-          }
-        }}
-      />
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
+      <div style={{ ...dimBackdrop(), zIndex: 199 }} onClick={onCancel} />
       <div
         style={{
           position: "fixed",
@@ -94,8 +88,6 @@ export function BpmInputModal({
             const key = (e as unknown as KeyboardEvent).key;
             if (key === "Enter") {
               handleConfirm();
-            } else if (key === "Escape") {
-              onCancel();
             }
           }}
           style={{

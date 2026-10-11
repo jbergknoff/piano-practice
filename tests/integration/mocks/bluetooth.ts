@@ -7,6 +7,8 @@
  * Once installed, `window.__sendBleMidi(bytes)` dispatches a raw BLE-MIDI
  * packet through the same `characteristicvaluechanged` listener real hardware
  * would fire, so the test exercises the full parse + dispatch pipeline.
+ * `window.__bleWrites()` returns every packet the app has written to the
+ * device (e.g. playalong's metronome clicks), oldest first.
  *
  * Must be installed via page.addInitScript() before page.goto().
  */
@@ -34,6 +36,7 @@ function bluetoothMockBody(
 ) {
   type Listener = (event: { target: { value: DataView } }) => void;
   const listeners: Listener[] = [];
+  const writes: number[][] = [];
 
   const fakeCharacteristic = {
     startNotifications() {
@@ -44,7 +47,12 @@ function bluetoothMockBody(
         listeners.push(fn);
       }
     },
-    writeValueWithoutResponse(_data: ArrayBufferView) {
+    writeValueWithoutResponse(data: ArrayBufferView) {
+      writes.push(
+        Array.from(
+          new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+        ),
+      );
       return Promise.resolve();
     },
   };
@@ -101,4 +109,5 @@ function bluetoothMockBody(
   };
   w.__bleListenerCount = () => listeners.length;
   w.__bleRequestDeviceCount = () => requestDeviceCount;
+  w.__bleWrites = () => writes.slice();
 }
