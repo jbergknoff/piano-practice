@@ -1,7 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useRef } from "preact/hooks";
 import { closeButtonStyle, serifTitle, type ThemeTokens } from "../theme";
-import { useModalDialog } from "./dialog-support";
+import { Layer } from "./Layer";
 
 interface ModalProps {
   /**
@@ -10,10 +9,9 @@ interface ModalProps {
    */
   onClose: () => void;
   /**
-   * Runs right after the dialog opens, in the same commit as its first render
-   * (a layout effect). Use it to focus/select an input: it has to happen after
-   * `showModal()`, which moves focus into the dialog itself, and in the first
-   * commit, so a keystroke can't land before the selection does (see the
+   * Runs right after the modal opens, in the same commit as its first render
+   * (a layout effect). Use it to focus/select an input: in the first commit,
+   * so a keystroke can't land before the selection does (see the
    * jump-to-measure flake in CLAUDE.md).
    */
   onShow?: () => void;
@@ -25,24 +23,23 @@ interface ModalProps {
 }
 
 /**
- * A centred modal panel, built on a native `<dialog>` opened with
- * `showModal()`. Rendering it opens it; unmounting it closes it. The platform
- * provides what the old hand-built modals approximated or missed:
- *
- * - the top layer, so the panel paints above everything else whatever the
- *   z-index or stacking context of the component that renders it;
- * - Escape to close;
- * - `inert` on the rest of the page, so focus and clicks stay inside;
- * - `::backdrop` for the dimmed, blurred layer behind the panel.
+ * A centred panel over a dimmed, blurred page. Rendering it opens it;
+ * unmounting it closes it. Escape or a press outside the panel calls
+ * `onClose`. Built on `Layer` (see there for why it is a popover rather than
+ * a `<dialog>`).
  */
 export function Modal({ onClose, onShow, label, style, children }: ModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  useModalDialog(dialogRef, onClose, onShow);
-
   return (
-    <dialog ref={dialogRef} class="app-modal" aria-label={label} style={style}>
+    <Layer
+      open={true}
+      onClose={onClose}
+      onShow={onShow}
+      kind="modal"
+      label={label}
+      panelStyle={style}
+    >
       {children}
-    </dialog>
+    </Layer>
   );
 }
 
