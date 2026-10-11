@@ -7,7 +7,6 @@ import {
   loadAttemptHistory,
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
-import { useEscapeKey } from "../hooks/use-escape-key";
 import { type MeasureRange, selectionKeyForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import { miniButtonStyle, serifTitle } from "../theme";
@@ -127,7 +126,6 @@ export function SelectionRangesDrawer({
   onCreateBookmark,
   repeatSections,
 }: SelectionRangesDrawerProps) {
-  useEscapeKey(onClose, open);
   const n = totalMeasures;
 
   const [attemptHistory, setAttemptHistory] = useState<
@@ -194,9 +192,15 @@ export function SelectionRangesDrawer({
   return (
     <>
       {/* Backdrop */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
       <div
+        role="button"
+        tabIndex={-1}
         onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" || e.key === "Enter") {
+            onClose();
+          }
+        }}
         style={{
           position: "absolute",
           inset: 0,

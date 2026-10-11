@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
-import { useEscapeKey } from "../hooks/use-escape-key";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -28,7 +27,6 @@ export function MeasureJumpModal({
 }: MeasureJumpModalProps) {
   const [draft, setDraft] = useState(String(currentMeasure));
   const inputRef = useRef<HTMLInputElement>(null);
-  useEscapeKey(onCancel);
 
   // Layout effect, not a plain effect: this must run in the same commit as the
   // modal's first render. A deferred useEffect leaves a window (up to a frame)
@@ -55,8 +53,16 @@ export function MeasureJumpModal({
 
   return (
     <>
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
-      <div style={{ ...dimBackdrop(), zIndex: 199 }} onClick={onCancel} />
+      <div
+        role="presentation"
+        style={{ ...dimBackdrop(), zIndex: 199 }}
+        onClick={onCancel}
+        onKeyDown={(e) => {
+          if ((e as unknown as KeyboardEvent).key === "Escape") {
+            onCancel();
+          }
+        }}
+      />
       <div
         style={{
           position: "fixed",
@@ -92,6 +98,8 @@ export function MeasureJumpModal({
             const key = (e as unknown as KeyboardEvent).key;
             if (key === "Enter") {
               handleConfirm();
+            } else if (key === "Escape") {
+              onCancel();
             }
           }}
           style={{

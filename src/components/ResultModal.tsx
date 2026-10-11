@@ -1,5 +1,4 @@
 import type { ComponentChildren } from "preact";
-import { useEscapeKey } from "../hooks/use-escape-key";
 import type { MeasureRange, NamedRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
@@ -110,14 +109,21 @@ export function ResultModal({
   nextRange = null,
   onNavigateToRange,
 }: ResultModalProps) {
-  useEscapeKey(onClose);
   const effectiveGridTemplate = onDeleteRow
     ? `${history.gridTemplate} 32px`
     : history.gridTemplate;
   return (
     <>
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
-      <div style={{ ...dimBackdrop(0.28), zIndex: 299 }} onClick={onClose} />
+      <div
+        role="presentation"
+        style={{ ...dimBackdrop(0.28), zIndex: 299 }}
+        onClick={onClose}
+        onKeyDown={(e: Event) => {
+          if ((e as unknown as KeyboardEvent).key === "Escape") {
+            onClose();
+          }
+        }}
+      />
 
       <div
         style={{

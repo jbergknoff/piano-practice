@@ -22,7 +22,7 @@ App-internal code (under `lib/` and `src/`):
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
-- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `piano-preference.ts` (the remembered transport), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-escape-key.ts` (document-level Escape listener every modal/drawer uses — a backdrop `onKeyDown` never fires, since the backdrop is never focused), `use-file-history.ts`, `use-file-library.ts`, `use-bookmarks.ts`
+- `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `piano-preference.ts` (the remembered transport), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-file-history.ts`, `use-file-library.ts`, `use-bookmarks.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts` (also owns the `PracticeMode` type), `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
 

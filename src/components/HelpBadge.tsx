@@ -10,7 +10,6 @@ import {
   radius,
   serifTitle,
 } from "../theme";
-import { useEscapeKey } from "../hooks/use-escape-key";
 import { DebugLogTab } from "./DebugLogTab";
 import { BluetoothIcon } from "./icons";
 
@@ -35,7 +34,6 @@ export function HelpBadge({
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("about");
-  useEscapeKey(() => setOpen(false), open);
 
   return (
     <>

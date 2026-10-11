@@ -1,4 +1,3 @@
-import { useEscapeKey } from "../hooks/use-escape-key";
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
 import {
   type ThemeTokens,
@@ -40,13 +39,18 @@ export function SettingsDrawer({
   playalongCountIn,
   onPlayalongCountInChange,
 }: SettingsDrawerProps) {
-  useEscapeKey(onClose, open);
   return (
     <>
       {/* Backdrop */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes; Escape is handled by useEscapeKey */}
       <div
+        role="button"
+        tabIndex={-1}
         onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" || e.key === "Enter") {
+            onClose();
+          }
+        }}
         style={{
           position: "absolute",
           inset: 0,
