@@ -60,6 +60,9 @@ export interface ScoreConversion {
   timeSigNum: number;
   timeSigDen: number;
   totalBeats: number;
+  /** Number of measures in the (repeat-expanded) score — the parser's
+   *  `numMeasures`, so it always agrees with `measureStartBeats.length`. */
+  totalMeasures: number;
   /** Repeat-bounded sections extracted from the original score, in expanded
    *  measure coordinates.  Empty for scores with no repeat markers (including
    *  all MIDI-sourced scores). */
@@ -241,6 +244,7 @@ export function musicXmlToConversion(xml: string): ScoreConversion {
     timeSigNum: timeSig.beats,
     timeSigDen: timeSig.beatType,
     totalBeats,
+    totalMeasures: score.numMeasures,
     repeatSections: extractRepeatSections(xml),
     measureStartBeats,
   };
