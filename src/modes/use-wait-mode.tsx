@@ -8,7 +8,6 @@ import {
 import {
   ResultModal,
   type ResultRow,
-  resultModalSections,
   ScoreChip,
   formatDate,
 } from "../components/ResultModal";
@@ -970,9 +969,12 @@ export function useWaitMode(
               rows,
             }}
             onClose={() => setCompletionModal(null)}
-            {...resultModalSections(control.sectionNavigation, () =>
-              setCompletionModal(null),
-            )}
+            previousRange={control.rangeNavigation.previous}
+            nextRange={control.rangeNavigation.next}
+            onNavigateToRange={(range) => {
+              setCompletionModal(null);
+              control.rangeNavigation.goTo(range);
+            }}
             onDeleteRow={(key) => {
               const updatedHistory = deleteAttempt(
                 completionModal.hash,

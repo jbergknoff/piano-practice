@@ -20,9 +20,7 @@ test.beforeEach(async ({ page }) => {
 // MIDI note numbers for c-major-melody.mid, measure 1.
 const MEASURE_ONE = [64, 72, 76, 71]; // E4 C5 E5 B4
 
-test("the wait-mode result modal steps to the next and previous section", async ({
-  page,
-}) => {
+test("the wait-mode result modal steps to the next range", async ({ page }) => {
   await loadFile(page, "c-major-melody.mid");
   await waitForMockBluetoothConnected(page);
   await page.getByRole("button", { name: "Wait" }).click();
@@ -43,15 +41,15 @@ test("the wait-mode result modal steps to the next and previous section", async 
     timeout: 2_000,
   });
 
-  // c-major-melody.mid is two measures long, so measure 1 alone is also the
-  // "First half" preset — stepping stays within the halves series. Measure 1
-  // is the start of the piece: there is a next section but no previous.
-  const next = page.locator("[data-section-nav='next']");
-  await expect(next).toHaveAttribute("aria-label", "Next: Second half");
+  // Measure 1 is the start of the piece: there is a next range but no previous.
+  const next = page.locator("[data-range-navigation='next']");
+  await expect(next).toHaveAttribute("aria-label", "Next: Measure 2");
   await expect(next).toBeEnabled();
-  await expect(page.locator("[data-section-nav='previous']")).toBeDisabled();
+  await expect(
+    page.locator("[data-range-navigation='previous']"),
+  ).toBeDisabled();
   if (screenshotsEnabled) {
-    await expect(page).toHaveScreenshot("section-navigation-result-modal.png");
+    await expect(page).toHaveScreenshot("range-navigation-result-modal.png");
   }
 
   await next.click();

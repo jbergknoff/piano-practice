@@ -75,78 +75,31 @@ export function selectionLabelForRange(range: MeasureRange | null): string {
     : `Measures ${range.from}–${range.to}`;
 }
 
-/** A measure range with a display name — a preset, section, or bookmark. */
+/** A measure range with a display name — a bookmark, or a generated label. */
 export interface NamedRange extends MeasureRange {
   name: string;
 }
 
 /**
- * The built-in halves and quarters presets offered in the ranges drawer. A
- * piece too short to split (fewer than 2 measures for halves, 4 for quarters)
- * gets an empty list rather than presets with empty ranges.
- */
-export function presetRanges(totalMeasures: number): {
-  halves: NamedRange[];
-  quarters: NamedRange[];
-} {
-  const n = totalMeasures;
-  const half = Math.floor(n / 2);
-  const quarter = Math.floor(n / 4);
-  const threeQuarters = Math.floor((3 * n) / 4);
-  return {
-    halves:
-      n >= 2
-        ? [
-            { name: "First half", from: 1, to: half },
-            { name: "Second half", from: half + 1, to: n },
-          ]
-        : [],
-    quarters:
-      n >= 4
-        ? [
-            { name: "Q1", from: 1, to: quarter },
-            { name: "Q2", from: quarter + 1, to: half },
-            { name: "Q3", from: half + 1, to: threeQuarters },
-            { name: "Q4", from: threeQuarters + 1, to: n },
-          ]
-        : [],
-  };
-}
-
-/**
- * The selection to move to for "previous"/"next" section navigation, or null
- * when there is nowhere to go (whole piece selected, or already at the edge).
+ * The range to move to for "previous"/"next" navigation, or null when there
+ * is nowhere to go (whole piece selected, or already at the edge).
  *
- * - If the current range is one of an ordered series (`orderedSeries`: halves,
- *   quarters, repeat sections), step to its neighbour within that series —
- *   Q1 → Q2, not to some unrelated range that happens to start next.
- * - Otherwise, if a bookmark sits immediately next to the current range (starts
- *   at `to + 1` for next, ends at `from − 1` for previous), go there. Several
+ * - If a bookmark sits immediately next to the current range (starts at
+ *   `to + 1` for next, ends at `from − 1` for previous), go there. Several
  *   candidates: the one closest in length to the current range wins (ties go to
  *   the shorter one).
  * - Otherwise slide the window by its own length (19–20 → 21–22), clamped to
- *   the piece. (A bookmark exactly matching the slid window is adjacent, so it
- *   would already have been picked above.)
+ *   the piece. From a half this lands on the other half; from a quarter, on the
+ *   next quarter when the piece divides evenly.
  */
-export function adjacentSection(
+export function adjacentRange(
   range: MeasureRange | null,
   direction: "previous" | "next",
   totalMeasures: number,
   bookmarks: NamedRange[],
-  orderedSeries: NamedRange[][],
 ): NamedRange | null {
   if (!range) {
     return null;
-  }
-  const step = direction === "next" ? 1 : -1;
-
-  for (const series of orderedSeries) {
-    const index = series.findIndex(
-      (member) => member.from === range.from && member.to === range.to,
-    );
-    if (index !== -1) {
-      return series[index + step] ?? null;
-    }
   }
 
   const length = range.to - range.from + 1;

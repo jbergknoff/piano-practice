@@ -16,16 +16,15 @@ import {
   type BluetoothHandle,
   type ModeControl,
   type PracticeMode,
-  type SectionNavigation,
+  type RangeNavigation,
   createPlayerHandle,
 } from "../../modes/mode-control";
 import { useListenMode } from "../../modes/use-listen-mode";
 import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
 import {
-  adjacentSection,
+  adjacentRange,
   type MeasureRange,
-  presetRanges,
   selectionEndBeat,
   selectionStartBeat,
 } from "../../selection";
@@ -288,32 +287,20 @@ export function PracticeScreen({
   const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
   const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
 
-  // Previous/next sections for the result modals. Recomputed every render —
-  // a handful of comparisons over the bookmark list.
-  const presets = presetRanges(totalMeasures);
-  const orderedSeries = [
-    presets.halves,
-    presets.quarters,
-    (musicxml?.repeatSections ?? []).map((section) => ({
-      name: section.label,
-      from: section.from,
-      to: section.to,
-    })),
-  ];
-  const sectionNavigation: SectionNavigation = {
-    previous: adjacentSection(
+  // Previous/next ranges for the result modals. Recomputed every render — a
+  // handful of comparisons over the bookmark list.
+  const rangeNavigation: RangeNavigation = {
+    previous: adjacentRange(
       measureRange,
       "previous",
       totalMeasures,
       bookmarks.bookmarks,
-      orderedSeries,
     ),
-    next: adjacentSection(
+    next: adjacentRange(
       measureRange,
       "next",
       totalMeasures,
       bookmarks.bookmarks,
-      orderedSeries,
     ),
     goTo: onMeasureRangeChange,
   };
@@ -329,7 +316,7 @@ export function PracticeScreen({
     measureRange,
     measureStartBeats: musicxml?.measureStartBeats ?? [],
     fileHash,
-    sectionNavigation,
+    rangeNavigation,
     appendToDebugLog,
   };
 

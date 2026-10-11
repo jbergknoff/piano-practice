@@ -186,7 +186,13 @@ export function PlusIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-function ChevronIcon({ size, path }: { size: number; path: string }) {
+export function ChevronIcon({
+  direction,
+  size = 16,
+}: {
+  direction: "left" | "right";
+  size?: number;
+}) {
   return (
     <svg
       width={size}
@@ -199,17 +205,9 @@ function ChevronIcon({ size, path }: { size: number; path: string }) {
       stroke-linejoin="round"
       aria-hidden="true"
     >
-      <path d={path} />
+      <path d={direction === "right" ? "M9 18l6-6-6-6" : "M15 18l-6-6 6-6"} />
     </svg>
   );
-}
-
-export function ChevronLeftIcon({ size = 16 }: { size?: number }) {
-  return <ChevronIcon size={size} path="M15 18l-6-6 6-6" />;
-}
-
-export function ChevronRightIcon({ size = 16 }: { size?: number }) {
-  return <ChevronIcon size={size} path="M9 18l6-6-6-6" />;
 }
 
 export function TrashIcon({ size = 14 }: { size?: number }) {

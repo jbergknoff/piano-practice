@@ -1,6 +1,5 @@
 import type { ComponentChildren } from "preact";
-import type { SectionNavigation } from "../modes/mode-control";
-import type { NamedRange } from "../selection";
+import type { MeasureRange, NamedRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -11,7 +10,7 @@ import {
   modalIconButtonStyle,
   serifTitle,
 } from "../theme";
-import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from "./icons";
+import { ChevronIcon, TrashIcon } from "./icons";
 
 export function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
@@ -73,39 +72,6 @@ export interface ResultRow {
   cells: ComponentChildren[];
 }
 
-/** A neighbouring section offered as a "previous"/"next" jump. */
-export interface ResultModalSection {
-  name: string;
-  onSelect: () => void;
-}
-
-/**
- * The `previousSection`/`nextSection` props for a mode's result modal: each
- * closes the modal (via the mode's own `close`) and then moves the selection.
- */
-export function resultModalSections(
-  navigation: SectionNavigation,
-  close: () => void,
-): {
-  previousSection: ResultModalSection | null;
-  nextSection: ResultModalSection | null;
-} {
-  const toSection = (range: NamedRange | null): ResultModalSection | null =>
-    range
-      ? {
-          name: range.name,
-          onSelect: () => {
-            close();
-            navigation.goTo({ from: range.from, to: range.to });
-          },
-        }
-      : null;
-  return {
-    previousSection: toSection(navigation.previous),
-    nextSection: toSection(navigation.next),
-  };
-}
-
 interface ResultModalProps {
   theme: ThemeTokens;
   accent: string;
@@ -124,8 +90,10 @@ interface ResultModalProps {
   onClose: () => void;
   onDeleteRow?: (key: string | number) => void;
   onClearRows?: () => void;
-  previousSection?: ResultModalSection | null;
-  nextSection?: ResultModalSection | null;
+  // Previous/next range chevrons beside the title; omitted when both are null.
+  previousRange?: NamedRange | null;
+  nextRange?: NamedRange | null;
+  onNavigateToRange?: (range: MeasureRange) => void;
 }
 
 export function ResultModal({
@@ -137,8 +105,9 @@ export function ResultModal({
   onClose,
   onDeleteRow,
   onClearRows,
-  previousSection,
-  nextSection,
+  previousRange = null,
+  nextRange = null,
+  onNavigateToRange,
 }: ResultModalProps) {
   const effectiveGridTemplate = onDeleteRow
     ? `${history.gridTemplate} 32px`
@@ -179,19 +148,13 @@ export function ResultModal({
           <div style={{ ...serifTitle(theme), lineHeight: 1.1, flex: 1 }}>
             {selectionLabel} complete
           </div>
-          {(previousSection || nextSection) && (
-            <>
-              <SectionButton
-                theme={theme}
-                direction="previous"
-                section={previousSection ?? null}
-              />
-              <SectionButton
-                theme={theme}
-                direction="next"
-                section={nextSection ?? null}
-              />
-            </>
+          {onNavigateToRange && (previousRange || nextRange) && (
+            <RangeNavigationButtons
+              theme={theme}
+              previousRange={previousRange}
+              nextRange={nextRange}
+              onNavigateToRange={onNavigateToRange}
+            />
           )}
         </div>
 
@@ -425,33 +388,47 @@ export function ResultModal({
   );
 }
 
-// A previous/next chevron beside the title. Rendered (dimmed and inert) even
-// when there is no section that way, so the pair keeps a stable position. The
+// The previous/next chevrons beside the title. A chevron with nowhere to go is
+// still rendered (dimmed and inert) so the pair keeps a stable position. The
 // destination's name is in the tooltip/accessible label.
-function SectionButton({
+function RangeNavigationButtons({
   theme,
-  direction,
-  section,
+  previousRange,
+  nextRange,
+  onNavigateToRange,
 }: {
   theme: ThemeTokens;
-  direction: "previous" | "next";
-  section: ResultModalSection | null;
+  previousRange: NamedRange | null;
+  nextRange: NamedRange | null;
+  onNavigateToRange: (range: MeasureRange) => void;
 }) {
-  const isNext = direction === "next";
-  const label = section
-    ? `${isNext ? "Next" : "Previous"}: ${section.name}`
-    : `No ${isNext ? "next" : "previous"} section`;
+  const button = (direction: "previous" | "next", range: NamedRange | null) => {
+    const directionLabel = direction === "next" ? "Next" : "Previous";
+    const label = range
+      ? `${directionLabel}: ${range.name}`
+      : `No ${directionLabel.toLowerCase()} range`;
+    return (
+      <button
+        type="button"
+        data-range-navigation={direction}
+        aria-label={label}
+        title={label}
+        disabled={!range}
+        onClick={() => {
+          if (range) {
+            onNavigateToRange({ from: range.from, to: range.to });
+          }
+        }}
+        style={modalIconButtonStyle(theme, range !== null)}
+      >
+        <ChevronIcon direction={direction === "next" ? "right" : "left"} />
+      </button>
+    );
+  };
   return (
-    <button
-      type="button"
-      data-section-nav={direction}
-      aria-label={label}
-      title={label}
-      disabled={!section}
-      onClick={section?.onSelect}
-      style={modalIconButtonStyle(theme, section !== null)}
-    >
-      {isNext ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-    </button>
+    <>
+      {button("previous", previousRange)}
+      {button("next", nextRange)}
+    </>
   );
 }

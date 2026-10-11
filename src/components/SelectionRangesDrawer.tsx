@@ -7,12 +7,7 @@ import {
   loadAttemptHistory,
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
-import {
-  type MeasureRange,
-  type NamedRange,
-  presetRanges,
-  selectionKeyForRange,
-} from "../selection";
+import { type MeasureRange, selectionKeyForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import { miniButtonStyle, serifTitle } from "../theme";
 import { PencilIcon, PlusIcon } from "./icons";
@@ -150,13 +145,32 @@ export function SelectionRangesDrawer({
   const wholeIsActive =
     measureRange === null || (measureRange.from === 1 && measureRange.to === n);
 
-  const presets = presetRanges(n);
-  const toPreset = (preset: NamedRange): Preset => ({
-    label: preset.name,
-    range: { from: preset.from, to: preset.to },
-  });
-  const halves = presets.halves.map(toPreset);
-  const quarters = presets.quarters.map(toPreset);
+  const halves: Preset[] = [
+    { label: "First half", range: { from: 1, to: Math.floor(n / 2) } },
+    {
+      label: "Second half",
+      range: { from: Math.floor(n / 2) + 1, to: n },
+    },
+  ];
+
+  const quarters: Preset[] = [
+    { label: "Q1", range: { from: 1, to: Math.floor(n / 4) } },
+    {
+      label: "Q2",
+      range: { from: Math.floor(n / 4) + 1, to: Math.floor(n / 2) },
+    },
+    {
+      label: "Q3",
+      range: {
+        from: Math.floor(n / 2) + 1,
+        to: Math.floor((3 * n) / 4),
+      },
+    },
+    {
+      label: "Q4",
+      range: { from: Math.floor((3 * n) / 4) + 1, to: n },
+    },
+  ];
 
   function handleSelect(range: MeasureRange | null) {
     onMeasureRangeChange(range);
@@ -356,7 +370,7 @@ export function SelectionRangesDrawer({
         )}
 
         {/* Halves */}
-        {halves.length > 0 && (
+        {n >= 2 && (
           <Section label="Halves" theme={theme}>
             {halves.map((p) => {
               const active = rangesEqual(measureRange, p.range);
@@ -389,7 +403,7 @@ export function SelectionRangesDrawer({
         )}
 
         {/* Quarters */}
-        {quarters.length > 0 && (
+        {n >= 4 && (
           <Section label="Quarters" theme={theme}>
             <div
               style={{

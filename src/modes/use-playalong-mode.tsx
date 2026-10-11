@@ -14,7 +14,6 @@ import {
   formatDate,
   ResultModal,
   type ResultRow,
-  resultModalSections,
   ScoreChip,
 } from "../components/ResultModal";
 import {
@@ -609,9 +608,12 @@ export function usePlayalongMode(
               ctrl.player.seek(startBeat);
               ctrl.setCursor(startBeat, "jump");
             }}
-            {...resultModalSections(control.sectionNavigation, () =>
-              setResultModal(null),
-            )}
+            previousRange={control.rangeNavigation.previous}
+            nextRange={control.rangeNavigation.next}
+            onNavigateToRange={(range) => {
+              setResultModal(null);
+              control.rangeNavigation.goTo(range);
+            }}
             onDeleteRow={(key) => {
               const updatedHistory = deletePlayalongAttempt(
                 resultModal.hash,

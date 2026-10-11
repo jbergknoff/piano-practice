@@ -132,10 +132,10 @@ export interface BluetoothHandle {
 }
 
 /**
- * The neighbouring sections the result modal offers ("previous"/"next"), each
- * null when there is nowhere to go — see `adjacentSection` in `selection.ts`.
+ * The neighbouring ranges the result modal offers ("previous"/"next"), each
+ * null when there is nowhere to go — see `adjacentRange` in `selection.ts`.
  */
-export interface SectionNavigation {
+export interface RangeNavigation {
   previous: NamedRange | null;
   next: NamedRange | null;
   goTo: (range: MeasureRange) => void;
@@ -161,7 +161,7 @@ export interface ModeControl {
    */
   measureStartBeats: number[];
   fileHash: string | null;
-  sectionNavigation: SectionNavigation;
+  rangeNavigation: RangeNavigation;
   appendToDebugLog: (event: DebugBeatEvent) => void;
 }
 
