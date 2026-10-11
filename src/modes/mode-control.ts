@@ -19,6 +19,12 @@ export interface PlayerHandle {
   seek(beat: number): void;
   setBpm(bpm: number): void;
   state(): "stopped" | "playing" | "paused";
+  /**
+   * The exact playback position, read from the audio clock at call time. Use
+   * this (not `ModeControl.currentBeatRef`, which trails it by up to a
+   * throttled position update) when timing matters, e.g. scoring a note.
+   */
+  currentBeat(): number;
   playCountIn(
     beats: number,
     timeSigNum: number,
@@ -71,6 +77,7 @@ export function createPlayerHandle(
       getPlayer()?.setBpm(bpm);
     },
     state: () => getPlayer()?.state ?? "stopped",
+    currentBeat: () => getPlayer()?.currentBeat ?? 0,
     playCountIn: (beats, timeSigNum, onBeat) => {
       const p = getPlayer();
       if (!p) {

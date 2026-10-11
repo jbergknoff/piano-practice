@@ -407,7 +407,10 @@ export function usePlayalongMode(
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
     const ctrl = controlRef.current;
     const now = Date.now();
-    const beat = ctrl.currentBeatRef.current;
+    // Read the audio clock directly: currentBeatRef only advances on the
+    // player's throttled position updates (every 50 ms), so it can lag the
+    // true playback position by a tenth of a beat at 120 BPM.
+    const beat = ctrl.player.currentBeat();
     const measure = measureNumberForBeat(ctrl.measureStartBeats, beat);
     const held = heldNotesRef.current;
 

@@ -226,10 +226,9 @@ test("player markers screenshot (visual regression for marker rendering)", async
   for (let i = 0; i < sequence.length; i++) {
     const press = sequence[i];
     if (press.advanceSeconds > 0) {
+      // No wait needed after advancing: a press reads the beat straight from
+      // the (mocked) audio clock, not from the throttled cursor position.
       await advanceAudioTime(page, press.advanceSeconds);
-      // Let the player's rAF tick propagate the new beat into currentBeatRef
-      // before the press reads it (otherwise the press records at the old beat).
-      await page.waitForTimeout(120);
     }
     await sendNoteOn(page, press.note);
     const expectedCount = i + 1;

@@ -96,7 +96,13 @@ export class MidiPlayer {
     if (this._state !== "playing") {
       return Math.min(this.resumeBeat, this.totalBeats);
     }
-    return Math.min(this.elapsedBeat(), this.totalBeats);
+    // Clamped to resumeBeat for the same reason as the position updates in
+    // startTick: the LOOKAHEAD offset puts the elapsed beat slightly before the
+    // play-start beat for the first ~50 ms.
+    return Math.max(
+      this.resumeBeat,
+      Math.min(this.elapsedBeat(), this.totalBeats),
+    );
   }
 
   async play(): Promise<void> {
