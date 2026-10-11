@@ -32,7 +32,6 @@ import {
   selectionStartBeat,
 } from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
-import { sendHiHat } from "./metronome";
 import { useStableHighlights } from "./note-colors";
 
 export type { DebugBeatEvent } from "../debug-log";
@@ -671,7 +670,8 @@ export function useWaitMode(
           return;
         }
         wrongNoteCountRef.current += 1;
-        sendHiHat(ctrl.bluetooth.sendNote, false);
+        // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
+        ctrl.bluetooth.sendNote(42, 55, 80, 9);
         if (wrongNoteTimerRef.current !== null) {
           clearTimeout(wrongNoteTimerRef.current);
         }

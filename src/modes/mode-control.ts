@@ -1,7 +1,7 @@
 import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
 import type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 import type { VNode } from "preact";
-import type { MetronomeTick, MidiPlayer } from "../../lib/midi/midi-player";
+import type { MidiPlayer } from "../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
 import type { MeasureRange, NamedRange } from "../selection";
@@ -47,14 +47,6 @@ export interface PlayerHandle {
     onNoteScheduled?: (
       notes: { noteNumber: number; velocity: number; durationMs: number }[],
     ) => void;
-  }): () => void;
-  /**
-   * Install a transient metronome: `onTick` fires at each of `ticks` (sorted
-   * by beat) as playback reaches it. Returns an uninstaller.
-   */
-  setMetronome(m: {
-    ticks: MetronomeTick[];
-    onTick: (tick: MetronomeTick) => void;
   }): () => void;
 }
 
@@ -126,20 +118,6 @@ export function createPlayerHandle(
         if (getPlayer() === p) {
           p.skipWebAudio = prevSkipWebAudio;
           p.onNoteScheduled = prevOnNoteScheduled;
-        }
-      };
-    },
-    setMetronome: (m) => {
-      const p = getPlayer();
-      if (!p) {
-        return () => {};
-      }
-      p.metronomeTicks = m.ticks;
-      p.onMetronomeTick = m.onTick;
-      return () => {
-        if (getPlayer() === p) {
-          p.metronomeTicks = null;
-          p.onMetronomeTick = undefined;
         }
       };
     },

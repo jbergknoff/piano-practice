@@ -35,27 +35,6 @@ export function notesSoundingAfter(
     .sort((a, b) => a.startBeat - b.startBeat);
 }
 
-/** One metronome click: its beat, and whether it starts a measure. */
-export interface MetronomeTick {
-  beat: number;
-  downbeat: boolean;
-}
-
-/**
- * The index of the first tick at or after `fromBeat` — where the metronome
- * resumes when playback starts or seeks there. The tolerance keeps a tick that
- * sits exactly on `fromBeat` (but differs from it by float error) included.
- */
-export function firstTickIndexFrom(
-  ticks: MetronomeTick[],
-  fromBeat: number,
-): number {
-  const index = ticks.findIndex(
-    (tick) => tick.beat >= fromBeat - SEEK_END_TOLERANCE_BEATS,
-  );
-  return index === -1 ? ticks.length : index;
-}
-
 // How far ahead (seconds) to schedule notes in each scheduler tick.
 const SCHEDULE_AHEAD = 0.3;
 // Scheduler tick interval (ms).
@@ -79,9 +58,6 @@ export class MidiPlayer {
   // Sorted subset of notes that still need scheduling in the current playback.
   private playQueue: PlaybackNote[] = [];
   private playQueueIndex = 0;
-  // Next metronome tick to schedule; null until computed for the current
-  // play-start beat (lazily, so ticks installed mid-playback start correctly).
-  private metronomeIndex: number | null = null;
 
   // AudioContext.currentTime at which beat 0 of the piece plays.
   private startAudioTime = 0;
@@ -105,14 +81,6 @@ export class MidiPlayer {
   onNoteScheduled?: (
     notes: { noteNumber: number; velocity: number; durationMs: number }[],
   ) => void;
-  /**
-   * Metronome clicks (sorted by beat), fired through `onMetronomeTick`. They
-   * go through the same audio-clock look-ahead scheduler as the notes, so the
-   * metronome stays locked to playback across long pieces, BPM changes, seeks
-   * and pauses — unlike a free-running timer, which drifts.
-   */
-  metronomeTicks: MetronomeTick[] | null = null;
-  onMetronomeTick?: (tick: MetronomeTick) => void;
 
   constructor(notes: PlaybackNote[], totalBeats: number, bpm = 120) {
     this.notes = notes;
@@ -212,7 +180,6 @@ export class MidiPlayer {
     // Build a sorted queue of notes that haven't finished yet.
     this.playQueue = notesSoundingAfter(this.notes, fromBeat);
     this.playQueueIndex = 0;
-    this.metronomeIndex = null;
 
     this.scheduleUpcoming();
     this.schedulerTimer = setInterval(
@@ -277,36 +244,6 @@ export class MidiPlayer {
         }, delayMs);
         this.extraTimers.push(timer);
       }
-    }
-
-    this.scheduleMetronome(horizon);
-  }
-
-  // Schedules the metronome ticks that fall before `horizon`. Each tick's
-  // timer delay is computed afresh from the audio clock, so timer jitter never
-  // accumulates into drift.
-  private scheduleMetronome(horizon: number): void {
-    const ticks = this.metronomeTicks;
-    if (!this.audioCtx || !ticks || !this.onMetronomeTick) {
-      return;
-    }
-    const ctx = this.audioCtx;
-    const secsPerBeat = 60 / this._bpm;
-    if (this.metronomeIndex === null) {
-      this.metronomeIndex = firstTickIndexFrom(ticks, this.resumeBeat);
-    }
-    while (this.metronomeIndex < ticks.length) {
-      const tick = ticks[this.metronomeIndex];
-      const tickTime = this.startAudioTime + tick.beat * secsPerBeat;
-      if (tickTime > horizon) {
-        break;
-      }
-      const delayMs = Math.max(0, (tickTime - ctx.currentTime) * 1000);
-      const timer = setTimeout(() => {
-        this.onMetronomeTick?.(tick);
-      }, delayMs);
-      this.extraTimers.push(timer);
-      this.metronomeIndex++;
     }
   }
 

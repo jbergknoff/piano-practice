@@ -32,7 +32,6 @@ import {
 import type { ThemeTokens } from "../theme";
 import { blurFilter } from "../theme";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
-import { metronomeTicks, sendHiHat } from "./metronome";
 import { soundingHighlights, useStableHighlights } from "./note-colors";
 
 export type PlayalongPhase =
@@ -116,15 +115,15 @@ export function usePlayalongMode(
   const countInCancelRef = useRef<(() => void) | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
   const uninstallAudioRoutingRef = useRef<(() => void) | null>(null);
-  const uninstallMetronomeRef = useRef<(() => void) | null>(null);
+  const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function stopMetronome() {
-    uninstallMetronomeRef.current?.();
-    uninstallMetronomeRef.current = null;
+    if (metronomeTimerRef.current !== null) {
+      clearInterval(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    }
   }
 
-  // Hands the clicks to the player, which schedules them on the audio clock
-  // alongside the notes (see `MidiPlayer.metronomeTicks`).
   function startMetronome() {
     stopMetronome();
     const ctrl = controlRef.current;
@@ -132,15 +131,16 @@ export function usePlayalongMode(
     if (!mx) {
       return;
     }
-    uninstallMetronomeRef.current = ctrl.player.setMetronome({
-      ticks: metronomeTicks(
-        ctrl.measureStartBeats,
-        mx.totalBeats,
-        mx.timeSigDen,
-      ),
-      onTick: (tick) =>
-        sendHiHat(controlRef.current.bluetooth.sendNote, tick.downbeat),
-    });
+    const msPerBeat = (60 / settingsRef.current.bpm) * 1000;
+    const timeSigNum = mx.timeSigNum;
+    let beatIdx = 0;
+    const tick = () => {
+      const isDownbeat = beatIdx % timeSigNum === 0;
+      ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
+      beatIdx++;
+    };
+    tick();
+    metronomeTimerRef.current = setInterval(tick, msPerBeat);
   }
 
   const controlRef = useRef(control);
@@ -361,7 +361,8 @@ export function usePlayalongMode(
       countInBeats,
       mx.timeSigNum,
       (i) => {
-        sendHiHat(ctrl.bluetooth.sendNote, i % mx.timeSigNum === 0);
+        const isDownbeat = i % mx.timeSigNum === 0;
+        ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
         setCountInBeat({ beat: i, timeSigNum: mx.timeSigNum });
       },
     );
