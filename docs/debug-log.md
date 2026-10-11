@@ -64,7 +64,7 @@ modes.
 | `WRONG` | The pressed note is not in the expected chord; wrong-note feedback fired |
 | `EXTRA` | Every expected note was held, but the advance was blocked because the user is also holding wrong notes (e.g. mashing extra keys). Release the extra keys and re-press the chord |
 | `GRACE` | Wrong note, but ignored because it arrived within the grace period after the previous advance (`msSinceAdvance < noteSensitivityMilliseconds`) |
-| `DEBOUNCE` | A correct note that would have triggered an advance, but arrived within 100 ms of the last advance and was ignored to prevent double-advancing on the same chord |
+| `DEBOUNCE` | A correct note that would have triggered an advance, but arrived within 50 ms of the last advance and was ignored to prevent double-advancing on the same chord |
 | `DUPLICATE` | A `ON` event for a key that was already held (no intervening `OFF`) — a duplicate the instrument re-sent for a sustained/pedalled note, or the tail of a rolled chord. Ignored, and deliberately not counted as a wrong held note so it can't block the next advance |
 | `OFF` | Note-release event — no matching logic runs, logged for timeline completeness |
 
@@ -99,9 +99,9 @@ advanced. The outcome column will tell you why it didn't.
   note in a different octave than the one you played.
 
 - **`DEBOUNCE`** — The advance was suppressed because it happened within
-  100 ms of the previous one. This can happen when a single physical
+  50 ms of the previous one. This can happen when a single physical
   key press generates two MIDI note-on events (rare, but possible with
-  some pianos/adapters). The `msSinceAdvance` value will be under 100.
+  some pianos/adapters). The `msSinceAdvance` value will be under 50.
 
 - **`EXTRA` on the note you meant to play** — Every expected note was
   held, but the advance was blocked because the app thought you were
