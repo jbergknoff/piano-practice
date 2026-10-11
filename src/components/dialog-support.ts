@@ -38,6 +38,12 @@ const DIALOG_CSS = `
   margin: 0;
   border: none;
   color: inherit;
+  /* Column layout lives here, not under [open]: while the drawer slides
+     closed, the allow-discrete transition keeps it displayed after [open] is
+     removed, so anything set only under [open] reverts for the whole
+     slide-out. A flex-direction there flipped the contents into a row. Only
+     display itself belongs under [open]. */
+  flex-direction: column;
   max-width: none;
   max-height: none;
   transition:
@@ -49,7 +55,6 @@ const DIALOG_CSS = `
 .app-drawer[data-side="right"] { right: 0; transform: translateX(100%); }
 .app-drawer[open] {
   display: flex;
-  flex-direction: column;
   transform: none;
 }
 .app-drawer:not([open]) { pointer-events: none; }

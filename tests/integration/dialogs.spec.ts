@@ -103,3 +103,25 @@ test("a right-click outside the context menu closes it", async ({ page }) => {
   await page.mouse.click(10, 380, { button: "right" });
   await expect(item).toHaveCount(0);
 });
+
+test("a drawer's contents stay stacked while it slides closed", async ({
+  page,
+}) => {
+  // The close transition keeps the drawer displayed after [open] is removed.
+  // Layout that was only set under [open] used to revert for the slide-out,
+  // flipping the contents into a row.
+  await page.getByTitle("Settings").click();
+  const drawer = page.getByRole("dialog", { name: "Settings" });
+  await expect(drawer).toBeVisible();
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const childTops = await drawer.evaluate((element) => {
+    for (const animation of document.getAnimations()) {
+      animation.pause();
+      animation.currentTime = 150;
+    }
+    return [...element.children]
+      .slice(0, 2)
+      .map((child) => child.getBoundingClientRect().top);
+  });
+  expect(childTops[1]).toBeGreaterThan(childTops[0]);
+});
