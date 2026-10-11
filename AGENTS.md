@@ -21,7 +21,7 @@ App-internal code (under `lib/` and `src/`):
 - `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts` (BLE MIDI packet parse/build), `web-midi.ts` (Web MIDI message parse/build)
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
-- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens. `Modal`/`Drawer`/`ContextMenu` (+ `dialog-support.ts`) are the shared native-element shells every modal, drawer and menu is built on — see "Modals, drawers and menus"
+- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens. `Modal`/`Drawer`/`ContextMenu` (+ `dialog-support.ts`, which also has the shared `useModalDialog` lifecycle hook) are the shared `<dialog>` shells every modal, drawer and menu is built on — see "Modals, drawers and menus"
 - `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `piano-preference.ts` (the remembered transport), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-file-history.ts`, `use-file-library.ts`, `use-bookmarks.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts` (also owns the `PracticeMode` type), `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
@@ -195,17 +195,21 @@ Every modal, drawer and menu is built on a native element, never a positioned
   laid out in a column by the stylesheet, and **callers must not set an inline
   `display`** on it: that would override the browser's `display: none` for a
   closed dialog. Settings and Ranges are `Drawer`s.
-- **`ContextMenu`** (`src/components/ContextMenu.tsx`) — `popover="auto"`, so
-  Escape and a press outside close it. Chrome fires `contextmenu` while the
-  button is still down and light dismiss runs on the `pointerup`, so the menu
-  waits for the opening press to end before showing, or that press would close
-  it immediately.
+- **`ContextMenu`** (`src/components/ContextMenu.tsx`) — also a `showModal()`
+  `<dialog>`, positioned at the click, with a **transparent** backdrop. It is
+  deliberately not a popover: a popover's light dismiss lets the dismissing
+  click through to whatever is underneath (closing the menu by clicking where
+  Play is would also press Play), whereas a modal dialog makes the page inert,
+  so a click or right-click outside the menu only closes it — the behaviour the
+  old invisible full-screen catcher `<div>` had. (A popover would also be
+  dismissed by the very click that opens it, since Chrome fires `contextmenu`
+  while the button is still down.)
 
 What this buys: the **top layer** (a modal paints above everything, whatever
 the z-index or stacking context of the component rendering it — the old
 cursor-over-modal bug in `modal-layering.spec.ts` can't come back), Escape,
 and an inert page behind a modal. The structural CSS these need (`::backdrop`,
-`[open]`, `@starting-style`, resetting the UA's `<dialog>`/`[popover]` styles)
+`[open]`, `@starting-style`, resetting the UA's `<dialog>` styles)
 lives in `src/components/dialog-support.ts` and is injected once at module
 load; colours and spacing stay inline at each call site. Backdrop clicks are
 handled there too (`useCloseOnBackdropClick`), as a listener rather than an

@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 
-// Structural CSS for the native <dialog>/popover elements behind `Modal`,
-// `Drawer` and the context menu. It has to be a stylesheet rather than inline
+// Structural CSS for the native <dialog> elements behind `Modal`, `Drawer`
+// and `ContextMenu`. It has to be a stylesheet rather than inline
 // styles because it targets things inline styles can't reach: `::backdrop`,
-// the `[open]` state, `@starting-style`, and the UA defaults for <dialog> and
-// [popover] (border, padding, Canvas colours, auto margins, max sizes) that
+// the `[open]` state, `@starting-style`, and the UA defaults for <dialog>
+// (border, padding, Canvas colours, auto margins, max sizes) that
 // would otherwise leak into the app's own panel styling. Colours, spacing and
 // sizes stay inline at each call site, as everywhere else in the app.
 //
@@ -70,7 +70,7 @@ const DIALOG_CSS = `
 .app-drawer:focus {
   outline: none;
 }
-.app-popover {
+.app-menu {
   position: fixed;
   inset: auto;
   margin: 0;
@@ -78,7 +78,15 @@ const DIALOG_CSS = `
   border: none;
   background: none;
   color: inherit;
+  max-width: none;
+  max-height: none;
   overflow: visible;
+}
+.app-menu::backdrop {
+  background: transparent;
+}
+.app-menu:focus {
+  outline: none;
 }
 `;
 
@@ -150,4 +158,50 @@ export function useCloseOnBackdropClick(
       dialog.removeEventListener("click", onClick);
     };
   }, [dialogRef]);
+}
+
+/**
+ * Opens `dialogRef`'s <dialog> as a modal (`showModal()`) when the component
+ * mounts and closes it when it unmounts, reporting user dismissals (Escape, a
+ * backdrop click) through `onClose` so the caller can unmount it. `onShow` runs
+ * right after `showModal()`, in the same layout effect: the place to focus an
+ * input, since `showModal()` itself moves focus into the dialog.
+ */
+export function useModalDialog(
+  dialogRef: { current: HTMLDialogElement | null },
+  onClose: () => void,
+  onShow?: () => void,
+): void {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const onShowRef = useRef(onShow);
+  onShowRef.current = onShow;
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) {
+      return;
+    }
+    dialog.showModal();
+    onShowRef.current?.();
+    // Escape closes the dialog natively and fires "close"; report it so the
+    // caller unmounts us. Closing on unmount below also fires "close" (a task
+    // later), which must not be reported back as a dismissal.
+    let unmounting = false;
+    function onNativeClose() {
+      if (!unmounting) {
+        onCloseRef.current();
+      }
+    }
+    dialog.addEventListener("close", onNativeClose);
+    return () => {
+      unmounting = true;
+      dialog.removeEventListener("close", onNativeClose);
+      if (dialog.open) {
+        dialog.close();
+      }
+    };
+  }, [dialogRef]);
+
+  useCloseOnBackdropClick(dialogRef, () => onCloseRef.current());
 }

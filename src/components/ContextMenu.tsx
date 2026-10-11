@@ -1,28 +1,6 @@
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { FONT_SANS, glassPanel, type ThemeTokens } from "../theme";
-import "./dialog-support";
-
-// How many pointers are currently pressed, tracked document-wide from module
-// load so the menu can tell whether the press that opened it is still going.
-let activePointers = 0;
-if (typeof window !== "undefined") {
-  window.addEventListener(
-    "pointerdown",
-    () => {
-      activePointers += 1;
-    },
-    true,
-  );
-  for (const type of ["pointerup", "pointercancel"]) {
-    window.addEventListener(
-      type,
-      () => {
-        activePointers = Math.max(0, activePointers - 1);
-      },
-      true,
-    );
-  }
-}
+import { useModalDialog } from "./dialog-support";
 
 export interface ContextMenuItem {
   label: string;
@@ -30,10 +8,17 @@ export interface ContextMenuItem {
 }
 
 /**
- * A menu at a point on screen, built on `popover="auto"`: the platform puts it
- * in the top layer and closes it on Escape or on a press anywhere outside it
- * ("light dismiss"), reporting either through `onClose`. Choosing an item
- * calls its `onSelect` and then `onClose`.
+ * A menu at a point on screen. Rendering it opens it; choosing an item calls
+ * its `onSelect` and then `onClose`; Escape or a click (or right-click)
+ * anywhere outside it calls `onClose`.
+ *
+ * It is a modal `<dialog>` with a transparent backdrop, not a popover, so the
+ * page behind it is inert while it is open: a click outside the menu lands on
+ * the backdrop and only closes the menu, rather than also pressing whatever
+ * is underneath. A popover's light dismiss would let that click through. (A
+ * dialog also has no light dismiss to trip over: Chrome fires `contextmenu`
+ * while the button is still down, and a popover shown then is dismissed by
+ * the same click's release.)
  */
 export function ContextMenu({
   clientX,
@@ -48,73 +33,33 @@ export function ContextMenu({
   onClose: () => void;
   theme: ThemeTokens;
 }) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDialogElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  useModalDialog(menuRef, onClose);
 
-  useLayoutEffect(() => {
+  // A right-click on the backdrop closes the menu too, instead of opening the
+  // browser's own context menu on top of it.
+  useEffect(() => {
     const menu = menuRef.current;
     if (!menu) {
       return;
     }
-    function onToggle(event: Event) {
-      if ((event as ToggleEvent).newState === "closed") {
+    function onContextMenu(event: MouseEvent) {
+      if (event.target === menu) {
+        event.preventDefault();
         onCloseRef.current();
       }
     }
-    menu.addEventListener("toggle", onToggle);
-    return () => menu.removeEventListener("toggle", onToggle);
+    menu.addEventListener("contextmenu", onContextMenu);
+    return () => menu.removeEventListener("contextmenu", onContextMenu);
   }, []);
 
-  // Show on mount, and again when re-opened at a new point. A right-click
-  // while the menu is open first light-dismisses it (on pointerdown), then
-  // asks for it at the new point; the browser coalesces the two queued
-  // "toggle" events into one open→open event, so `onClose` is not called and
-  // the menu simply reappears where it was asked for.
-  //
-  // Showing waits for the opening press to end. Chrome fires `contextmenu`
-  // while the button (or a long-pressing finger) is still down, and popover
-  // light dismiss runs on the *pointerup*: a menu shown mid-press would be
-  // dismissed by the very press that opened it. So if a press is still in
-  // progress, show the menu just after it ends.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new position is the trigger to re-show
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-    if (!menu) {
-      return;
-    }
-    function show() {
-      if (menu?.isConnected && !menu.matches(":popover-open")) {
-        menu.showPopover();
-      }
-    }
-    if (activePointers === 0) {
-      show();
-      return;
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    function onPressEnd() {
-      window.removeEventListener("pointerup", onPressEnd, true);
-      window.removeEventListener("pointercancel", onPressEnd, true);
-      // A task later, so the press's own light dismiss has already run.
-      timer = setTimeout(show, 0);
-    }
-    window.addEventListener("pointerup", onPressEnd, true);
-    window.addEventListener("pointercancel", onPressEnd, true);
-    return () => {
-      window.removeEventListener("pointerup", onPressEnd, true);
-      window.removeEventListener("pointercancel", onPressEnd, true);
-      clearTimeout(timer);
-    };
-  }, [clientX, clientY]);
-
-  // No inline `display` on the menu: it would override the browser's
-  // `display: none` for a hidden popover. The items stack as blocks instead.
   return (
-    <div
+    <dialog
       ref={menuRef}
-      popover="auto"
-      class="app-popover"
+      class="app-menu"
+      aria-label="Actions"
       style={{
         left: clientX + 4,
         top: clientY + 4,
@@ -122,6 +67,8 @@ export function ContextMenu({
         borderRadius: 12,
         padding: 4,
         boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+        display: "flex",
+        flexDirection: "column",
         minWidth: 180,
       }}
     >
@@ -134,7 +81,6 @@ export function ContextMenu({
             onCloseRef.current();
           }}
           style={{
-            display: "block",
             background: "none",
             border: "none",
             cursor: "pointer",
@@ -150,6 +96,6 @@ export function ContextMenu({
           {label}
         </button>
       ))}
-    </div>
+    </dialog>
   );
 }

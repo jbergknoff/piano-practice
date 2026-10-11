@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { loadFile, mockCrypto } from "./helpers";
 
-// Modals and drawers are native <dialog>s (Modal, Drawer) and the context menu
-// is a popover (ContextMenu). These pin down the behaviour the platform now
-// provides, which the old hand-built versions got wrong: Escape used to be
+// Modals, drawers and the context menu are native <dialog>s (Modal, Drawer,
+// ContextMenu). These pin down the behaviour the platform now provides, which the old hand-built versions got wrong: Escape used to be
 // handled on backdrop <div>s that never receive keydown, so it closed almost
 // nothing.
 
@@ -63,8 +62,8 @@ test("Escape closes a drawer", async ({ page }) => {
 test("the context menu stays open after the right-click that opens it, and Escape closes it", async ({
   page,
 }) => {
-  // Chrome fires contextmenu while the button is still down; a popover shown
-  // then would be light-dismissed by that same click's pointerup.
+  // Chrome fires contextmenu while the button is still down, so the menu
+  // opens mid-click; the rest of that click must not close it again.
   await page.locator("svg[role='img']").click({ button: "right" });
   const item = page.getByRole("button", { name: "Move cursor to here" });
   await expect(item).toBeVisible();
@@ -74,10 +73,33 @@ test("the context menu stays open after the right-click that opens it, and Escap
   await expect(item).toHaveCount(0);
 });
 
-test("a click outside the context menu closes it", async ({ page }) => {
+test("a click outside the context menu closes it without pressing what is underneath", async ({
+  page,
+}) => {
+  const play = page.getByTitle("Play");
+  const playBox = await play.boundingBox();
+  if (!playBox) {
+    throw new Error("Play button has no box");
+  }
   await page.locator("svg[role='img']").click({ button: "right" });
   const item = page.getByRole("button", { name: "Move cursor to here" });
   await expect(item).toBeVisible();
-  await page.mouse.click(10, 380);
+
+  // Click exactly where the Play button is. The menu's backdrop takes the
+  // click, so the menu closes and playback does not start.
+  await page.mouse.click(
+    playBox.x + playBox.width / 2,
+    playBox.y + playBox.height / 2,
+  );
+  await expect(item).toHaveCount(0);
+  await expect(page.getByTitle("Play")).toBeVisible();
+  await expect(page.getByTitle("Pause")).toHaveCount(0);
+});
+
+test("a right-click outside the context menu closes it", async ({ page }) => {
+  await page.locator("svg[role='img']").click({ button: "right" });
+  const item = page.getByRole("button", { name: "Move cursor to here" });
+  await expect(item).toBeVisible();
+  await page.mouse.click(10, 380, { button: "right" });
   await expect(item).toHaveCount(0);
 });

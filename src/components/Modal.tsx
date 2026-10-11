@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useRef } from "preact/hooks";
 import { closeButtonStyle, serifTitle, type ThemeTokens } from "../theme";
-import { useCloseOnBackdropClick } from "./dialog-support";
+import { useModalDialog } from "./dialog-support";
 
 interface ModalProps {
   /**
@@ -37,38 +37,7 @@ interface ModalProps {
  */
 export function Modal({ onClose, onShow, label, style, children }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const onShowRef = useRef(onShow);
-  onShowRef.current = onShow;
-
-  useLayoutEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) {
-      return;
-    }
-    dialog.showModal();
-    onShowRef.current?.();
-    // Escape closes the dialog natively and fires "close"; report it so the
-    // caller unmounts us. Closing on unmount below also fires "close" (a task
-    // later), which must not be reported back as a dismissal.
-    let unmounting = false;
-    function onNativeClose() {
-      if (!unmounting) {
-        onCloseRef.current();
-      }
-    }
-    dialog.addEventListener("close", onNativeClose);
-    return () => {
-      unmounting = true;
-      dialog.removeEventListener("close", onNativeClose);
-      if (dialog.open) {
-        dialog.close();
-      }
-    };
-  }, []);
-
-  useCloseOnBackdropClick(dialogRef, () => onCloseRef.current());
+  useModalDialog(dialogRef, onClose, onShow);
 
   return (
     <dialog ref={dialogRef} class="app-modal" aria-label={label} style={style}>
