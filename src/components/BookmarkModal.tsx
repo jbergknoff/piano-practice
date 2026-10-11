@@ -71,6 +71,11 @@ export function BookmarkModal({
         boxSizing: "border-box",
       }}
     >
+      {/* noValidate: `canSave` is the validation, and it already disables
+          Save. The From/To inputs carry min/max, so without this the browser
+          would also validate on submit (Enter in any field) and block an
+          out-of-range bound with its own error bubble, a second and
+          differently worded check on top of ours. */}
       <form
         noValidate
         onSubmit={(event) => {

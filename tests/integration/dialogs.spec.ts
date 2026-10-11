@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 import { loadFile, mockCrypto } from "./helpers";
 
 // Modals, drawers and the context menu are native <dialog>s (Modal, Drawer,
-// ContextMenu). These pin down the behaviour the platform now provides, which the old hand-built versions got wrong: Escape used to be
-// handled on backdrop <div>s that never receive keydown, so it closed almost
-// nothing.
+// ContextMenu). These pin down the behaviour the platform now provides, which
+// the old hand-built versions got wrong: Escape used to be handled on backdrop
+// <div>s that never receive keydown, so it closed almost nothing.
 
 test.beforeEach(async ({ page }) => {
   await mockCrypto(page);
