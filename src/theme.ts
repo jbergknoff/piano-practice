@@ -140,16 +140,6 @@ export function glassPanel(
   };
 }
 
-// Full-screen dim layer rendered behind modals/drawers.
-export function dimBackdrop(opacity = 0.3, blur = 4): JSX.CSSProperties {
-  return {
-    position: "fixed",
-    inset: 0,
-    background: `rgba(0,0,0,${opacity})`,
-    ...blurFilter(`blur(${blur}px)`),
-  };
-}
-
 // Italic serif heading used for titles across modals and screens.
 export function serifTitle(
   theme: ThemeTokens,
@@ -193,6 +183,20 @@ export function miniButtonStyle(theme: ThemeTokens): JSX.CSSProperties {
     justifyContent: "center",
     borderRadius: radius.sm,
     outline: "none",
+  };
+}
+
+/** The ✕ that closes a modal or drawer, in the top-right of its header. */
+export function closeButtonStyle(theme: ThemeTokens): JSX.CSSProperties {
+  return {
+    background: "transparent",
+    border: "none",
+    color: theme.inkSoft,
+    cursor: "pointer",
+    fontSize: 18,
+    padding: 4,
+    outline: "none",
+    lineHeight: 1,
   };
 }
 

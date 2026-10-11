@@ -9,7 +9,9 @@ import {
 } from "../hooks/use-file-history";
 import { type MeasureRange, selectionKeyForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
-import { miniButtonStyle, serifTitle } from "../theme";
+import { miniButtonStyle } from "../theme";
+import { Drawer } from "./Drawer";
+import { ModalHeader } from "./Modal";
 import { PencilIcon, PlusIcon } from "./icons";
 
 interface SelectionRangesDrawerProps {
@@ -190,189 +192,178 @@ export function SelectionRangesDrawer({
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        role="button"
-        tabIndex={-1}
-        onClick={onClose}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" || e.key === "Enter") {
-            onClose();
-          }
-        }}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.18)",
-          opacity: open ? 1 : 0,
-          pointerEvents: open ? "auto" : "none",
-          transition: "opacity 0.25s ease",
-          zIndex: 10,
-        }}
-      />
-      {/* Panel */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          bottom: 0,
-          width: 300,
-          background: theme.panelSolid,
-          borderRight: `0.5px solid ${theme.border}`,
-          boxShadow: open ? "20px 0 40px rgba(0,0,0,0.18)" : "none",
-          transform: open ? "translateX(0)" : "translateX(-100%)",
-          transition: "transform 0.32s cubic-bezier(.32,.72,.36,1)",
-          padding: "22px 24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-          color: theme.ink,
-          zIndex: 11,
-          overflowY: "auto",
-          boxSizing: "border-box",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span style={serifTitle(theme, 22)}>Ranges</span>
+    <Drawer
+      open={open}
+      onClose={onClose}
+      side="left"
+      label="Ranges"
+      style={{
+        width: 300,
+        background: theme.panelSolid,
+        borderRight: `0.5px solid ${theme.border}`,
+        boxShadow: open ? "20px 0 40px rgba(0,0,0,0.18)" : "none",
+        padding: "22px 24px",
+        gap: 20,
+        color: theme.ink,
+        overflowY: "auto",
+        boxSizing: "border-box",
+      }}
+    >
+      <ModalHeader theme={theme} title="Ranges" onClose={onClose} />
+
+      {/* Bookmarks */}
+      <Section
+        label="Bookmarks"
+        theme={theme}
+        action={
           <button
             type="button"
-            onClick={onClose}
+            onClick={onCreateBookmark}
+            title="New bookmark"
+            style={miniButtonStyle(theme)}
+          >
+            <PlusIcon />
+          </button>
+        }
+      >
+        {bookmarks.length === 0 ? (
+          <span style={{ fontSize: 11, color: theme.inkFaint }}>
+            No bookmarks yet
+          </span>
+        ) : (
+          bookmarks.map((bookmark) => {
+            const range = { from: bookmark.from, to: bookmark.to };
+            const active = rangesEqual(measureRange, range);
+            return (
+              <BookmarkButton
+                key={bookmark.id}
+                label={bookmark.name}
+                sublabel={
+                  bookmark.from === bookmark.to
+                    ? `m. ${bookmark.from}`
+                    : `mm. ${bookmark.from}–${bookmark.to}`
+                }
+                best={bestForRange(range)}
+                bestPlayalong={bestPlayalongForRange(range)}
+                active={active}
+                accent={accent}
+                theme={theme}
+                miniBar={
+                  <MiniBar
+                    from={bookmark.from}
+                    to={bookmark.to}
+                    total={n}
+                    accent={accent}
+                    active={active}
+                  />
+                }
+                onClick={() => handleSelect(range)}
+                onEdit={() => onEditBookmark(bookmark)}
+              />
+            );
+          })
+        )}
+      </Section>
+
+      <div style={{ height: 1, background: theme.border }} />
+
+      {/* Whole piece */}
+      <PresetButton
+        label="Whole piece"
+        sublabel={`mm. 1–${n}`}
+        best={bestForRange(null)}
+        bestPlayalong={bestPlayalongForRange(null)}
+        active={wholeIsActive}
+        accent={accent}
+        theme={theme}
+        miniBar={
+          <MiniBar
+            from={1}
+            to={n}
+            total={n}
+            accent={accent}
+            active={wholeIsActive}
+          />
+        }
+        onClick={() => handleSelect(null)}
+      />
+
+      {/* Repeat sections */}
+      {repeatSections.length > 0 && (
+        <Section label="Sections" theme={theme}>
+          {repeatSections.map((sec) => {
+            const range = { from: sec.from, to: sec.to };
+            const active = rangesEqual(measureRange, range);
+            return (
+              <PresetButton
+                key={sec.label}
+                label={sec.label}
+                sublabel={`mm. ${sec.from}–${sec.to}`}
+                best={bestForRange(range)}
+                bestPlayalong={bestPlayalongForRange(range)}
+                active={active}
+                accent={accent}
+                theme={theme}
+                miniBar={
+                  <MiniBar
+                    from={sec.from}
+                    to={sec.to}
+                    total={n}
+                    accent={accent}
+                    active={active}
+                  />
+                }
+                onClick={() => handleSelect(range)}
+              />
+            );
+          })}
+        </Section>
+      )}
+
+      {/* Halves */}
+      {n >= 2 && (
+        <Section label="Halves" theme={theme}>
+          {halves.map((p) => {
+            const active = rangesEqual(measureRange, p.range);
+            return (
+              <PresetButton
+                key={p.label}
+                label={p.label}
+                sublabel={p.range ? `mm. ${p.range.from}–${p.range.to}` : ""}
+                best={bestForRange(p.range)}
+                bestPlayalong={bestPlayalongForRange(p.range)}
+                active={active}
+                accent={accent}
+                theme={theme}
+                miniBar={
+                  p.range ? (
+                    <MiniBar
+                      from={p.range.from}
+                      to={p.range.to}
+                      total={n}
+                      accent={accent}
+                      active={active}
+                    />
+                  ) : null
+                }
+                onClick={() => handleSelect(p.range)}
+              />
+            );
+          })}
+        </Section>
+      )}
+
+      {/* Quarters */}
+      {n >= 4 && (
+        <Section label="Quarters" theme={theme}>
+          <div
             style={{
-              background: "transparent",
-              border: "none",
-              color: theme.inkSoft,
-              cursor: "pointer",
-              fontSize: 18,
-              padding: 4,
-              outline: "none",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
             }}
           >
-            ✕
-          </button>
-        </div>
-
-        {/* Bookmarks */}
-        <Section
-          label="Bookmarks"
-          theme={theme}
-          action={
-            <button
-              type="button"
-              onClick={onCreateBookmark}
-              title="New bookmark"
-              style={miniButtonStyle(theme)}
-            >
-              <PlusIcon />
-            </button>
-          }
-        >
-          {bookmarks.length === 0 ? (
-            <span style={{ fontSize: 11, color: theme.inkFaint }}>
-              No bookmarks yet
-            </span>
-          ) : (
-            bookmarks.map((bookmark) => {
-              const range = { from: bookmark.from, to: bookmark.to };
-              const active = rangesEqual(measureRange, range);
-              return (
-                <BookmarkButton
-                  key={bookmark.id}
-                  label={bookmark.name}
-                  sublabel={
-                    bookmark.from === bookmark.to
-                      ? `m. ${bookmark.from}`
-                      : `mm. ${bookmark.from}–${bookmark.to}`
-                  }
-                  best={bestForRange(range)}
-                  bestPlayalong={bestPlayalongForRange(range)}
-                  active={active}
-                  accent={accent}
-                  theme={theme}
-                  miniBar={
-                    <MiniBar
-                      from={bookmark.from}
-                      to={bookmark.to}
-                      total={n}
-                      accent={accent}
-                      active={active}
-                    />
-                  }
-                  onClick={() => handleSelect(range)}
-                  onEdit={() => onEditBookmark(bookmark)}
-                />
-              );
-            })
-          )}
-        </Section>
-
-        <div style={{ height: 1, background: theme.border }} />
-
-        {/* Whole piece */}
-        <PresetButton
-          label="Whole piece"
-          sublabel={`mm. 1–${n}`}
-          best={bestForRange(null)}
-          bestPlayalong={bestPlayalongForRange(null)}
-          active={wholeIsActive}
-          accent={accent}
-          theme={theme}
-          miniBar={
-            <MiniBar
-              from={1}
-              to={n}
-              total={n}
-              accent={accent}
-              active={wholeIsActive}
-            />
-          }
-          onClick={() => handleSelect(null)}
-        />
-
-        {/* Repeat sections */}
-        {repeatSections.length > 0 && (
-          <Section label="Sections" theme={theme}>
-            {repeatSections.map((sec) => {
-              const range = { from: sec.from, to: sec.to };
-              const active = rangesEqual(measureRange, range);
-              return (
-                <PresetButton
-                  key={sec.label}
-                  label={sec.label}
-                  sublabel={`mm. ${sec.from}–${sec.to}`}
-                  best={bestForRange(range)}
-                  bestPlayalong={bestPlayalongForRange(range)}
-                  active={active}
-                  accent={accent}
-                  theme={theme}
-                  miniBar={
-                    <MiniBar
-                      from={sec.from}
-                      to={sec.to}
-                      total={n}
-                      accent={accent}
-                      active={active}
-                    />
-                  }
-                  onClick={() => handleSelect(range)}
-                />
-              );
-            })}
-          </Section>
-        )}
-
-        {/* Halves */}
-        {n >= 2 && (
-          <Section label="Halves" theme={theme}>
-            {halves.map((p) => {
+            {quarters.map((p) => {
               const active = rangesEqual(measureRange, p.range);
               return (
                 <PresetButton
@@ -399,53 +390,10 @@ export function SelectionRangesDrawer({
                 />
               );
             })}
-          </Section>
-        )}
-
-        {/* Quarters */}
-        {n >= 4 && (
-          <Section label="Quarters" theme={theme}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 8,
-              }}
-            >
-              {quarters.map((p) => {
-                const active = rangesEqual(measureRange, p.range);
-                return (
-                  <PresetButton
-                    key={p.label}
-                    label={p.label}
-                    sublabel={
-                      p.range ? `mm. ${p.range.from}–${p.range.to}` : ""
-                    }
-                    best={bestForRange(p.range)}
-                    bestPlayalong={bestPlayalongForRange(p.range)}
-                    active={active}
-                    accent={accent}
-                    theme={theme}
-                    miniBar={
-                      p.range ? (
-                        <MiniBar
-                          from={p.range.from}
-                          to={p.range.to}
-                          total={n}
-                          accent={accent}
-                          active={active}
-                        />
-                      ) : null
-                    }
-                    onClick={() => handleSelect(p.range)}
-                  />
-                );
-              })}
-            </div>
-          </Section>
-        )}
-      </div>
-    </>
+          </div>
+        </Section>
+      )}
+    </Drawer>
   );
 }
 

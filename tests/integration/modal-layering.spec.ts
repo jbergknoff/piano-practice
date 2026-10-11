@@ -18,13 +18,11 @@ test.beforeEach(async ({ page }) => {
 
 // Regression test for a bug where the playback cursor bar painted on top of
 // modals opened from the bottom-right badge row (Help, piano connection).
-// Both badges render their own trigger button *and* their modal from the
-// same component, mounted inside PracticeScreen's bottom-right row — which
-// sets its own z-index and thereby caps the modal's z-index at the row's
-// level, regardless of the modal's own (much higher) z-index value. The
-// cursor bar's ancestors set no z-index, so its z-index leaked into the root
-// stacking context above the row. The fix raises that row's z-index above
-// the cursor's.
+// Those modals used to be ordinary positioned <div>s rendered inside that row,
+// so the row's stacking context capped their z-index below the cursor bar's.
+// They are now <dialog>s opened with showModal(), which puts them in the top
+// layer, above every stacking context, so this can no longer be broken by a
+// z-index; the test stays to keep it that way.
 //
 // This is a pixel-level regression, not a structural one: the cursor bar has
 // pointer-events: none (so it doesn't block clicks on the score), which
