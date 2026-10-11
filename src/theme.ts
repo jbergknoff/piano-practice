@@ -197,6 +197,34 @@ export function miniButtonStyle(theme: ThemeTokens): JSX.CSSProperties {
 }
 
 /**
+ * 32×32 outlined icon button for use inside a modal (e.g. the result modal's
+ * previous/next chevrons) — big enough to tap on a phone, unlike
+ * `miniButtonStyle`, and outlined like the ghost `modalActionButtonStyle` so it
+ * reads as a button against the glass panel. Pass `enabled = false` to dim it.
+ */
+export function modalIconButtonStyle(
+  theme: ThemeTokens,
+  enabled = true,
+): JSX.CSSProperties {
+  return {
+    width: 32,
+    height: 32,
+    flexShrink: 0,
+    background: "transparent",
+    border: `0.5px solid ${theme.border}`,
+    color: theme.ink,
+    cursor: enabled ? "pointer" : "default",
+    opacity: enabled ? 1 : 0.3,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+    outline: "none",
+    padding: 0,
+  };
+}
+
+/**
  * Cancel / OK style buttons used at the foot of modals. Pass `"ghost"` for the
  * secondary (Cancel) button and `"accent"` for the primary (OK/Save) button.
  * The `enabled` flag drives cursor and opacity on the accent variant; it has no

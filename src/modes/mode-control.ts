@@ -4,7 +4,7 @@ import type { VNode } from "preact";
 import type { MidiPlayer } from "../../lib/midi/midi-player";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
-import type { MeasureRange } from "../selection";
+import type { MeasureRange, NamedRange } from "../selection";
 
 // Re-exported from the display package (its public API) so the rest of the app
 // can keep importing the highlight type from mode-control.
@@ -131,6 +131,16 @@ export interface BluetoothHandle {
   ) => void;
 }
 
+/**
+ * The neighbouring sections the result modal offers ("previous"/"next"), each
+ * null when there is nowhere to go — see `adjacentSection` in `selection.ts`.
+ */
+export interface SectionNavigation {
+  previous: NamedRange | null;
+  next: NamedRange | null;
+  goTo: (range: MeasureRange) => void;
+}
+
 export interface ModeControl {
   player: PlayerHandle;
   bluetooth: BluetoothHandle;
@@ -151,6 +161,7 @@ export interface ModeControl {
    */
   measureStartBeats: number[];
   fileHash: string | null;
+  sectionNavigation: SectionNavigation;
   appendToDebugLog: (event: DebugBeatEvent) => void;
 }
 

@@ -1,4 +1,6 @@
 import type { ComponentChildren } from "preact";
+import type { SectionNavigation } from "../modes/mode-control";
+import type { NamedRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -6,9 +8,10 @@ import {
   glassPanel,
   hexA,
   miniButtonStyle,
+  modalIconButtonStyle,
   serifTitle,
 } from "../theme";
-import { TrashIcon } from "./icons";
+import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from "./icons";
 
 export function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
@@ -70,6 +73,39 @@ export interface ResultRow {
   cells: ComponentChildren[];
 }
 
+/** A neighbouring section offered as a "previous"/"next" jump. */
+export interface ResultModalSection {
+  name: string;
+  onSelect: () => void;
+}
+
+/**
+ * The `previousSection`/`nextSection` props for a mode's result modal: each
+ * closes the modal (via the mode's own `close`) and then moves the selection.
+ */
+export function resultModalSections(
+  navigation: SectionNavigation,
+  close: () => void,
+): {
+  previousSection: ResultModalSection | null;
+  nextSection: ResultModalSection | null;
+} {
+  const toSection = (range: NamedRange | null): ResultModalSection | null =>
+    range
+      ? {
+          name: range.name,
+          onSelect: () => {
+            close();
+            navigation.goTo({ from: range.from, to: range.to });
+          },
+        }
+      : null;
+  return {
+    previousSection: toSection(navigation.previous),
+    nextSection: toSection(navigation.next),
+  };
+}
+
 interface ResultModalProps {
   theme: ThemeTokens;
   accent: string;
@@ -88,6 +124,8 @@ interface ResultModalProps {
   onClose: () => void;
   onDeleteRow?: (key: string | number) => void;
   onClearRows?: () => void;
+  previousSection?: ResultModalSection | null;
+  nextSection?: ResultModalSection | null;
 }
 
 export function ResultModal({
@@ -99,6 +137,8 @@ export function ResultModal({
   onClose,
   onDeleteRow,
   onClearRows,
+  previousSection,
+  nextSection,
 }: ResultModalProps) {
   const effectiveGridTemplate = onDeleteRow
     ? `${history.gridTemplate} 32px`
@@ -135,10 +175,24 @@ export function ResultModal({
           gap: 20,
         }}
       >
-        <div>
-          <div style={{ ...serifTitle(theme), lineHeight: 1.1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ ...serifTitle(theme), lineHeight: 1.1, flex: 1 }}>
             {selectionLabel} complete
           </div>
+          {(previousSection || nextSection) && (
+            <>
+              <SectionButton
+                theme={theme}
+                direction="previous"
+                section={previousSection ?? null}
+              />
+              <SectionButton
+                theme={theme}
+                direction="next"
+                section={nextSection ?? null}
+              />
+            </>
+          )}
         </div>
 
         {latest && (
@@ -368,5 +422,36 @@ export function ResultModal({
         </button>
       </div>
     </>
+  );
+}
+
+// A previous/next chevron beside the title. Rendered (dimmed and inert) even
+// when there is no section that way, so the pair keeps a stable position. The
+// destination's name is in the tooltip/accessible label.
+function SectionButton({
+  theme,
+  direction,
+  section,
+}: {
+  theme: ThemeTokens;
+  direction: "previous" | "next";
+  section: ResultModalSection | null;
+}) {
+  const isNext = direction === "next";
+  const label = section
+    ? `${isNext ? "Next" : "Previous"}: ${section.name}`
+    : `No ${isNext ? "next" : "previous"} section`;
+  return (
+    <button
+      type="button"
+      data-section-nav={direction}
+      aria-label={label}
+      title={label}
+      disabled={!section}
+      onClick={section?.onSelect}
+      style={modalIconButtonStyle(theme, section !== null)}
+    >
+      {isNext ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+    </button>
   );
 }

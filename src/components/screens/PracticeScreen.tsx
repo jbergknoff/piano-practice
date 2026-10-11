@@ -16,13 +16,16 @@ import {
   type BluetoothHandle,
   type ModeControl,
   type PracticeMode,
+  type SectionNavigation,
   createPlayerHandle,
 } from "../../modes/mode-control";
 import { useListenMode } from "../../modes/use-listen-mode";
 import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
 import {
+  adjacentSection,
   type MeasureRange,
+  presetRanges,
   selectionEndBeat,
   selectionStartBeat,
 } from "../../selection";
@@ -282,6 +285,39 @@ export function PracticeScreen({
     [],
   );
 
+  const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
+  const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
+
+  // Previous/next sections for the result modals. Recomputed every render —
+  // a handful of comparisons over the bookmark list.
+  const presets = presetRanges(totalMeasures);
+  const orderedSeries = [
+    presets.halves,
+    presets.quarters,
+    (musicxml?.repeatSections ?? []).map((section) => ({
+      name: section.label,
+      from: section.from,
+      to: section.to,
+    })),
+  ];
+  const sectionNavigation: SectionNavigation = {
+    previous: adjacentSection(
+      measureRange,
+      "previous",
+      totalMeasures,
+      bookmarks.bookmarks,
+      orderedSeries,
+    ),
+    next: adjacentSection(
+      measureRange,
+      "next",
+      totalMeasures,
+      bookmarks.bookmarks,
+      orderedSeries,
+    ),
+    goTo: onMeasureRangeChange,
+  };
+
   const control: ModeControl = {
     player: playerHandle,
     bluetooth: bluetoothHandle,
@@ -293,6 +329,7 @@ export function PracticeScreen({
     measureRange,
     measureStartBeats: musicxml?.measureStartBeats ?? [],
     fileHash,
+    sectionNavigation,
     appendToDebugLog,
   };
 
@@ -388,9 +425,6 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
-
-  const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
-  const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
 
   const handleModeChange = (newMode: PracticeMode) => {
     if (newMode === mode) {
