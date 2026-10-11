@@ -16,12 +16,14 @@ import {
   type BluetoothHandle,
   type ModeControl,
   type PracticeMode,
+  type RangeNavigation,
   createPlayerHandle,
 } from "../../modes/mode-control";
 import { useListenMode } from "../../modes/use-listen-mode";
 import { usePlayalongMode } from "../../modes/use-playalong-mode";
 import { useWaitMode } from "../../modes/use-wait-mode";
 import {
+  adjacentRange,
   type MeasureRange,
   selectionEndBeat,
   selectionStartBeat,
@@ -282,6 +284,27 @@ export function PracticeScreen({
     [],
   );
 
+  const totalMeasures = musicxml ? musicxml.totalMeasures : 1;
+  const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
+
+  // Previous/next ranges for the result modals. Recomputed every render — a
+  // handful of comparisons over the bookmark list.
+  const rangeNavigation: RangeNavigation = {
+    previous: adjacentRange(
+      measureRange,
+      "previous",
+      totalMeasures,
+      bookmarks.bookmarks,
+    ),
+    next: adjacentRange(
+      measureRange,
+      "next",
+      totalMeasures,
+      bookmarks.bookmarks,
+    ),
+    goTo: onMeasureRangeChange,
+  };
+
   const control: ModeControl = {
     player: playerHandle,
     bluetooth: bluetoothHandle,
@@ -293,6 +316,7 @@ export function PracticeScreen({
     measureRange,
     measureStartBeats: musicxml?.measureStartBeats ?? [],
     fileHash,
+    rangeNavigation,
     appendToDebugLog,
   };
 
@@ -388,9 +412,6 @@ export function PracticeScreen({
     measureNumber: number;
     beat: number;
   } | null>(null);
-
-  const totalMeasures = musicxml ? musicxml.totalMeasures : 1;
-  const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
 
   const handleModeChange = (newMode: PracticeMode) => {
     if (newMode === mode) {

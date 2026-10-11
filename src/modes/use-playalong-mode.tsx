@@ -608,6 +608,12 @@ export function usePlayalongMode(
               ctrl.player.seek(startBeat);
               ctrl.setCursor(startBeat, "jump");
             }}
+            previousRange={control.rangeNavigation.previous}
+            nextRange={control.rangeNavigation.next}
+            onNavigateToRange={(range) => {
+              setResultModal(null);
+              control.rangeNavigation.goTo(range);
+            }}
             onDeleteRow={(key) => {
               const updatedHistory = deletePlayalongAttempt(
                 resultModal.hash,

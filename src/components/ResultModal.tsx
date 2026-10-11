@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import type { MeasureRange, NamedRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
   dimBackdrop,
@@ -6,9 +7,10 @@ import {
   glassPanel,
   hexA,
   miniButtonStyle,
+  modalIconButtonStyle,
   serifTitle,
 } from "../theme";
-import { TrashIcon } from "./icons";
+import { ChevronIcon, TrashIcon } from "./icons";
 
 export function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
@@ -88,6 +90,10 @@ interface ResultModalProps {
   onClose: () => void;
   onDeleteRow?: (key: string | number) => void;
   onClearRows?: () => void;
+  // Previous/next range chevrons beside the title; omitted when both are null.
+  previousRange?: NamedRange | null;
+  nextRange?: NamedRange | null;
+  onNavigateToRange?: (range: MeasureRange) => void;
 }
 
 export function ResultModal({
@@ -99,6 +105,9 @@ export function ResultModal({
   onClose,
   onDeleteRow,
   onClearRows,
+  previousRange = null,
+  nextRange = null,
+  onNavigateToRange,
 }: ResultModalProps) {
   const effectiveGridTemplate = onDeleteRow
     ? `${history.gridTemplate} 32px`
@@ -135,10 +144,18 @@ export function ResultModal({
           gap: 20,
         }}
       >
-        <div>
-          <div style={{ ...serifTitle(theme), lineHeight: 1.1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ ...serifTitle(theme), lineHeight: 1.1, flex: 1 }}>
             {selectionLabel} complete
           </div>
+          {onNavigateToRange && (previousRange || nextRange) && (
+            <RangeNavigationButtons
+              theme={theme}
+              previousRange={previousRange}
+              nextRange={nextRange}
+              onNavigateToRange={onNavigateToRange}
+            />
+          )}
         </div>
 
         {latest && (
@@ -367,6 +384,51 @@ export function ResultModal({
           Keep practicing
         </button>
       </div>
+    </>
+  );
+}
+
+// The previous/next chevrons beside the title. A chevron with nowhere to go is
+// still rendered (dimmed and inert) so the pair keeps a stable position. The
+// destination's name is in the tooltip/accessible label.
+function RangeNavigationButtons({
+  theme,
+  previousRange,
+  nextRange,
+  onNavigateToRange,
+}: {
+  theme: ThemeTokens;
+  previousRange: NamedRange | null;
+  nextRange: NamedRange | null;
+  onNavigateToRange: (range: MeasureRange) => void;
+}) {
+  const button = (direction: "previous" | "next", range: NamedRange | null) => {
+    const directionLabel = direction === "next" ? "Next" : "Previous";
+    const label = range
+      ? `${directionLabel}: ${range.name}`
+      : `No ${directionLabel.toLowerCase()} range`;
+    return (
+      <button
+        type="button"
+        data-range-navigation={direction}
+        aria-label={label}
+        title={label}
+        disabled={!range}
+        onClick={() => {
+          if (range) {
+            onNavigateToRange({ from: range.from, to: range.to });
+          }
+        }}
+        style={modalIconButtonStyle(theme, range !== null)}
+      >
+        <ChevronIcon direction={direction === "next" ? "right" : "left"} />
+      </button>
+    );
+  };
+  return (
+    <>
+      {button("previous", previousRange)}
+      {button("next", nextRange)}
     </>
   );
 }

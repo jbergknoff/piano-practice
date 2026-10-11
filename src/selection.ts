@@ -74,3 +74,59 @@ export function selectionLabelForRange(range: MeasureRange | null): string {
     ? `Measure ${range.from}`
     : `Measures ${range.from}–${range.to}`;
 }
+
+/** A measure range with a display name — a bookmark, or a generated label. */
+export interface NamedRange extends MeasureRange {
+  name: string;
+}
+
+/**
+ * The range to move to for "previous"/"next" navigation, or null when there
+ * is nowhere to go (whole piece selected, or already at the edge).
+ *
+ * - If a bookmark sits immediately next to the current range (starts at
+ *   `to + 1` for next, ends at `from − 1` for previous), go there. Several
+ *   candidates: the one closest in length to the current range wins (ties go to
+ *   the shorter one).
+ * - Otherwise slide the window by its own length (19–20 → 21–22), clamped to
+ *   the piece. From a half this lands on the other half; from a quarter, on the
+ *   next quarter when the piece divides evenly.
+ */
+export function adjacentRange(
+  range: MeasureRange | null,
+  direction: "previous" | "next",
+  totalMeasures: number,
+  bookmarks: NamedRange[],
+): NamedRange | null {
+  if (!range) {
+    return null;
+  }
+
+  const length = range.to - range.from + 1;
+  const adjacentBookmarks = bookmarks
+    .filter((bookmark) =>
+      direction === "next"
+        ? bookmark.from === range.to + 1
+        : bookmark.to === range.from - 1,
+    )
+    .sort((a, b) => {
+      const lengthA = a.to - a.from + 1;
+      const lengthB = b.to - b.from + 1;
+      return (
+        Math.abs(lengthA - length) - Math.abs(lengthB - length) ||
+        lengthA - lengthB
+      );
+    });
+  if (adjacentBookmarks.length > 0) {
+    return adjacentBookmarks[0];
+  }
+
+  const slid =
+    direction === "next"
+      ? { from: range.to + 1, to: Math.min(totalMeasures, range.to + length) }
+      : { from: Math.max(1, range.from - length), to: range.from - 1 };
+  if (slid.from > slid.to || slid.from < 1 || slid.to > totalMeasures) {
+    return null;
+  }
+  return { ...slid, name: selectionLabelForRange(slid) };
+}
