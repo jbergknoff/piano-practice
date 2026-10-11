@@ -287,4 +287,16 @@ describe("totalBeats – derived from note content, not the measure formula", ()
     // back to totalBeats, which must be the true end (7), not 8.
     expect(measureStartBeats).toEqual([0, 1, 3, 5]);
   });
+
+  test("totalMeasures counts the repeat-expanded score and matches measureStartBeats", () => {
+    const xml = readFileSync(
+      "tests/fixtures/two-section-repeat.musicxml",
+      "utf8",
+    );
+    const writtenMeasures = (xml.match(/<measure /g) ?? []).length;
+    const { totalMeasures, measureStartBeats } = musicXmlToConversion(xml);
+
+    expect(totalMeasures).toBeGreaterThan(writtenMeasures);
+    expect(totalMeasures).toBe(measureStartBeats.length);
+  });
 });

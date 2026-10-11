@@ -284,7 +284,7 @@ export function PracticeScreen({
     [],
   );
 
-  const totalMeasures = musicxml ? musicxml.measureStartBeats.length : 1;
+  const totalMeasures = musicxml ? musicxml.totalMeasures : 1;
   const bookmarks = useBookmarks(fileHash, totalMeasures, onMeasureRangeChange);
 
   // Previous/next ranges for the result modals. Recomputed every render — a
