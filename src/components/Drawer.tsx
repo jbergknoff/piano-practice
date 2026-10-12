@@ -9,7 +9,8 @@ import { useCloseOnBackdropClick } from "./dialog-support";
  *
  * The slide is sequenced around `showModal()`'s cost. Making the rest of the
  * page inert restyles every element: with a long score on screen that is one
- * ~150–250 ms frame on a phone-speed CPU. So nothing moves in that frame:
+ * ~150–250 ms frame with the CPU throttled 4× (roughly a phone). So nothing
+ * moves in that frame:
  *
  * - Opening calls `showModal()` with the panel still offscreen, and only sets
  *   `data-shown` (which slides it in) two frames later, once the costly frame
@@ -92,10 +93,13 @@ export function Drawer({
     };
   }, [open]);
 
-  // Escape: slide out instead of the native instant close. The "close" event
-  // still reports to the caller in case the browser closes it anyway (Chrome
-  // ignores preventDefault on repeated Escapes without a user gesture), and
-  // when `close()` above finishes a slide-out, which is harmless.
+  // Escape: cancel the native instant close and slide out instead. The
+  // "close" event still has to be handled, because the browser may close the
+  // dialog anyway (Chrome ignores preventDefault on repeated Escapes without a
+  // user gesture). Clearing `data-shown` there puts the panel back offscreen,
+  // so the next open slides in. It also fires after `close()` above finishes
+  // a slide-out, where both steps are harmless: `data-shown` is already gone
+  // and the caller's `open` is already false.
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) {

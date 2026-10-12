@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 
-// Structural CSS for the native <dialog> elements behind `Modal`, `Drawer`
-// and `ContextMenu`. It has to be a stylesheet rather than inline
-// styles because it targets things inline styles can't reach: `::backdrop`,
-// and the UA defaults for <dialog>
-// (border, padding, Canvas colours, auto margins, max sizes) that
-// would otherwise leak into the app's own panel styling. Colours, spacing and
-// sizes stay inline at each call site, as everywhere else in the app.
+// Structural CSS for the native <dialog> elements behind `Modal`, `Drawer` and
+// `ContextMenu`. It has to be a stylesheet because it targets things inline
+// styles can't reach: `::backdrop`, the drawer's `[open]`/`[data-shown]`
+// states, and the UA's <dialog> defaults (border, padding, Canvas colours, auto
+// margins, max sizes), which would otherwise leak into the panels' own styling.
+// Colours, spacing and sizes stay inline at each call site, as everywhere else
+// in the app.
 //
 // Injected once per document at module load (same pattern as the sheet-music
 // glyph font), so it is in place before any dialog first renders.

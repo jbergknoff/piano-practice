@@ -1,9 +1,5 @@
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
-import {
-  type ThemeTokens,
-  chipToggleButtonStyle,
-  radius,
-} from "../theme";
+import { type ThemeTokens, chipToggleButtonStyle, radius } from "../theme";
 import { Drawer } from "./Drawer";
 import { ModalHeader } from "./Modal";
 import { ResetIcon } from "./icons";

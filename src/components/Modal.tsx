@@ -27,7 +27,7 @@ interface ModalProps {
 /**
  * A centred modal panel, built on a native `<dialog>` opened with
  * `showModal()`. Rendering it opens it; unmounting it closes it. The platform
- * provides what the old hand-built modals approximated or missed:
+ * provides:
  *
  * - the top layer, so the panel paints above everything else whatever the
  *   z-index or stacking context of the component that renders it;

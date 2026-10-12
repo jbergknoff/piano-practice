@@ -106,8 +106,8 @@ test("a right-click outside the context menu closes it", async ({ page }) => {
 
 test("a drawer slides out before it closes", async ({ page }) => {
   // Closing must slide the panel away first and only then close() the dialog:
-  // un-inerting the page restyles everything, and doing that before the slide
-  // made the slide-out start late on a phone.
+  // un-inerting the page restyles everything, and doing that first delayed the
+  // slide-out by ~200 ms (Chromium, 4× CPU throttling, full Rondo score).
   await page.getByTitle("Settings").click();
   const drawer = page.getByRole("dialog", { name: "Settings" });
   await expect(drawer).toHaveAttribute("data-shown", "");
