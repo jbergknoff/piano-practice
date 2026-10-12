@@ -189,19 +189,25 @@ Every modal, drawer and menu is built on a native element, never a positioned
   measure), `BookmarkModal`, `ResultModal`, the Help and piano-connection modals
   and the piece-info modal are all `Modal`s.
 - **`Drawer`** (`src/components/Drawer.tsx`) — also a `showModal()` `<dialog>`,
-  pinned full-height to one side. It takes an `open` prop but is simply mounted
-  only while open, like `Modal`, and **deliberately has no slide animation**.
+  pinned full-height to one side, always mounted and driven by an `open` prop.
+  It slides, but the slide is **sequenced around `showModal()`'s cost**.
   `showModal()` makes the rest of the page inert, and flipping inertness
   restyles every element: with the full Rondo score on screen (~18,000
-  elements) that is one ~30–50 ms style recalculation on a fast desktop, on
-  every open and close, several times that on a phone. An animated version
-  (`@starting-style` + `allow-discrete` transitions) put that recalculation
-  right at the start of the slide, which stuttered on a phone. A popover-based
-  version avoided the cost but needed a hand-built scrim and Escape handling,
-  and was judged not worth it. Without the animation the cost is just a short
-  delay before the drawer appears. (Ariakit hit the same `inert` cost:
-  https://github.com/ariakit/ariakit/issues/7697.) Settings and Ranges are
-  `Drawer`s.
+  elements) that is one ~30–50 ms frame on a fast desktop and ~150–250 ms at 4×
+  CPU throttling. So opening calls `showModal()` with the panel still offscreen
+  and sets `data-shown` (the CSS that slides it in) two frames later; closing
+  removes `data-shown`, waits for the slide-out's animations to finish, and
+  only then calls `close()`, so the un-inert restyle happens after the drawer is
+  gone. Escape is routed through the same path by intercepting the dialog's
+  `cancel` event. Measured in Chromium (4× throttle): the slide-out starts at
+  once instead of after a ~200 ms pause, and neither slide has a frame over
+  ~20 ms; the pause before the slide-in can't be avoided while using
+  `showModal()`. Because `close()` waits for the slide, no `@starting-style` or
+  `allow-discrete` transitions are needed. Reduced motion skips the slide. An
+  earlier attempt used a popover instead to dodge the inert cost; it needed a
+  hand-built scrim and Escape handling and was dropped. (Ariakit hit the same
+  `inert` cost: https://github.com/ariakit/ariakit/issues/7697.) Settings and
+  Ranges are `Drawer`s.
 - **`ContextMenu`** (`src/components/ContextMenu.tsx`) — also a `showModal()`
   `<dialog>`, positioned at the click, with a **transparent** backdrop. It is
   deliberately not a popover: a popover's light dismiss lets the dismissing

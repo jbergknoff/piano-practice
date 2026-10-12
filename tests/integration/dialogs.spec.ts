@@ -103,3 +103,31 @@ test("a right-click outside the context menu closes it", async ({ page }) => {
   await page.mouse.click(10, 380, { button: "right" });
   await expect(item).toHaveCount(0);
 });
+
+test("a drawer slides out before it closes", async ({ page }) => {
+  // Closing must slide the panel away first and only then close() the dialog:
+  // un-inerting the page restyles everything, and doing that before the slide
+  // made the slide-out start late on a phone.
+  await page.getByTitle("Settings").click();
+  const drawer = page.getByRole("dialog", { name: "Settings" });
+  await expect(drawer).toHaveAttribute("data-shown", "");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  const midSlide = await drawer.evaluate((element) => ({
+    open: (element as HTMLDialogElement).open,
+    shown: element.hasAttribute("data-shown"),
+    sliding: element.getAnimations().length > 0,
+  }));
+  expect(midSlide).toEqual({ open: true, shown: false, sliding: true });
+  await expect(drawer).toBeHidden();
+});
+
+test("with reduced motion a drawer opens and closes without sliding", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByTitle("Settings").click();
+  const drawer = page.getByRole("dialog", { name: "Settings" });
+  await expect(drawer).toHaveAttribute("data-shown", "");
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await expect(drawer).toBeHidden();
+});

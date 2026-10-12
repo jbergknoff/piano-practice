@@ -40,12 +40,26 @@ const DIALOG_CSS = `
   margin: 0;
   border: none;
   color: inherit;
-  display: flex;
   flex-direction: column;
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.36, 1);
 }
-.app-drawer[data-side="left"] { left: 0; }
-.app-drawer[data-side="right"] { right: 0; }
-.app-drawer::backdrop { background: rgba(0, 0, 0, 0.18); }
+/* display only while open, so the UA's display: none still hides it closed. */
+.app-drawer[open] { display: flex; }
+.app-drawer[data-side="left"] { left: 0; transform: translateX(-100%); }
+.app-drawer[data-side="right"] { right: 0; transform: translateX(100%); }
+.app-drawer[data-shown] { transform: none; }
+.app-drawer::backdrop {
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.app-drawer[data-shown]::backdrop { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .app-drawer,
+  .app-drawer::backdrop {
+    transition: none;
+  }
+}
 .app-modal:focus,
 .app-drawer:focus {
   outline: none;
