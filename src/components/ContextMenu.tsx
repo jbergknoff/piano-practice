@@ -1,6 +1,6 @@
-import { useRef } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import { FONT_SANS, glassPanel, type ThemeTokens } from "../theme";
-import { Layer } from "./Layer";
+import { useModalDialog } from "./dialog-support";
 
 export interface ContextMenuItem {
   label: string;
@@ -12,11 +12,13 @@ export interface ContextMenuItem {
  * its `onSelect` and then `onClose`; Escape or a click (or right-click)
  * anywhere outside it calls `onClose`.
  *
- * It is a `Layer` with a transparent scrim, so a click outside the menu lands
- * on the scrim and only closes the menu, rather than also pressing whatever is
- * underneath. (A plain `popover="auto"` menu would light-dismiss and let that
- * click through, and would be dismissed by the very click that opens it, since
- * Chrome fires `contextmenu` while the button is still down.)
+ * It is a modal `<dialog>` with a transparent backdrop, not a popover, so the
+ * page behind it is inert while it is open: a click outside the menu lands on
+ * the backdrop and only closes the menu, rather than also pressing whatever
+ * is underneath. A popover's light dismiss would let that click through. (A
+ * dialog also has no light dismiss to trip over: Chrome fires `contextmenu`
+ * while the button is still down, and a popover shown then is dismissed by
+ * the same click's release.)
  */
 export function ContextMenu({
   clientX,
@@ -31,16 +33,34 @@ export function ContextMenu({
   onClose: () => void;
   theme: ThemeTokens;
 }) {
+  const menuRef = useRef<HTMLDialogElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  useModalDialog(menuRef, onClose);
+
+  // A right-click on the backdrop closes the menu too, instead of opening the
+  // browser's own context menu on top of it.
+  useEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) {
+      return;
+    }
+    function onContextMenu(event: MouseEvent) {
+      if (event.target === menu) {
+        event.preventDefault();
+        onCloseRef.current();
+      }
+    }
+    menu.addEventListener("contextmenu", onContextMenu);
+    return () => menu.removeEventListener("contextmenu", onContextMenu);
+  }, []);
 
   return (
-    <Layer
-      open={true}
-      onClose={onClose}
-      kind="menu"
-      label="Actions"
-      panelStyle={{
+    <dialog
+      ref={menuRef}
+      class="app-menu"
+      aria-label="Actions"
+      style={{
         left: clientX + 4,
         top: clientY + 4,
         ...glassPanel(theme),
@@ -76,6 +96,6 @@ export function ContextMenu({
           {label}
         </button>
       ))}
-    </Layer>
+    </dialog>
   );
 }

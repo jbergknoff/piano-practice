@@ -50,7 +50,7 @@ export function SettingsDrawer({
         width: 320,
         background: theme.panelSolid,
         borderLeft: `0.5px solid ${theme.border}`,
-        boxShadow: open ? "-20px 0 40px rgba(0,0,0,0.18)" : "none",
+        boxShadow: "-20px 0 40px rgba(0,0,0,0.18)",
         padding: "22px 24px",
         gap: 18,
         color: theme.ink,

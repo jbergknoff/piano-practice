@@ -201,7 +201,7 @@ export function SelectionRangesDrawer({
         width: 300,
         background: theme.panelSolid,
         borderRight: `0.5px solid ${theme.border}`,
-        boxShadow: open ? "20px 0 40px rgba(0,0,0,0.18)" : "none",
+        boxShadow: "20px 0 40px rgba(0,0,0,0.18)",
         padding: "22px 24px",
         gap: 20,
         color: theme.ink,

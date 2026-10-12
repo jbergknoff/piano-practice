@@ -20,9 +20,9 @@ test.beforeEach(async ({ page }) => {
 // modals opened from the bottom-right badge row (Help, piano connection).
 // Those modals used to be ordinary positioned <div>s rendered inside that row,
 // so the row's stacking context capped their z-index below the cursor bar's.
-// They are now Layers (popovers), which puts them in the top layer, above
-// every stacking context, so this can no longer be broken by a z-index; the
-// test stays to keep it that way.
+// They are now <dialog>s opened with showModal(), which puts them in the top
+// layer, above every stacking context, so this can no longer be broken by a
+// z-index; the test stays to keep it that way.
 //
 // This is a pixel-level regression, not a structural one: the cursor bar has
 // pointer-events: none (so it doesn't block clicks on the score), which

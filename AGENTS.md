@@ -21,7 +21,7 @@ App-internal code (under `lib/` and `src/`):
 - `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts` (BLE MIDI packet parse/build), `web-midi.ts` (Web MIDI message parse/build)
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
-- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens. `Modal`/`Drawer`/`ContextMenu` are thin wrappers over `Layer.tsx`, the popover-based shell every modal, drawer and menu is built on — see "Modals, drawers and menus"
+- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens. `Modal`/`Drawer`/`ContextMenu` (+ `dialog-support.ts`, which also has the shared `useModalDialog` lifecycle hook) are the shared `<dialog>` shells every modal, drawer and menu is built on — see "Modals, drawers and menus"
 - `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `piano-preference.ts` (the remembered transport), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-file-history.ts`, `use-file-library.ts`, `use-bookmarks.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts` (also owns the `PracticeMode` type), `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
@@ -70,7 +70,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/hooks/use-piano.ts` | Unified piano-connection controller: merges the two input transports (`useBluetooth` + `useWebMidi`) into one status/error/device view and exposes `connectBluetooth`/`connectMidi` + `bluetoothSupported`/`midiSupported`, routing `sendNote`/`sendNotesBatch` to whichever transport is connected. App calls this (not `useBluetooth` directly) and passes the result down as the `piano` prop. There is deliberately no auto-select/guessing between transports (an earlier version tried to infer Web MIDI vs Bluetooth from permission state, which was fragile and unpredictable — see git history on this file for the abandoned approach) — the UI always asks the user explicitly, since only the user reliably knows how their piano is connected. `connectBluetooth`/`connectMidi` each resolve to whether the attempt ended up connected. It also owns `suggestedSource` — the transport that last connected successfully (persisted via `piano-preference.ts`), which the badge uses to skip the chooser on the first tap. This is **remembering, not guessing**: it is only ever written after a transport actually connects, and it clears itself (`shortcutSpent`) as soon as an attempt fails, so the very next tap falls back to the chooser. That escape hatch is load-bearing — without it, a user whose last session was Bluetooth could never reach USB, since every tap would re-open the Bluetooth picker. |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input transport (Web Bluetooth); calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/hooks/use-web-midi.ts` | Web MIDI input transport (`navigator.requestMIDIAccess`); same surface as `useBluetooth`. Listens on **every** real input port (filtering out the ALSA "MIDI Through" loopback via `isThroughPort`) so it doesn't matter which port is the piano. Sees USB pianos and, on Linux, BLE pianos that BlueZ bridges to ALSA (which Web Bluetooth can't reach once BlueZ's MIDI plugin claims the GATT service). **Auto-reconnects silently on mount** when `navigator.permissions.query({name:"midi"})` reports `"granted"`: unlike Web Bluetooth's per-device grant, the Web MIDI permission is persistent, origin-scoped, and needs no user gesture, so a USB piano reconnects with zero taps. The permission check is the gate that keeps this silent — calling `requestMIDIAccess` unguarded could raise a prompt with no gesture behind it — and a failed auto-attempt falls back to `"idle"` rather than `"error"`, so no modal appears on load |
-| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `closeButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass recipes go through here (the modal/drawer scrims are styled in `src/components/Layer.tsx`) — don't re-type the literals in components |
+| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `closeButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass recipes go through here (the modal/drawer backdrops are `::backdrop` rules in `src/components/dialog-support.ts`) — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
 ### Mode system
@@ -176,54 +176,52 @@ bottleneck.)
 
 ### Modals, drawers and menus
 
-Every modal, drawer and menu is a **`Layer`** (`src/components/Layer.tsx`): one
-full-screen `popover="manual"` element holding a **scrim** (the dimmed area
-behind the panel, which also catches every press outside it) and the **panel**
-(a `<dialog open>`, used only for its semantics; it is never `show()`n). Three
-thin wrappers sit on top:
+Every modal, drawer and menu is built on a native element, never a positioned
+`<div>` over a hand-made backdrop:
 
-- **`Modal`** — centred panel over a dimmed, blurred scrim. Rendering it opens
-  it, unmounting closes it; `onClose` fires for Escape, a scrim click, or the
-  header ✕ (`ModalHeader`). `onShow` runs in the layout effect that shows the
-  layer, which is where an input should be focused/selected (see the
-  jump-to-measure flake below: it must land in the first commit).
-  `NumberPromptModal` (custom tempo, jump to measure), `BookmarkModal`,
-  `ResultModal`, the Help and piano-connection modals and the piece-info modal
-  are all `Modal`s.
-- **`Drawer`** — always mounted, driven by `open`, slides in from a side.
-  `@starting-style` gives the entry; transitioning the layer's `display` and
-  `overlay` with `allow-discrete` keeps it rendered through the slide-out
-  (browsers without them skip the animation). The panel is a flex column.
-  Settings and Ranges are `Drawer`s.
-- **`ContextMenu`** — panel at the click point over a transparent scrim, so a
-  click or right-click outside the menu only closes it rather than also
-  pressing what is underneath (closing the menu by clicking where Play is must
-  not start playback).
+- **`Modal`** (`src/components/Modal.tsx`) — a `<dialog>` opened with
+  `showModal()` when it mounts and closed when it unmounts, so callers render it
+  conditionally (`{open && <Modal …>}`) and get `onClose` for Escape, a backdrop
+  click, or the header ✕ (`ModalHeader`). `onShow` runs in the same layout
+  effect as `showModal()`, which is where an input should be focused/selected
+  (see the jump-to-measure flake below: it must land in the first commit, and
+  after `showModal()` moves focus). `NumberPromptModal` (custom tempo, jump to
+  measure), `BookmarkModal`, `ResultModal`, the Help and piano-connection modals
+  and the piece-info modal are all `Modal`s.
+- **`Drawer`** (`src/components/Drawer.tsx`) — also a `showModal()` `<dialog>`,
+  pinned full-height to one side. It takes an `open` prop but is simply mounted
+  only while open, like `Modal`, and **deliberately has no slide animation**.
+  `showModal()` makes the rest of the page inert, and flipping inertness
+  restyles every element: with the full Rondo score on screen (~18,000
+  elements) that is one ~30–50 ms style recalculation on a fast desktop, on
+  every open and close, several times that on a phone. An animated version
+  (`@starting-style` + `allow-discrete` transitions) put that recalculation
+  right at the start of the slide, which stuttered on a phone. A popover-based
+  version avoided the cost but needed a hand-built scrim and Escape handling,
+  and was judged not worth it. Without the animation the cost is just a short
+  delay before the drawer appears. (Ariakit hit the same `inert` cost:
+  https://github.com/ariakit/ariakit/issues/7697.) Settings and Ranges are
+  `Drawer`s.
+- **`ContextMenu`** (`src/components/ContextMenu.tsx`) — also a `showModal()`
+  `<dialog>`, positioned at the click, with a **transparent** backdrop. It is
+  deliberately not a popover: a popover's light dismiss lets the dismissing
+  click through to whatever is underneath (closing the menu by clicking where
+  Play is would also press Play), whereas a modal dialog makes the page inert,
+  so a click or right-click outside the menu only closes it — the behaviour the
+  old invisible full-screen catcher `<div>` had. (A popover would also be
+  dismissed by the very click that opens it, since Chrome fires `contextmenu`
+  while the button is still down.)
 
-**Why a popover, not `<dialog>.showModal()`** (which an earlier version of this
-code used): `showModal()` makes the rest of the page inert, and flipping
-inertness restyles every element. With the full Rondo score on screen that is
-~18,000 elements and a single ~30–50 ms style recalculation on a fast desktop,
-on every open *and* close — several times that on a phone, right as a drawer's
-slide starts, which showed up as stutter. Showing a popover costs nothing
-measurable (style recalculation is back to ~2 ms total for a drawer opening,
-the same as the old hand-built `<div>` drawer). Ariakit hit the same cost:
-https://github.com/ariakit/ariakit/issues/7697.
-
-What the popover still gives: the **top layer**, so a layer paints above
-everything whatever the z-index or stacking context of the component that
-renders it (the old cursor-over-modal bug in `modal-layering.spec.ts` can't come
-back). What `Layer` adds itself: the scrim blocks clicks (a popover's own
-`::backdrop` can't — the UA makes it `pointer-events: none !important`, so
-clicks fall through to the page), and one document-level **Escape** listener
-closes the topmost open layer. What is given up: the native focus trap (Tab can
-reach the page behind a layer), which matters little on a phone.
-
-The structural CSS (scrim/panel positioning, the drawer transitions, resetting
-the UA's `[popover]`/`<dialog>` styles) lives in `Layer.tsx` and is injected
-once at module load; colours and spacing stay inline at each call site. The
-scrim's click handling is a listener rather than an `onClick` prop, so there
-are no `useKeyWithClickEvents` suppressions. Regression: `dialogs.spec.ts`.
+What this buys: the **top layer** (a modal paints above everything, whatever
+the z-index or stacking context of the component rendering it — the old
+cursor-over-modal bug in `modal-layering.spec.ts` can't come back), Escape,
+and an inert page behind a modal. The structural CSS these need (`::backdrop`,
+resetting the UA's `<dialog>` styles)
+lives in `src/components/dialog-support.ts` and is injected once at module
+load; colours and spacing stay inline at each call site. Backdrop clicks are
+handled there too (`useCloseOnBackdropClick`), as a listener rather than an
+`onClick` on a backdrop element, so there are no
+`useKeyWithClickEvents` suppressions to make. Regression: `dialogs.spec.ts`.
 
 ### Forcing landscape
 

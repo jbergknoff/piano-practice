@@ -1,41 +1,45 @@
 import type { ComponentChildren, JSX } from "preact";
-import { Layer } from "./Layer";
+import { useRef } from "preact/hooks";
+import { useModalDialog } from "./dialog-support";
 
 /**
- * A full-height panel that slides in from one side over a dimmed page. Unlike
- * `Modal` it stays mounted and is driven by `open`, so it can animate out as
- * well as in. The slide is CSS (`Layer.tsx`): `@starting-style` gives the
- * entry transition, and transitioning `display` and `overlay` with
- * `allow-discrete` keeps the closing layer rendered until it has slid away.
- * Browsers without those features simply skip the animation.
+ * A full-height panel pinned to one side of the screen, built on a native
+ * `<dialog>` opened with `showModal()` like `Modal`: top layer, Escape to
+ * close, an inert page behind it, and a press on the backdrop closes it.
+ *
+ * It appears and disappears without a slide. An animated version stuttered
+ * on a phone: `showModal()` makes the rest of the page inert, which restyles
+ * every element (~30 ms with a long score on a fast desktop, several times
+ * that on a phone), and that landed right as the slide began. Without the
+ * animation the same cost is just a moment's delay before the drawer shows.
  */
-export function Drawer({
-  open,
-  onClose,
-  side,
-  label,
-  style,
-  children,
-}: {
+export function Drawer(props: DrawerProps) {
+  return props.open ? <OpenDrawer {...props} /> : null;
+}
+
+interface DrawerProps {
   open: boolean;
-  /** Called on Escape or a press outside the panel; the caller sets `open` to false. */
+  /** Called on Escape or a backdrop click; the caller sets `open` to false. */
   onClose: () => void;
   side: "left" | "right";
   label: string;
   /** The panel's own look (width, background, padding, gap). Children are laid out in a column. */
   style: JSX.CSSProperties;
   children: ComponentChildren;
-}) {
+}
+
+function OpenDrawer({ onClose, side, label, style, children }: DrawerProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useModalDialog(dialogRef, onClose);
   return (
-    <Layer
-      open={open}
-      onClose={onClose}
-      kind="drawer"
-      side={side}
-      label={label}
-      panelStyle={style}
+    <dialog
+      ref={dialogRef}
+      class="app-drawer"
+      data-side={side}
+      aria-label={label}
+      style={style}
     >
       {children}
-    </Layer>
+    </dialog>
   );
 }

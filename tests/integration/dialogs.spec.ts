@@ -1,11 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { loadFile, mockCrypto } from "./helpers";
 
-// Modals, drawers and the context menu are all `Layer`s: a popover holding a
-// click-catching scrim and the panel. These pin down their behaviour: Escape
-// and outside presses close them (the old hand-built modals handled Escape on
-// backdrop <div>s that never receive keydown, so it closed almost nothing),
-// and an outside press never reaches the page underneath.
+// Modals, drawers and the context menu are native <dialog>s (Modal, Drawer,
+// ContextMenu). These pin down the behaviour the platform now provides, which
+// the old hand-built versions got wrong: Escape used to be handled on backdrop
+// <div>s that never receive keydown, so it closed almost nothing.
 
 test.beforeEach(async ({ page }) => {
   await mockCrypto(page);
@@ -103,26 +102,4 @@ test("a right-click outside the context menu closes it", async ({ page }) => {
   await expect(item).toBeVisible();
   await page.mouse.click(10, 380, { button: "right" });
   await expect(item).toHaveCount(0);
-});
-
-test("a drawer's contents stay stacked while it slides closed", async ({
-  page,
-}) => {
-  // The close transition keeps the drawer displayed after it is closed. Layout
-  // that was only set while open used to revert for the slide-out, flipping
-  // the contents into a row.
-  await page.getByTitle("Settings").click();
-  const drawer = page.getByRole("dialog", { name: "Settings" });
-  await expect(drawer).toBeVisible();
-  await page.getByRole("button", { name: "Close settings" }).click();
-  const childTops = await drawer.evaluate((element) => {
-    for (const animation of document.getAnimations()) {
-      animation.pause();
-      animation.currentTime = 150;
-    }
-    return [...element.children]
-      .slice(0, 2)
-      .map((child) => child.getBoundingClientRect().top);
-  });
-  expect(childTops[1]).toBeGreaterThan(childTops[0]);
 });
