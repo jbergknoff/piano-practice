@@ -2,7 +2,6 @@ import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
 import {
   type ThemeTokens,
   chipToggleButtonStyle,
-  glassPanel,
   radius,
 } from "../theme";
 import { Drawer } from "./Drawer";
@@ -181,7 +180,12 @@ function ToggleRow({
           alignItems: "center",
           gap: 2,
           padding: "3px 4px",
-          ...glassPanel(theme),
+          // glassPanel's colours without its backdrop-filter: on the drawer's
+          // solid background the blur had nothing to blur, but the GPU still
+          // recomputed it every frame of the drawer's slide, which made the
+          // settings drawer choppy on a phone.
+          background: theme.panel,
+          border: `0.5px solid ${theme.border}`,
           borderRadius: radius.md,
           flexShrink: 0,
         }}
