@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 
 // Structural CSS for the native <dialog> elements behind `Modal`, `Drawer` and
 // `ContextMenu`. It has to be a stylesheet because it targets things inline
@@ -118,7 +118,11 @@ export function useCloseOnBackdropClick(
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  // A layout effect, so the listeners are attached in the same commit that
+  // calls showModal(). Preact defers a plain useEffect until after paint,
+  // leaving a window where the dialog already blocks the page but a backdrop
+  // click does nothing.
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) {
       return;

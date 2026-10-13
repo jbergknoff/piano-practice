@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import { FONT_SANS, glassPanel, type ThemeTokens } from "../theme";
 import { useModalDialog } from "./dialog-support";
 
@@ -39,8 +39,9 @@ export function ContextMenu({
   useModalDialog(menuRef, onClose);
 
   // A right-click on the backdrop closes the menu too, instead of opening the
-  // browser's own context menu on top of it.
-  useEffect(() => {
+  // browser's own context menu on top of it. A layout effect, like the
+  // backdrop-click listener, so it is in place as soon as the menu shows.
+  useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!menu) {
       return;

@@ -131,3 +131,37 @@ test("with reduced motion a drawer opens and closes without sliding", async ({
   await page.getByRole("button", { name: "Close settings" }).click();
   await expect(drawer).toBeHidden();
 });
+
+test("a backdrop click landing right after the menu opens still closes it", async ({
+  page,
+}) => {
+  // The backdrop-click listener used to be attached in a plain useEffect,
+  // which Preact runs after paint: a click in that gap hit a backdrop that
+  // blocked the page but closed nothing. It failed in CI by chance; this
+  // dispatches the click in exactly that gap (the task after the dialog
+  // opens, before deferred effects run), so it fails every time if the
+  // listener is attached late.
+  await page.evaluate(() => {
+    const observer = new MutationObserver(() => {
+      const menu = document.querySelector<HTMLDialogElement>("dialog.app-menu");
+      if (!menu?.open) {
+        return;
+      }
+      observer.disconnect();
+      setTimeout(() => {
+        const outside = { clientX: 5, clientY: 5, bubbles: true };
+        menu.dispatchEvent(new PointerEvent("pointerdown", outside));
+        menu.dispatchEvent(new MouseEvent("click", outside));
+      }, 0);
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+  });
+  await page.locator("svg[role='img']").click({ button: "right" });
+  await expect(
+    page.getByRole("button", { name: "Move cursor to here" }),
+  ).toHaveCount(0);
+});

@@ -227,7 +227,12 @@ lives in `src/components/dialog-support.ts` and is injected once at module
 load; colours and spacing stay inline at each call site. Backdrop clicks are
 handled there too (`useCloseOnBackdropClick`), as a listener rather than an
 `onClick` on a backdrop element, so there are no
-`useKeyWithClickEvents` suppressions to make. Regression: `dialogs.spec.ts`.
+`useKeyWithClickEvents` suppressions to make. **Attach dialog listeners in
+`useLayoutEffect`, not `useEffect`**: Preact runs `useEffect` after paint, so a
+listener attached there misses any click that lands between `showModal()` (in
+a layout effect) and the deferred effect; the dialog already blocks the page
+but the click closes nothing. That race failed `dialogs.spec.ts` in CI; the
+spec now dispatches a click in exactly that gap. Regression: `dialogs.spec.ts`.
 
 ### Forcing landscape
 
