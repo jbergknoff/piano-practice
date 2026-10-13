@@ -84,8 +84,8 @@ export class BeatScheduler {
   private totalBeats: number;
   private _state: SchedulerState = "stopped";
   private onLeadInEnd: (() => void) | null = null;
-  // Bumped by pause/dispose, so a play() still waiting on the audio context
-  // to resume knows it has been called off.
+  // Bumped by every play/pause/dispose, so a play() still waiting on the audio
+  // context to resume knows it has been called off or overtaken by another.
   private playGeneration = 0;
 
   onPositionUpdate?: (beat: number) => void;
@@ -148,7 +148,7 @@ export class BeatScheduler {
     }
     const generation = ++this.playGeneration;
     await this.audioCtx.resume();
-    if (generation !== this.playGeneration || this._state === "playing") {
+    if (generation !== this.playGeneration) {
       return;
     }
 
