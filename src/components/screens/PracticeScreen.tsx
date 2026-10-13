@@ -32,18 +32,22 @@ import type { ThemeTokens } from "../../theme";
 import {
   chipToggleButtonStyle,
   cornerButtonStyle,
-  dimBackdrop,
   FONT_SANS,
   glassPanel,
   hexA,
   miniButtonStyle,
   serifTitle,
 } from "../../theme";
-import { BpmInputModal } from "../BpmInputModal";
+import { ContextMenu } from "../ContextMenu";
 import { ConnectionBadge } from "../ConnectionBadge";
 import { FullscreenButton } from "../FullscreenButton";
 import { HelpBadge } from "../HelpBadge";
-import { MeasureJumpModal } from "../MeasureJumpModal";
+import { Modal } from "../Modal";
+import {
+  NumberPromptModal,
+  parseBpm,
+  parseMeasureNumber,
+} from "../NumberPromptModal";
 import { BookmarkModal } from "../BookmarkModal";
 import { SelectionRangesDrawer } from "../SelectionRangesDrawer";
 import { SettingsDrawer } from "../SettingsDrawer";
@@ -438,36 +442,6 @@ export function PracticeScreen({
       ) ?? null)
     : null;
 
-  const handleContextMenuAction = (
-    action:
-      | "focus"
-      | "seek"
-      | "jump"
-      | "clearFocus"
-      | "saveBookmark"
-      | "editBookmark",
-    measureNumber: number,
-    beat: number,
-  ) => {
-    if (action === "focus") {
-      onMeasureRangeChange({ from: measureNumber, to: measureNumber });
-    } else if (action === "jump") {
-      setMeasureJumpDefault(measureNumber);
-    } else if (action === "clearFocus") {
-      onMeasureRangeChange(null);
-    } else if (action === "saveBookmark") {
-      if (measureRange) {
-        bookmarks.openCreate(measureRange);
-      }
-    } else if (action === "editBookmark") {
-      if (activeBookmark) {
-        bookmarks.openEdit(activeBookmark);
-      }
-    } else {
-      handleSeek(beat);
-    }
-  };
-
   const showStopIcon =
     mode === "playalong" &&
     (isPlaying ||
@@ -846,10 +820,10 @@ export function PracticeScreen({
       {active.overlay}
 
       {/* BOTTOM RIGHT: bluetooth + gear.
-          z-index 4 (above the other chrome, which is 2) so the Help and
-          "Connect a piano" modals these badges open — rendered inside this
-          row, so capped by its stacking context — clear the playback cursor
-          bar, which leaks into the root stacking context at z-index 3. */}
+          z-index 4 (above the other chrome, which is 2) keeps these buttons
+          above the playback cursor bar, which leaks into the root stacking
+          context at z-index 3. The modals the badges open no longer depend on
+          it: they are <dialog>s in the top layer, above everything. */}
       <div
         style={{
           position: "absolute",
@@ -899,100 +873,47 @@ export function PracticeScreen({
 
       {/* Context menu (right-click / long-press on sheet music) */}
       {contextMenu && (
-        <>
-          <div
-            role="presentation"
-            style={{ position: "fixed", inset: 0, zIndex: 99 }}
-            onClick={() => setContextMenu(null)}
-            onKeyDown={(e) => {
-              if ((e as unknown as KeyboardEvent).key === "Escape") {
-                setContextMenu(null);
-              }
-            }}
-          />
-          <div
-            style={{
-              position: "fixed",
-              left: contextMenu.clientX + 4,
-              top: contextMenu.clientY + 4,
-              zIndex: 100,
-              ...glassPanel(theme),
-              borderRadius: 12,
-              padding: 4,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
-              display: "flex",
-              flexDirection: "column",
-              minWidth: 180,
-            }}
-          >
-            {(
-              [
-                {
-                  label: `Focus measure ${contextMenu.measureNumber}`,
-                  action: "focus" as const,
-                },
-                {
-                  label: "Move cursor to here",
-                  action: "seek" as const,
-                },
-                {
-                  label: "Jump to measure…",
-                  action: "jump" as const,
-                },
-                ...(measureRange
-                  ? [
-                      activeBookmark
-                        ? {
-                            label: `Rename “${activeBookmark.name}”`,
-                            action: "editBookmark" as const,
-                          }
-                        : {
-                            label: "Bookmark this range",
-                            action: "saveBookmark" as const,
-                          },
-                      { label: "Clear focus", action: "clearFocus" as const },
-                    ]
-                  : []),
-              ] as {
-                label: string;
-                action:
-                  | "focus"
-                  | "seek"
-                  | "jump"
-                  | "clearFocus"
-                  | "saveBookmark"
-                  | "editBookmark";
-              }[]
-            ).map(({ label, action }) => (
-              <button
-                key={action}
-                type="button"
-                onClick={() => {
-                  handleContextMenuAction(
-                    action,
-                    contextMenu.measureNumber,
-                    contextMenu.beat,
-                  );
-                  setContextMenu(null);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "8px 12px",
-                  textAlign: "left",
-                  fontSize: 13,
-                  color: theme.ink,
-                  borderRadius: 8,
-                  fontFamily: FONT_SANS,
-                  width: "100%",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </>
+        <ContextMenu
+          clientX={contextMenu.clientX}
+          clientY={contextMenu.clientY}
+          onClose={() => setContextMenu(null)}
+          theme={theme}
+          items={[
+            {
+              label: `Focus measure ${contextMenu.measureNumber}`,
+              onSelect: () =>
+                onMeasureRangeChange({
+                  from: contextMenu.measureNumber,
+                  to: contextMenu.measureNumber,
+                }),
+            },
+            {
+              label: "Move cursor to here",
+              onSelect: () => handleSeek(contextMenu.beat),
+            },
+            {
+              label: "Jump to measure…",
+              onSelect: () => setMeasureJumpDefault(contextMenu.measureNumber),
+            },
+            ...(measureRange
+              ? [
+                  activeBookmark
+                    ? {
+                        label: `Rename “${activeBookmark.name}”`,
+                        onSelect: () => bookmarks.openEdit(activeBookmark),
+                      }
+                    : {
+                        label: "Bookmark this range",
+                        onSelect: () => bookmarks.openCreate(measureRange),
+                      },
+                  {
+                    label: "Clear focus",
+                    onSelect: () => onMeasureRangeChange(null),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
 
       {/* Bookmark naming/renaming modal */}
@@ -1017,80 +938,65 @@ export function PracticeScreen({
 
       {/* Piece info modal */}
       {pieceInfoOpen && (
-        <>
-          <div
-            role="presentation"
-            style={{ ...dimBackdrop(), zIndex: 199 }}
-            onClick={() => setPieceInfoOpen(false)}
-            onKeyDown={(e) => {
-              if ((e as unknown as KeyboardEvent).key === "Escape") {
-                setPieceInfoOpen(false);
-              }
-            }}
-          />
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              zIndex: 200,
-              ...glassPanel(theme, 24, 160),
-              borderRadius: 16,
-              padding: "24px 28px",
-              boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
-              minWidth: 280,
-            }}
-          >
-            <div style={{ ...serifTitle(theme, 24), marginBottom: 20 }}>
-              {pieceTitle}
-            </div>
-            {(
+        <Modal
+          label="Piece info"
+          onClose={() => setPieceInfoOpen(false)}
+          style={{
+            ...glassPanel(theme, 24, 160),
+            borderRadius: 16,
+            padding: "24px 28px",
+            boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+            minWidth: 280,
+          }}
+        >
+          <div style={{ ...serifTitle(theme, 24), marginBottom: 20 }}>
+            {pieceTitle}
+          </div>
+          {(
+            [
+              ["File", fileName],
               [
-                ["File", fileName],
-                [
-                  "Tempo",
-                  `${baseBpm} BPM${bpm !== baseBpm ? ` (playing at ${bpm})` : ""}`,
-                ],
-                [
-                  "Time signature",
-                  musicxml
-                    ? `${musicxml.timeSigNum}/${musicxml.timeSigDen}`
-                    : "—",
-                ],
-                ...(tracks.length > 0
-                  ? ([["Tracks", String(tracks.length)]] as [string, string][])
-                  : []),
-              ] as [string, string][]
-            ).map(([label, value]) => (
-              <div
-                key={label}
+                "Tempo",
+                `${baseBpm} BPM${bpm !== baseBpm ? ` (playing at ${bpm})` : ""}`,
+              ],
+              [
+                "Time signature",
+                musicxml
+                  ? `${musicxml.timeSigNum}/${musicxml.timeSigDen}`
+                  : "—",
+              ],
+              ...(tracks.length > 0
+                ? ([["Tracks", String(tracks.length)]] as [string, string][])
+                : []),
+            ] as [string, string][]
+          ).map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
+                gap: 24,
+                padding: "7px 0",
+                borderTop: `0.5px solid ${theme.border}`,
+                fontSize: 13,
+              }}
+            >
+              <span style={{ color: theme.inkSoft, whiteSpace: "nowrap" }}>
+                {label}
+              </span>
+              <span
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                  gap: 24,
-                  padding: "7px 0",
-                  borderTop: `0.5px solid ${theme.border}`,
-                  fontSize: 13,
+                  color: theme.ink,
+                  textAlign: "right",
+                  wordBreak: "break-all",
                 }}
               >
-                <span style={{ color: theme.inkSoft, whiteSpace: "nowrap" }}>
-                  {label}
-                </span>
-                <span
-                  style={{
-                    color: theme.ink,
-                    textAlign: "right",
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
+                {value}
+              </span>
+            </div>
+          ))}
+        </Modal>
       )}
 
       <SelectionRangesDrawer
@@ -1132,9 +1038,12 @@ export function PracticeScreen({
 
       {/* BPM free-input modal */}
       {bpmInputModalOpen && (
-        <BpmInputModal
-          currentBpm={bpm}
-          baseBpm={baseBpm}
+        <NumberPromptModal
+          title="Set tempo"
+          hint={`Default: ${baseBpm} BPM`}
+          initialValue={bpm}
+          parse={parseBpm}
+          confirmLabel="OK"
           onConfirm={(newBpm) => {
             onBpmChange(newBpm);
             setBpmInputModalOpen(false);
@@ -1147,9 +1056,12 @@ export function PracticeScreen({
 
       {/* Jump-to-measure modal — focuses the chosen measure (cursor snaps there) */}
       {measureJumpDefault !== null && musicxml && (
-        <MeasureJumpModal
-          currentMeasure={measureJumpDefault}
-          totalMeasures={totalMeasures}
+        <NumberPromptModal
+          title="Jump to measure"
+          hint={`1–${totalMeasures}`}
+          initialValue={measureJumpDefault}
+          parse={(draft) => parseMeasureNumber(draft, totalMeasures)}
+          confirmLabel="Go"
           onConfirm={(measureNumber) => {
             onMeasureRangeChange({ from: measureNumber, to: measureNumber });
             setMeasureJumpDefault(null);

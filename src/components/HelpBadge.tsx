@@ -1,16 +1,9 @@
 import { useState } from "preact/hooks";
 import type { DebugBeatEvent } from "../modes/use-wait-mode";
 import type { ThemeTokens } from "../theme";
-import {
-  blurFilter,
-  dimBackdrop,
-  FONT_MONO,
-  FONT_SANS,
-  hexA,
-  radius,
-  serifTitle,
-} from "../theme";
+import { blurFilter, FONT_MONO, FONT_SANS, hexA, radius } from "../theme";
 import { DebugLogTab } from "./DebugLogTab";
+import { Modal, ModalHeader } from "./Modal";
 import { BluetoothIcon } from "./icons";
 
 const IS_MOBILE_BRAVE =
@@ -64,127 +57,92 @@ export function HelpBadge({
       </button>
 
       {open && (
-        <>
-          {/* Backdrop */}
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
-          <div
-            style={{ ...dimBackdrop(), zIndex: 199 }}
-            onClick={() => setOpen(false)}
+        <Modal
+          label="Help"
+          onClose={() => setOpen(false)}
+          style={{
+            background: theme.panelSolid,
+            border: `0.5px solid ${theme.border}`,
+            borderRadius: 20,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            width: "min(400px, calc(100vw - 40px))",
+            maxHeight: "calc(100vh - 80px)",
+            display: "flex",
+            flexDirection: "column",
+            fontFamily: FONT_SANS,
+            overflow: "hidden",
+          }}
+        >
+          <ModalHeader
+            theme={theme}
+            title="Help"
+            onClose={() => setOpen(false)}
+            style={{ padding: "20px 24px 0", flexShrink: 0 }}
           />
 
-          {/* Modal */}
+          {/* Tab bar */}
           <div
             style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              zIndex: 200,
-              background: theme.panelSolid,
-              border: `0.5px solid ${theme.border}`,
-              borderRadius: 20,
-              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-              width: "min(400px, calc(100vw - 40px))",
-              maxHeight: "calc(100vh - 80px)",
               display: "flex",
-              flexDirection: "column",
-              fontFamily: FONT_SANS,
-              overflow: "hidden",
+              gap: 4,
+              padding: "14px 24px 0",
+              flexShrink: 0,
             }}
           >
-            {/* Header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "20px 24px 0",
-                flexShrink: 0,
-              }}
-            >
-              <span style={serifTitle(theme, 22)}>Help</span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: theme.inkSoft,
-                  cursor: "pointer",
-                  fontSize: 18,
-                  padding: 4,
-                  outline: "none",
-                  lineHeight: 1,
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Tab bar */}
-            <div
-              style={{
-                display: "flex",
-                gap: 4,
-                padding: "14px 24px 0",
-                flexShrink: 0,
-              }}
-            >
-              {(["about", "bluetooth", "debugging"] as Tab[]).map((t) => {
-                const active = tab === t;
-                const labels: Record<Tab, string> = {
-                  about: "About",
-                  bluetooth: "Bluetooth",
-                  debugging: "Debugging",
-                };
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTab(t)}
-                    style={{
-                      padding: "5px 14px",
-                      borderRadius: 20,
-                      border: active ? "none" : `0.5px solid ${theme.border}`,
-                      background: active ? accent : "transparent",
-                      color: active ? "#FFF7E5" : theme.inkSoft,
-                      fontSize: 12,
-                      fontWeight: active ? 600 : 400,
-                      cursor: "pointer",
-                      outline: "none",
-                      fontFamily: FONT_SANS,
-                      transition: "background 0.15s, color 0.15s",
-                    }}
-                  >
-                    {labels[t]}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Tab content */}
-            <div
-              style={{
-                padding: "18px 24px 24px",
-                overflowY: "auto",
-                flex: 1,
-              }}
-            >
-              {tab === "about" ? (
-                <AboutTab theme={theme} accent={accent} />
-              ) : tab === "bluetooth" ? (
-                <BluetoothTab theme={theme} accent={accent} />
-              ) : (
-                <DebugLogTab
-                  theme={theme}
-                  accent={accent}
-                  getDebugLog={getDebugLog}
-                  clearDebugLog={clearDebugLog}
-                />
-              )}
-            </div>
+            {(["about", "bluetooth", "debugging"] as Tab[]).map((t) => {
+              const active = tab === t;
+              const labels: Record<Tab, string> = {
+                about: "About",
+                bluetooth: "Bluetooth",
+                debugging: "Debugging",
+              };
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  style={{
+                    padding: "5px 14px",
+                    borderRadius: 20,
+                    border: active ? "none" : `0.5px solid ${theme.border}`,
+                    background: active ? accent : "transparent",
+                    color: active ? "#FFF7E5" : theme.inkSoft,
+                    fontSize: 12,
+                    fontWeight: active ? 600 : 400,
+                    cursor: "pointer",
+                    outline: "none",
+                    fontFamily: FONT_SANS,
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                >
+                  {labels[t]}
+                </button>
+              );
+            })}
           </div>
-        </>
+
+          {/* Tab content */}
+          <div
+            style={{
+              padding: "18px 24px 24px",
+              overflowY: "auto",
+              flex: 1,
+            }}
+          >
+            {tab === "about" ? (
+              <AboutTab theme={theme} accent={accent} />
+            ) : tab === "bluetooth" ? (
+              <BluetoothTab theme={theme} accent={accent} />
+            ) : (
+              <DebugLogTab
+                theme={theme}
+                accent={accent}
+                getDebugLog={getDebugLog}
+                clearDebugLog={clearDebugLog}
+              />
+            )}
+          </div>
+        </Modal>
       )}
     </>
   );

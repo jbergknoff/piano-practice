@@ -1,14 +1,14 @@
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useRef } from "preact/hooks";
 import type { BookmarkEditorState } from "../hooks/use-bookmarks";
 import { selectionLabelForRange } from "../selection";
 import type { ThemeTokens } from "../theme";
 import {
-  dimBackdrop,
   FONT_SANS,
   glassPanel,
   modalActionButtonStyle,
   serifTitle,
 } from "../theme";
+import { Modal } from "./Modal";
 
 interface BookmarkModalProps {
   editor: BookmarkEditorState;
@@ -44,49 +44,48 @@ export function BookmarkModal({
   accent,
 }: BookmarkModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  // Layout effect, not a plain effect — see MeasureJumpModal for why the
-  // focus/select has to land in the same commit as the first render.
-  useLayoutEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, []);
 
   const range = editor.kind === "create" ? editor : editor.bookmark;
   const rangeLabel = selectionLabelForRange(range);
   const canSave =
     nameDraft.trim().length > 0 && (editor.kind === "edit" || boundsValid);
 
+  const title =
+    editor.kind === "create" ? "Bookmark this range" : "Rename bookmark";
+
   return (
-    <>
-      <div
-        role="presentation"
-        style={{ ...dimBackdrop(), zIndex: 199 }}
-        onClick={onCancel}
-        onKeyDown={(e) => {
-          if ((e as unknown as KeyboardEvent).key === "Escape") {
-            onCancel();
+    <Modal
+      label={title}
+      onClose={onCancel}
+      onShow={() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }}
+      style={{
+        ...glassPanel(theme, 24, 160),
+        borderRadius: 16,
+        padding: "24px 28px",
+        boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
+        width: 300,
+        maxWidth: "calc(100vw - 48px)",
+        boxSizing: "border-box",
+      }}
+    >
+      {/* noValidate: `canSave` is the validation, and it already disables
+          Save. The From/To inputs carry min/max, so without this the browser
+          would also validate on submit (Enter in any field) and block an
+          out-of-range bound with its own error bubble, a second and
+          differently worded check on top of ours. */}
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canSave) {
+            onSave();
           }
         }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          zIndex: 200,
-          ...glassPanel(theme, 24, 160),
-          borderRadius: 16,
-          padding: "24px 28px",
-          boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
-          width: 300,
-          maxWidth: "calc(100vw - 48px)",
-          boxSizing: "border-box",
-        }}
       >
-        <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>
-          {editor.kind === "create" ? "Bookmark this range" : "Rename bookmark"}
-        </div>
+        <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>{title}</div>
         {editor.kind === "create" ? (
           <div
             style={{
@@ -149,11 +148,6 @@ export function BookmarkModal({
           onInput={(e) =>
             onNameDraftChange((e.target as HTMLInputElement).value)
           }
-          onKeyDown={(e) => {
-            if ((e as unknown as KeyboardEvent).key === "Enter") {
-              onSave();
-            }
-          }}
           style={{
             width: "100%",
             boxSizing: "border-box",
@@ -205,8 +199,7 @@ export function BookmarkModal({
               Cancel
             </button>
             <button
-              type="button"
-              onClick={onSave}
+              type="submit"
               disabled={!canSave}
               style={modalActionButtonStyle(theme, "accent", accent, canSave)}
             >
@@ -214,8 +207,8 @@ export function BookmarkModal({
             </button>
           </div>
         </div>
-      </div>
-    </>
+      </form>
+    </Modal>
   );
 }
 

@@ -1,11 +1,7 @@
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
-import {
-  type ThemeTokens,
-  chipToggleButtonStyle,
-  glassPanel,
-  radius,
-  serifTitle,
-} from "../theme";
+import { type ThemeTokens, chipToggleButtonStyle, radius } from "../theme";
+import { Drawer } from "./Drawer";
+import { ModalHeader } from "./Modal";
 import { ResetIcon } from "./icons";
 
 interface SettingsDrawerProps {
@@ -40,158 +36,110 @@ export function SettingsDrawer({
   onPlayalongCountInChange,
 }: SettingsDrawerProps) {
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        role="button"
-        tabIndex={-1}
-        onClick={onClose}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" || e.key === "Enter") {
-            onClose();
-          }
-        }}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.18)",
-          opacity: open ? 1 : 0,
-          pointerEvents: open ? "auto" : "none",
-          transition: "opacity 0.25s ease",
-          zIndex: 10,
-        }}
+    <Drawer
+      open={open}
+      onClose={onClose}
+      side="right"
+      label="Settings"
+      style={{
+        width: 320,
+        background: theme.panelSolid,
+        borderLeft: `0.5px solid ${theme.border}`,
+        boxShadow: "-20px 0 40px rgba(0,0,0,0.18)",
+        padding: "22px 24px",
+        gap: 18,
+        color: theme.ink,
+        overflowY: "auto",
+      }}
+    >
+      <ModalHeader
+        theme={theme}
+        title="Settings"
+        onClose={onClose}
+        closeLabel="Close settings"
       />
-      {/* Panel */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 320,
-          background: theme.panelSolid,
-          borderLeft: `0.5px solid ${theme.border}`,
-          boxShadow: open ? "-20px 0 40px rgba(0,0,0,0.18)" : "none",
-          transform: open ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 0.32s cubic-bezier(.32,.72,.36,1)",
-          padding: "22px 24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 18,
-          color: theme.ink,
-          zIndex: 11,
-          overflowY: "auto",
-        }}
-      >
-        {/* Header */}
-        <div
+
+      {/* Tracks (if multiple) */}
+      {tracks.length > 1 && (
+        <DrawerRow theme={theme} label="Tracks" hint="">
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {tracks.map((track) => (
+              <label
+                key={track.index}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedTracks.includes(track.index)}
+                  onChange={() => onTrackToggle(track.index)}
+                  style={{ accentColor: accent }}
+                />
+                <span style={{ color: theme.ink }}>
+                  {track.name} ({track.noteCount} notes)
+                </span>
+              </label>
+            ))}
+          </div>
+        </DrawerRow>
+      )}
+
+      {/* Playalong Mode section */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <span
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: theme.inkSoft,
           }}
         >
-          <span style={serifTitle(theme, 22)}>Settings</span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close settings"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: theme.inkSoft,
-              cursor: "pointer",
-              fontSize: 18,
-              padding: 4,
-              outline: "none",
-            }}
-          >
-            ✕
-          </button>
-        </div>
+          Playalong Mode
+        </span>
 
-        {/* Tracks (if multiple) */}
-        {tracks.length > 1 && (
-          <DrawerRow theme={theme} label="Tracks" hint="">
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {tracks.map((track) => (
-                <label
-                  key={track.index}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    cursor: "pointer",
-                    fontSize: 12,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedTracks.includes(track.index)}
-                    onChange={() => onTrackToggle(track.index)}
-                    style={{ accentColor: accent }}
-                  />
-                  <span style={{ color: theme.ink }}>
-                    {track.name} ({track.noteCount} notes)
-                  </span>
-                </label>
-              ))}
-            </div>
-          </DrawerRow>
-        )}
+        <ToggleRow
+          theme={theme}
+          accent={accent}
+          label="Play music aloud"
+          options={[
+            { label: "On", value: true },
+            { label: "Off", value: false },
+          ]}
+          value={playalongPlayMusic}
+          onChange={onPlayalongPlayMusicChange}
+        />
 
-        {/* Playalong Mode section */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: theme.inkSoft,
-            }}
-          >
-            Playalong Mode
-          </span>
+        <ToggleRow
+          theme={theme}
+          accent={accent}
+          label="Metronome"
+          options={[
+            { label: "On", value: true },
+            { label: "Off", value: false },
+          ]}
+          value={playalongMetronome}
+          onChange={onPlayalongMetronomeChange}
+        />
 
-          <ToggleRow
-            theme={theme}
-            accent={accent}
-            label="Play music aloud"
-            options={[
-              { label: "On", value: true },
-              { label: "Off", value: false },
-            ]}
-            value={playalongPlayMusic}
-            onChange={onPlayalongPlayMusicChange}
-          />
-
-          <ToggleRow
-            theme={theme}
-            accent={accent}
-            label="Metronome"
-            options={[
-              { label: "On", value: true },
-              { label: "Off", value: false },
-            ]}
-            value={playalongMetronome}
-            onChange={onPlayalongMetronomeChange}
-          />
-
-          <ToggleRow
-            theme={theme}
-            accent={accent}
-            label="Start on"
-            options={[
-              { label: "Count-in", value: true },
-              { label: "First played note", value: false },
-            ]}
-            value={playalongCountIn}
-            onChange={onPlayalongCountInChange}
-          />
-        </div>
+        <ToggleRow
+          theme={theme}
+          accent={accent}
+          label="Start on"
+          options={[
+            { label: "Count-in", value: true },
+            { label: "First played note", value: false },
+          ]}
+          value={playalongCountIn}
+          onChange={onPlayalongCountInChange}
+        />
       </div>
-    </>
+    </Drawer>
   );
 }
 
@@ -228,7 +176,12 @@ function ToggleRow({
           alignItems: "center",
           gap: 2,
           padding: "3px 4px",
-          ...glassPanel(theme),
+          // glassPanel's colours without its backdrop-filter: on the drawer's
+          // solid background the blur had nothing to blur, but the GPU still
+          // recomputed it every frame of the drawer's slide, which made the
+          // settings drawer choppy on a phone.
+          background: theme.panel,
+          border: `0.5px solid ${theme.border}`,
           borderRadius: radius.md,
           flexShrink: 0,
         }}

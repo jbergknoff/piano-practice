@@ -2,16 +2,15 @@ import { useEffect, useState } from "preact/hooks";
 import type { PianoController, PianoSource } from "../hooks/use-piano";
 import type { ThemeTokens } from "../theme";
 import {
-  dimBackdrop,
   FONT_MONO,
   FONT_SANS,
   glassPanel,
   hexA,
   modalActionButtonStyle,
   radius,
-  serifTitle,
 } from "../theme";
 import { BluetoothIcon, PianoIcon, UsbIcon } from "./icons";
+import { Modal, ModalHeader } from "./Modal";
 
 // Coarse browser detection — only used to tailor the unsupported message.
 const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
@@ -224,12 +223,7 @@ export function ConnectionBadge({
     piano.connectMidi();
   }
 
-  const modalBaseStyle = {
-    position: "fixed" as const,
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    zIndex: 300,
+  const modalStyle = {
     background: theme.panelSolid,
     border: `0.5px solid ${theme.border}`,
     borderRadius: 20,
@@ -240,19 +234,6 @@ export function ConnectionBadge({
     display: "flex",
     flexDirection: "column" as const,
     gap: 14,
-  };
-
-  const backdropStyle = { ...dimBackdrop(), zIndex: 299 };
-
-  const closeButtonStyle = {
-    background: "transparent",
-    border: "none",
-    color: theme.inkSoft,
-    cursor: "pointer",
-    fontSize: 18,
-    padding: 4,
-    outline: "none",
-    lineHeight: 1,
   };
 
   return (
@@ -303,251 +284,202 @@ export function ConnectionBadge({
       )}
 
       {showUnsupportedModal && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
-          <div
-            style={backdropStyle}
-            onClick={() => setShowUnsupportedModal(false)}
+        <Modal
+          label="Can't connect a piano"
+          onClose={() => setShowUnsupportedModal(false)}
+          style={modalStyle}
+        >
+          <ModalHeader
+            theme={theme}
+            title="Can't connect a piano"
+            titleSize={20}
+            onClose={() => setShowUnsupportedModal(false)}
           />
-          <div style={modalBaseStyle}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={serifTitle(theme, 20)}>Can't connect a piano</span>
-              <button
-                type="button"
-                onClick={() => setShowUnsupportedModal(false)}
-                style={closeButtonStyle}
-              >
-                ✕
-              </button>
-            </div>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                color: theme.inkSoft,
-                lineHeight: 1.6,
-              }}
-            >
-              {unsupportedBody(accent)}
-            </p>
-          </div>
-        </>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: theme.inkSoft,
+              lineHeight: 1.6,
+            }}
+          >
+            {unsupportedBody(accent)}
+          </p>
+        </Modal>
       )}
 
       {showChooserModal && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
-          <div
-            style={backdropStyle}
-            onClick={() => setShowChooserModal(false)}
+        <Modal
+          label="Connect a piano"
+          onClose={() => setShowChooserModal(false)}
+          style={modalStyle}
+        >
+          <ModalHeader
+            theme={theme}
+            title="Connect a piano"
+            titleSize={20}
+            onClose={() => setShowChooserModal(false)}
           />
-          <div style={modalBaseStyle}>
-            <div
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: theme.inkSoft,
+              lineHeight: 1.6,
+            }}
+          >
+            How is your piano connected?
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setShowChooserModal(false);
+                piano.connectBluetooth();
+              }}
               style={{
+                ...modalActionButtonStyle(theme, "accent", accent),
+                width: "100%",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={serifTitle(theme, 20)}>Connect a piano</span>
-              <button
-                type="button"
-                onClick={() => setShowChooserModal(false)}
-                style={closeButtonStyle}
-              >
-                ✕
-              </button>
-            </div>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                color: theme.inkSoft,
-                lineHeight: 1.6,
-              }}
-            >
-              How is your piano connected?
-            </p>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
+                justifyContent: "center",
                 gap: 8,
               }}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setShowChooserModal(false);
-                  piano.connectBluetooth();
-                }}
-                style={{
-                  ...modalActionButtonStyle(theme, "accent", accent),
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                <BluetoothIcon size={13} />
-                Bluetooth
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowChooserModal(false);
-                  piano.connectMidi();
-                }}
-                style={{
-                  ...modalActionButtonStyle(theme, "accent", accent),
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                <UsbIcon size={13} />
-                USB (Web MIDI)
-              </button>
-            </div>
+              <BluetoothIcon size={13} />
+              Bluetooth
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowChooserModal(false);
+                piano.connectMidi();
+              }}
+              style={{
+                ...modalActionButtonStyle(theme, "accent", accent),
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <UsbIcon size={13} />
+              USB (Web MIDI)
+            </button>
           </div>
-        </>
+        </Modal>
       )}
 
       {showStatusModal && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
-          <div
-            style={backdropStyle}
-            onClick={() => setShowStatusModal(false)}
+        <Modal
+          label="Piano connection"
+          onClose={() => setShowStatusModal(false)}
+          style={modalStyle}
+        >
+          <ModalHeader
+            theme={theme}
+            title="Piano connection"
+            titleSize={20}
+            onClose={() => setShowStatusModal(false)}
           />
-          <div style={modalBaseStyle}>
-            <div
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              color: theme.ink,
+            }}
+          >
+            <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#5E8C5A",
+                flexShrink: 0,
               }}
-            >
-              <span style={serifTitle(theme, 20)}>Piano connection</span>
-              <button
-                type="button"
-                onClick={() => setShowStatusModal(false)}
-                style={closeButtonStyle}
-              >
-                ✕
-              </button>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 13,
-                color: theme.ink,
-              }}
-            >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "#5E8C5A",
-                  flexShrink: 0,
-                }}
-              />
-              {piano.deviceName}
-              <span style={{ color: theme.inkSoft }}>
-                {piano.source === "midi" ? "· via MIDI" : "· via Bluetooth"}
-              </span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setShowStatusModal(false)}
-                style={modalActionButtonStyle(theme, "accent", accent)}
-              >
-                Done
-              </button>
-            </div>
+            />
+            {piano.deviceName}
+            <span style={{ color: theme.inkSoft }}>
+              {piano.source === "midi" ? "· via MIDI" : "· via Bluetooth"}
+            </span>
           </div>
-        </>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => setShowStatusModal(false)}
+              style={modalActionButtonStyle(theme, "accent", accent)}
+            >
+              Done
+            </button>
+          </div>
+        </Modal>
       )}
 
       {showErrorModal && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop only closes */}
-          <div style={backdropStyle} onClick={() => setShowErrorModal(false)} />
-          <div style={modalBaseStyle}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={serifTitle(theme, 20)}>Connection failed</span>
-              <button
-                type="button"
-                onClick={() => setShowErrorModal(false)}
-                style={closeButtonStyle}
-              >
-                ✕
-              </button>
-            </div>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                color: theme.inkSoft,
-                lineHeight: 1.6,
-              }}
-            >
-              {errorBody(accent, piano.source)}
-            </p>
-            <div
-              style={{
-                margin: 0,
-                padding: "10px 12px",
-                fontFamily: FONT_MONO,
-                fontSize: 11.5,
-                lineHeight: 1.5,
-                color: theme.ink,
-                background: hexA(theme.inkFaint, 0.12),
-                border: `0.5px solid ${theme.border}`,
-                borderRadius: radius.md,
-                userSelect: "text",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {piano.error ?? "Connection failed"}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowErrorModal(false)}
-                style={modalActionButtonStyle(theme, "accent", accent)}
-              >
-                Okay
-              </button>
-            </div>
+        <Modal
+          label="Connection failed"
+          onClose={() => setShowErrorModal(false)}
+          style={modalStyle}
+        >
+          <ModalHeader
+            theme={theme}
+            title="Connection failed"
+            titleSize={20}
+            onClose={() => setShowErrorModal(false)}
+          />
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: theme.inkSoft,
+              lineHeight: 1.6,
+            }}
+          >
+            {errorBody(accent, piano.source)}
+          </p>
+          <div
+            style={{
+              margin: 0,
+              padding: "10px 12px",
+              fontFamily: FONT_MONO,
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              color: theme.ink,
+              background: hexA(theme.inkFaint, 0.12),
+              border: `0.5px solid ${theme.border}`,
+              borderRadius: radius.md,
+              userSelect: "text",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {piano.error ?? "Connection failed"}
           </div>
-        </>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              justifyContent: "flex-end",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowErrorModal(false)}
+              style={modalActionButtonStyle(theme, "accent", accent)}
+            >
+              Okay
+            </button>
+          </div>
+        </Modal>
       )}
     </>
   );

@@ -21,7 +21,7 @@ App-internal code (under `lib/` and `src/`):
 - `lib/midi/` — `midi-player.ts` (Web Audio playback), `ble-midi.ts` (BLE MIDI packet parse/build), `web-midi.ts` (Web MIDI message parse/build)
 - `lib/circular-buffer/` — generic O(1) ring buffer
 - `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
-- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens
+- `src/components/` — UI components; `src/components/screens/` holds the two top-level screens. `Modal`/`Drawer`/`ContextMenu` (+ `dialog-support.ts`, which also has the shared `useModalDialog` lifecycle hook) are the shared `<dialog>` shells every modal, drawer and menu is built on — see "Modals, drawers and menus"
 - `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `piano-preference.ts` (the remembered transport), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-file-history.ts`, `use-file-library.ts`, `use-bookmarks.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts` (also owns the `PracticeMode` type), `note-colors.ts`
 - `tests/unit/` — cross-package unit tests that span more than one package (e.g. layout fed by MIDI-derived MusicXML)
@@ -70,7 +70,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/hooks/use-piano.ts` | Unified piano-connection controller: merges the two input transports (`useBluetooth` + `useWebMidi`) into one status/error/device view and exposes `connectBluetooth`/`connectMidi` + `bluetoothSupported`/`midiSupported`, routing `sendNote`/`sendNotesBatch` to whichever transport is connected. App calls this (not `useBluetooth` directly) and passes the result down as the `piano` prop. There is deliberately no auto-select/guessing between transports (an earlier version tried to infer Web MIDI vs Bluetooth from permission state, which was fragile and unpredictable — see git history on this file for the abandoned approach) — the UI always asks the user explicitly, since only the user reliably knows how their piano is connected. `connectBluetooth`/`connectMidi` each resolve to whether the attempt ended up connected. It also owns `suggestedSource` — the transport that last connected successfully (persisted via `piano-preference.ts`), which the badge uses to skip the chooser on the first tap. This is **remembering, not guessing**: it is only ever written after a transport actually connects, and it clears itself (`shortcutSpent`) as soon as an attempt fails, so the very next tap falls back to the chooser. That escape hatch is load-bearing — without it, a user whose last session was Bluetooth could never reach USB, since every tap would re-open the Bluetooth picker. |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input transport (Web Bluetooth); calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/hooks/use-web-midi.ts` | Web MIDI input transport (`navigator.requestMIDIAccess`); same surface as `useBluetooth`. Listens on **every** real input port (filtering out the ALSA "MIDI Through" loopback via `isThroughPort`) so it doesn't matter which port is the piano. Sees USB pianos and, on Linux, BLE pianos that BlueZ bridges to ALSA (which Web Bluetooth can't reach once BlueZ's MIDI plugin claims the GATT service). **Auto-reconnects silently on mount** when `navigator.permissions.query({name:"midi"})` reports `"granted"`: unlike Web Bluetooth's per-device grant, the Web MIDI permission is persistent, origin-scoped, and needs no user gesture, so a USB piano reconnects with zero taps. The permission check is the gate that keeps this silent — calling `requestMIDIAccess` unguarded could raise a prompt with no gesture behind it — and a failed auto-attempt falls back to `"idle"` rather than `"error"`, so no modal appears on load |
-| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `dimBackdrop`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass/backdrop recipes go through here — don't re-type the literals in components |
+| `src/theme.ts` | Design tokens (color themes + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `closeButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass recipes go through here (the modal/drawer backdrops are `::backdrop` rules in `src/components/dialog-support.ts`) — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
 ### Mode system
@@ -173,6 +173,66 @@ bottleneck.)
 - **Top-right** — fullscreen/landscape toggle (`FullscreenButton`); chosen because it is the only corner with no other chrome, and the top-left row already runs out of width in portrait on a phone. `LandingScreen` places the same button in the same spot.
 - **Bottom-left** — range selector (bookmark icon), Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
+
+### Modals, drawers and menus
+
+Every modal, drawer and menu is built on a native element, never a positioned
+`<div>` over a hand-made backdrop:
+
+- **`Modal`** (`src/components/Modal.tsx`) — a `<dialog>` opened with
+  `showModal()` when it mounts and closed when it unmounts, so callers render it
+  conditionally (`{open && <Modal …>}`) and get `onClose` for Escape, a backdrop
+  click, or the header ✕ (`ModalHeader`). `onShow` runs in the same layout
+  effect as `showModal()`, which is where an input should be focused/selected
+  (see the jump-to-measure flake below: it must land in the first commit, and
+  after `showModal()` moves focus). `NumberPromptModal` (custom tempo, jump to
+  measure), `BookmarkModal`, `ResultModal`, the Help and piano-connection modals
+  and the piece-info modal are all `Modal`s.
+- **`Drawer`** (`src/components/Drawer.tsx`) — also a `showModal()` `<dialog>`,
+  pinned full-height to one side, always mounted and driven by an `open` prop.
+  It slides, but the slide is **sequenced around `showModal()`'s cost**.
+  `showModal()` makes the rest of the page inert, and flipping inertness
+  restyles every element: with the full Rondo score on screen (~18,000
+  elements) that is one ~30–50 ms frame on a fast desktop and ~150–250 ms at 4×
+  CPU throttling. So opening calls `showModal()` with the panel still offscreen
+  and sets `data-shown` (the CSS that slides it in) two frames later; closing
+  removes `data-shown`, waits for the slide-out's animations to finish, and
+  only then calls `close()`, so the un-inert restyle happens after the drawer is
+  gone. Escape is routed through the same path by intercepting the dialog's
+  `cancel` event. Measured in Chromium (4× throttle): the slide-out starts at
+  once instead of after a ~200 ms pause, and neither slide has a frame over
+  ~20 ms; the pause before the slide-in can't be avoided while using
+  `showModal()`. Because `close()` waits for the slide, no `@starting-style` or
+  `allow-discrete` transitions are needed. Reduced motion skips the slide. An
+  earlier attempt used a popover instead to dodge the inert cost; it needed a
+  hand-built scrim and Escape handling and was dropped. (Ariakit hit the same
+  `inert` cost: https://github.com/ariakit/ariakit/issues/7697.) Settings and
+  Ranges are `Drawer`s.
+- **`ContextMenu`** (`src/components/ContextMenu.tsx`) — also a `showModal()`
+  `<dialog>`, positioned at the click, with a **transparent** backdrop. It is
+  deliberately not a popover: a popover's light dismiss lets the dismissing
+  click through to whatever is underneath (closing the menu by clicking where
+  Play is would also press Play), whereas a modal dialog makes the page inert,
+  so a click or right-click outside the menu only closes it — the behaviour the
+  old invisible full-screen catcher `<div>` had. (A popover would also be
+  dismissed by the very click that opens it, since Chrome fires `contextmenu`
+  while the button is still down.)
+
+What this buys: the **top layer** (a modal paints above everything, whatever
+the z-index or stacking context of the component rendering it — the old
+cursor-over-modal bug in `modal-layering.spec.ts` can't come back), Escape,
+and an inert page behind a modal. The structural CSS these need (`::backdrop`,
+resetting the UA's `<dialog>` styles)
+lives in `src/components/dialog-support.ts` and is injected once at module
+load; colours and spacing stay inline at each call site. Backdrop clicks are
+handled there too (`useCloseOnBackdropClick`), as a listener rather than an
+`onClick` on a backdrop element, so there are no
+`useKeyWithClickEvents` suppressions to make. **Attach dialog listeners in
+`useLayoutEffect`, not `useEffect`**: Preact runs `useEffect` after paint, so a
+listener attached there misses any click that lands between `showModal()` (in
+a layout effect) and the deferred effect; the dialog already blocks the page
+but the click closes nothing. That race failed `dialogs.spec.ts` in CI; the
+spec now dispatches a click in exactly that gap. Regression: `dialogs.spec.ts`.
 
 ### Forcing landscape
 
@@ -326,7 +386,8 @@ the next frame, and the spec's `input.fill("2")` raced it. select()-then-fill
 leaves a collapsed caret (what the baseline captured); fill()-then-select
 leaves the value highlighted permanently, so `toHaveScreenshot`'s retries could
 never converge. Fixed on both sides: the three autofocusing modals
-(`MeasureJumpModal`, `BookmarkModal`, `BpmInputModal`) now use
+(then `MeasureJumpModal`, `BookmarkModal`, `BpmInputModal`; today
+`NumberPromptModal` and `BookmarkModal`, via `Modal`'s `onShow`) now use
 `useLayoutEffect`, so focus+select lands in the same commit as the first render
 and there is no window left to lose — this is a real user-facing bug too, since
 a keystroke landing in that window gets retroactively selected and replaced by
