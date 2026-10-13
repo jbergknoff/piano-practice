@@ -2,7 +2,7 @@
  * Demo mode: a desktop-only profiling harness, activated by the `?demo=1` URL
  * query parameter. It installs an inert fake `navigator.bluetooth` so the app
  * reaches `status: "connected"` without real hardware (which makes Playalong
- * selectable and gives count-in's `bluetooth.sendNote` a target). The simulated
+ * selectable and gives the count-in's hi-hat a target). The simulated
  * key presses themselves are NOT fed through this adapter — PracticeScreen's
  * demo feeder drives the App-owned note-event dispatch ref directly, which is
  * the exact path real BLE input ends up calling, so a captured performance

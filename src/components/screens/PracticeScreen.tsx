@@ -14,8 +14,8 @@ import type { DebugBeatEvent } from "../../debug-log";
 import type { PianoController } from "../../hooks/use-piano";
 import { useBookmarks } from "../../hooks/use-bookmarks";
 import {
-  type BluetoothHandle,
   type ModeControl,
+  type PianoOutput,
   type PiecePlayback,
   type PracticeMode,
   type RangeNavigation,
@@ -272,18 +272,14 @@ export function PracticeScreen({
     return p ? p.currentBeat : null;
   }, []);
 
-  // Stable BluetoothHandle that reads from a ref so identity stays constant.
+  // Stable PianoOutput that reads from a ref so identity stays constant.
   const pianoRef = useRef(piano);
   pianoRef.current = piano;
-  const bluetoothHandle = useMemo<BluetoothHandle>(
+  const pianoOutput = useMemo<PianoOutput>(
     () => ({
-      get status() {
-        return pianoRef.current.status;
-      },
-      sendNote: (note, velocity, durationMs, channel) =>
-        pianoRef.current.sendNote(note, velocity, durationMs, channel),
-      sendNotesBatch: (notes, channel) =>
-        pianoRef.current.sendNotesBatch(notes, channel),
+      // Channel 10 (index 9) is General MIDI percussion; note 42 is a closed
+      // hi-hat. 80 ms is just long enough to sound.
+      playHiHat: (velocity) => pianoRef.current.sendNote(42, velocity, 80, 9),
     }),
     [],
   );
@@ -311,7 +307,7 @@ export function PracticeScreen({
 
   const control: ModeControl = {
     player: playerHandle,
-    bluetooth: bluetoothHandle,
+    piano: pianoOutput,
     setCursor,
     setIsPlaying,
     currentBeat,

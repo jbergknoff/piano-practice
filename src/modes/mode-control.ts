@@ -8,7 +8,6 @@ import type {
 } from "../../lib/midi/beat-scheduler";
 import type { NoteTrack, ScheduledChordNote } from "../../lib/midi/note-track";
 import type { DebugBeatEvent } from "../debug-log";
-import type { BtStatus } from "../hooks/use-bluetooth";
 import type { MeasureRange, NamedRange } from "../selection";
 
 // Re-exported from the display package (its public API) so the rest of the app
@@ -37,10 +36,10 @@ export interface PlayerHandle {
    */
   currentBeat(): number;
   /**
-   * Add a track (e.g. a metronome `ClickTrack`) to play alongside the piece.
-   * Returns a remover.
+   * Add something to play in time with the piece, on the same clock (e.g. a
+   * metronome `ClickTrack`). Returns a function that takes it off again.
    */
-  addTrack(track: ScheduledTrack): () => void;
+  addPlaybackTrack(track: ScheduledTrack): () => void;
   /**
    * Install transient onPositionUpdate / onEnd callbacks. Returns an
    * uninstaller that restores the values that were in place at install time.
@@ -88,7 +87,7 @@ export function createPlayerHandle(
     },
     state: () => getPlayer()?.state ?? "stopped",
     currentBeat: () => getPlayer()?.currentBeat ?? 0,
-    addTrack: (track) => getPlayer()?.addTrack(track) ?? (() => {}),
+    addPlaybackTrack: (track) => getPlayer()?.addTrack(track) ?? (() => {}),
     installCallbacks: (c) => {
       const p = getPlayer();
       if (!p) {
@@ -128,18 +127,16 @@ export function createPlayerHandle(
   };
 }
 
-export interface BluetoothHandle {
-  status: BtStatus;
-  sendNote: (
-    note: number,
-    velocity: number,
-    durationMs: number,
-    channel?: number,
-  ) => void;
-  sendNotesBatch: (
-    notes: { note: number; velocity: number; durationMs: number }[],
-    channel?: number,
-  ) => void;
+/**
+ * What a mode can play on the connected piano, whichever way it is connected
+ * (Bluetooth or USB). Modes never deal in MIDI notes and channels directly.
+ */
+export interface PianoOutput {
+  /**
+   * A closed hi-hat on the piano's drum kit: the metronome's click, and wait
+   * mode's wrong-note cue. `velocity` (1–127) sets how loud.
+   */
+  playHiHat: (velocity: number) => void;
 }
 
 /**
@@ -154,7 +151,7 @@ export interface RangeNavigation {
 
 export interface ModeControl {
   player: PlayerHandle;
-  bluetooth: BluetoothHandle;
+  piano: PianoOutput;
   setCursor: (beat: number, behavior: "jump" | "smooth") => void;
   setIsPlaying: (playing: boolean) => void;
   /**
