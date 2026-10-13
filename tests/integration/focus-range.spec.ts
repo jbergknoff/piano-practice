@@ -27,7 +27,7 @@ import {
 //
 // ─── Fake-clock arithmetic ────────────────────────────────────────────────────
 //
-// At 120 BPM, one quarter beat = 0.5 s.  MidiPlayer derives:
+// At 120 BPM, one quarter beat = 0.5 s.  BeatScheduler derives:
 //   startAudioTime = fakeNow_at_play + LOOKAHEAD − startBeat × secsPerBeat
 //   elapsedBeat(t) = (t − startAudioTime) × (bpm / 60)
 //

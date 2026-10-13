@@ -8,13 +8,15 @@ import {
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
 import type { ScoreConversion } from "../../../lib/musicxml/musicxml-playback";
 import { SheetMusicDisplay } from "@jbergknoff/sheet-music-display";
-import { MidiPlayer } from "../../../lib/midi/midi-player";
+import { BeatScheduler } from "../../../lib/midi/beat-scheduler";
+import { NoteTrack } from "../../../lib/midi/note-track";
 import type { DebugBeatEvent } from "../../debug-log";
 import type { PianoController } from "../../hooks/use-piano";
 import { useBookmarks } from "../../hooks/use-bookmarks";
 import {
   type BluetoothHandle,
   type ModeControl,
+  type PiecePlayback,
   type PracticeMode,
   type RangeNavigation,
   createPlayerHandle,
@@ -167,7 +169,7 @@ export function PracticeScreen({
 
   // Player effect — keyed on musicxml. Declared first so mode-activation
   // effect (declared below) cleans up before this one disposes the player.
-  const playerRef = useRef<MidiPlayer | null>(null);
+  const playbackRef = useRef<PiecePlayback | null>(null);
   const initialBeatRef = useRef(initialBeat);
   initialBeatRef.current = initialBeat;
   const measureRangeRef = useRef(measureRange);
@@ -179,17 +181,15 @@ export function PracticeScreen({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: bpm/measureRange flow through the player methods + refs
   useEffect(() => {
-    playerRef.current?.dispose();
-    playerRef.current = null;
+    playbackRef.current?.scheduler.dispose();
+    playbackRef.current = null;
     setIsPlaying(false);
     setCurrentBeat(0);
 
     if (musicxml && musicxml.totalBeats > 0) {
-      const player = new MidiPlayer(
-        musicxml.notes,
-        musicxml.totalBeats,
-        bpmRef.current,
-      );
+      const player = new BeatScheduler(musicxml.totalBeats, bpmRef.current);
+      const notes = new NoteTrack(musicxml.notes);
+      player.addTrack(notes);
       const range = measureRangeRef.current;
       if (range) {
         const measureStartBeats = musicxml.measureStartBeats;
@@ -214,27 +214,27 @@ export function PracticeScreen({
         setIsPlaying(false);
         setCursor(beat, "jump");
       };
-      playerRef.current = player;
+      playbackRef.current = { scheduler: player, notes };
       // Jump so the cursor is placed and the sheet scrolls to the start (or the
       // restored position) as soon as the piece loads.
       setCursor(seekBeat, "jump");
     }
 
     return () => {
-      playerRef.current?.dispose();
-      playerRef.current = null;
+      playbackRef.current?.scheduler.dispose();
+      playbackRef.current = null;
     };
   }, [musicxml]);
 
   // BPM changes flow through the live player.
   useEffect(() => {
-    playerRef.current?.setBpm(bpm);
+    playbackRef.current?.scheduler.setBpm(bpm);
   }, [bpm]);
 
   // Measure-range changes: update focusRange + seek + snap (unless wait mode
   // owns the cursor, in which case let the wait hook handle range changes).
   useEffect(() => {
-    const player = playerRef.current;
+    const player = playbackRef.current?.scheduler;
     if (!musicxml) {
       return;
     }
@@ -258,9 +258,9 @@ export function PracticeScreen({
     }
   }, [measureRange, musicxml, setCursor]);
 
-  // Stable PlayerHandle that delegates to the current playerRef value.
+  // Stable PlayerHandle that delegates to the current playbackRef value.
   const playerHandle = useMemo(
-    () => createPlayerHandle(() => playerRef.current),
+    () => createPlayerHandle(() => playbackRef.current),
     [],
   );
 
@@ -268,7 +268,7 @@ export function PracticeScreen({
   // start position even when stopped); null only when there is no player. The
   // play/pause lifecycle of the rAF loop is driven by the `playing` prop below.
   const getLiveBeat = useCallback(() => {
-    const p = playerRef.current;
+    const p = playbackRef.current?.scheduler;
     return p ? p.currentBeat : null;
   }, []);
 
@@ -428,9 +428,9 @@ export function PracticeScreen({
       ? selectionStartBeat(measureRange, musicxml.measureStartBeats)
       : 0;
     clearDebugLog();
-    playerRef.current?.pause();
+    playbackRef.current?.scheduler.pause();
     setIsPlaying(false);
-    playerRef.current?.seek(startBeat);
+    playbackRef.current?.scheduler.seek(startBeat);
     setCursor(startBeat, "jump");
     onModeChange(newMode);
   };

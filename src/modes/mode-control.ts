@@ -1,7 +1,12 @@
 import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
 import type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 import type { VNode } from "preact";
-import type { MidiPlayer } from "../../lib/midi/midi-player";
+import type {
+  BeatScheduler,
+  PlayOptions,
+  ScheduledTrack,
+} from "../../lib/midi/beat-scheduler";
+import type { NoteTrack, ScheduledChordNote } from "../../lib/midi/note-track";
 import type { DebugBeatEvent } from "../debug-log";
 import type { BtStatus } from "../hooks/use-bluetooth";
 import type { MeasureRange, NamedRange } from "../selection";
@@ -13,8 +18,14 @@ export type { NoteHighlight } from "@jbergknoff/sheet-music-display";
 /** The three practice modes, persisted in `FileHistory` and driven by `App`. */
 export type PracticeMode = "wait" | "playalong" | "listen";
 
+/** A piece's playback: the clock, and the piece's notes as a track on it. */
+export interface PiecePlayback {
+  scheduler: BeatScheduler;
+  notes: NoteTrack;
+}
+
 export interface PlayerHandle {
-  play(): Promise<void>;
+  play(options?: PlayOptions): Promise<void>;
   pause(): void;
   seek(beat: number): void;
   setBpm(bpm: number): void;
@@ -25,11 +36,11 @@ export interface PlayerHandle {
    * throttled position update) when timing matters, e.g. scoring a note.
    */
   currentBeat(): number;
-  playCountIn(
-    beats: number,
-    timeSigNum: number,
-    onBeat: (beatIndex: number) => void,
-  ): { cancel: () => void; done: Promise<void> };
+  /**
+   * Add a track (e.g. a metronome `ClickTrack`) to play alongside the piece.
+   * Returns a remover.
+   */
+  addTrack(track: ScheduledTrack): () => void;
   /**
    * Install transient onPositionUpdate / onEnd callbacks. Returns an
    * uninstaller that restores the values that were in place at install time.
@@ -44,27 +55,26 @@ export interface PlayerHandle {
    */
   setAudioRouting(r: {
     skipWebAudio: boolean;
-    onNoteScheduled?: (
-      notes: { noteNumber: number; velocity: number; durationMs: number }[],
-    ) => void;
+    onNoteScheduled?: (notes: ScheduledChordNote[]) => void;
   }): () => void;
 }
 
 /**
- * Build a stable handle that delegates to whatever MidiPlayer the getter
+ * Build a stable handle that delegates to whatever playback the getter
  * currently returns. This lets the handle outlive player recreation (e.g.
- * on track-selection or file changes) — methods become no-ops when no
- * player exists. Uninstallers capture the player at install time and skip
- * restoration if the player has since been replaced.
+ * on file changes) — methods become no-ops when no playback exists.
+ * Uninstallers capture the playback at install time and skip restoration if it
+ * has since been replaced.
  */
 export function createPlayerHandle(
-  getPlayer: () => MidiPlayer | null,
+  getPlayback: () => PiecePlayback | null,
 ): PlayerHandle {
+  const getPlayer = () => getPlayback()?.scheduler ?? null;
   return {
-    play: async () => {
+    play: async (options) => {
       const p = getPlayer();
       if (p) {
-        await p.play();
+        await p.play(options);
       }
     },
     pause: () => {
@@ -78,13 +88,7 @@ export function createPlayerHandle(
     },
     state: () => getPlayer()?.state ?? "stopped",
     currentBeat: () => getPlayer()?.currentBeat ?? 0,
-    playCountIn: (beats, timeSigNum, onBeat) => {
-      const p = getPlayer();
-      if (!p) {
-        return { cancel: () => {}, done: Promise.resolve() };
-      }
-      return p.playCountIn(beats, timeSigNum, onBeat);
-    },
+    addTrack: (track) => getPlayer()?.addTrack(track) ?? (() => {}),
     installCallbacks: (c) => {
       const p = getPlayer();
       if (!p) {
@@ -106,7 +110,7 @@ export function createPlayerHandle(
       };
     },
     setAudioRouting: (r) => {
-      const p = getPlayer();
+      const p = getPlayback()?.notes;
       if (!p) {
         return () => {};
       }
@@ -115,7 +119,7 @@ export function createPlayerHandle(
       p.skipWebAudio = r.skipWebAudio;
       p.onNoteScheduled = r.onNoteScheduled;
       return () => {
-        if (getPlayer() === p) {
+        if (getPlayback()?.notes === p) {
           p.skipWebAudio = prevSkipWebAudio;
           p.onNoteScheduled = prevOnNoteScheduled;
         }

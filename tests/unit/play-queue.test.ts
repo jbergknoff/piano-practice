@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, test } from "bun:test";
-import { notesSoundingAfter } from "../../lib/midi/midi-player";
+import { notesSoundingAfter } from "../../lib/midi/note-track";
 import type { ScoreConversion } from "../../lib/musicxml/musicxml-playback";
 import {
   musicXmlToConversion,

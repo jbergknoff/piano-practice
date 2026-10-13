@@ -327,6 +327,33 @@ test("count-in overlay is visible after starting playalong with count-in enabled
   expect(await getHighlightedNoteIds(page)).toEqual([]);
 });
 
+test("the count-in runs on the audio clock and hands over to scoring at the first beat", async ({
+  page,
+}) => {
+  await loadFile(page, "c-major-melody.mid");
+  await waitForMockBluetoothConnected(page);
+
+  await page.getByRole("button", { name: "Playalong" }).click();
+  await page.getByTitle("Play").click();
+  const countIn = page.getByText("Count in…");
+  await expect(countIn).toBeVisible();
+
+  // Two bars of 4/4 at 120 BPM: the count-in lasts 4 s of audio time (plus the
+  // scheduler's 0.05 s look-ahead). A note pressed during it isn't scored.
+  await advanceAudioTime(page, 3.9);
+  await sendNoteOn(page, E4);
+  await sendNoteOff(page, E4);
+  await page.waitForTimeout(100);
+  expect(await getHighlightedNoteIds(page)).toEqual([]);
+  await expect(countIn).toBeVisible();
+
+  // Past the count-in, the clock is at beat 0.1: E4 (beat 0) is a hit.
+  await advanceAudioTime(page, 0.2);
+  await expect(countIn).toBeHidden();
+  await sendNoteOn(page, E4);
+  await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]);
+});
+
 // c-major-melody.mid: 8 quarter notes, 2 measures of 4/4 at 120 BPM.
 //
 // Beat layout (all voices 0, part 0):

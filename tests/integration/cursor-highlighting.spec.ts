@@ -22,9 +22,9 @@ test.beforeEach(async ({ page }) => {
 
 /**
  * Drive the cursor in listen mode by advancing the fake AudioContext clock.
- * MidiPlayer derives `elapsedBeat = (currentTime - startAudioTime) * bpm/60`,
+ * BeatScheduler derives `elapsedBeat = (currentTime - startAudioTime) * bpm/60`,
  * so advancing the clock by `secs` advances the cursor by `secs * bpm/60`
- * beats. The cursor settles after MidiPlayer's rAF tick fires (one frame +
+ * beats. The cursor settles after BeatScheduler's rAF tick fires (one frame +
  * its 50ms position-emit throttle), so callers should poll the DOM rather
  * than assume the highlight is updated synchronously.
  */
@@ -148,7 +148,7 @@ test("grace notes are highlighted during listen-mode playback alongside notes su
   // opening the measure labelled "6" (measureNumber 5) sits at beats
   // 8.8–8.9 (p0-m5-n0-v0) and 8.9–9.0 (p0-m5-n1-v0), each 0.1 beat long,
   // overlapping notes sustained from the previous chord (p0-m4-n2-v0,
-  // p1-m4-n3-v0/v1). MidiPlayer's elapsedBeat = (currentTime - LOOKAHEAD) *
+  // p1-m4-n3-v0/v1). BeatScheduler's elapsedBeat = (currentTime - LOOKAHEAD) *
   // bpm/60, so landing on beat 8.85 (the first grace's midpoint) takes 4.475s
   // of audio time from a fresh Play.
   await advanceAudioTime(page, 4.475);
