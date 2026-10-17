@@ -8,6 +8,7 @@ import {
   sendChordOn,
   waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
+  waitForRender,
 } from "./helpers";
 
 // repeated-chord.musicxml is a single 4/4 measure: the same C5+E5 chord struck
@@ -50,15 +51,13 @@ test("a held repeated chord advances only one wait point, not through every repe
   // passage produces. These duplicates must NOT advance: the chord was not
   // freshly re-struck, so the wait point stays on beat 2.
   await sendChordOn(page, [C5, E5]);
-  await page.waitForTimeout(120);
   await sendChordOn(page, [C5, E5]);
-  await page.waitForTimeout(120);
+  await waitForRender(page);
   expect(await getHighlightedNoteIds(page)).toEqual([...HL_BEAT2].sort());
 
   // A genuine re-strike (release, then press again) advances one more wait
   // point (beat 2 → 3), proving the chord still advances when actually replayed.
   await sendChordOff(page, [C5, E5]);
-  await page.waitForTimeout(80);
   await sendChordOn(page, [C5, E5]);
   await waitForHighlightedNoteIds(page, HL_BEAT3);
 });

@@ -56,7 +56,6 @@ async function playChord(
 ): Promise<void> {
   await sendChordOn(page, notes);
   await sendChordOff(page, notes);
-  await page.waitForTimeout(120);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -128,7 +127,6 @@ test("playing the slashed graces then the required chord advances to the next wa
   // no wrong-note sound) without blocking the subsequent required chord.
   await sendNoteOn(page, SLASHED_GRACE_E5);
   await sendNoteOn(page, SLASHED_GRACE_A5);
-  await page.waitForTimeout(60);
 
   // Play the required chord while the optional graces are still held. The held
   // graces must not block the advance because they are in optionalNoteNumbers,
@@ -137,7 +135,6 @@ test("playing the slashed graces then the required chord advances to the next wa
   await sendNoteOff(page, SLASHED_GRACE_E5);
   await sendNoteOff(page, SLASHED_GRACE_A5);
   await sendChordOff(page, [REQUIRED_C_SHARP_6, REQUIRED_A3]);
-  await page.waitForTimeout(120);
 
   await waitForHighlightedNoteIds(page, HL_SECOND_BEAT, 3_000);
 });
@@ -167,7 +164,6 @@ test("a duplicate Note On for a sustained chord tone does not block the next adv
   // The instrument re-sends Note On for the still-held C#6 (no intervening
   // Note Off). It must be ignored, not treated as a fresh wrong key.
   await sendNoteOn(page, REQUIRED_C_SHARP_6);
-  await page.waitForTimeout(60);
 
   // Playing the required E4 must advance off the E4 wait point — the sustained
   // C#6 must not block it.

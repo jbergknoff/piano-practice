@@ -10,6 +10,7 @@ import {
   sendNoteOn,
   waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
+  waitForRender,
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
@@ -79,8 +80,8 @@ test("a wrong note does not advance the wait-point highlight", async ({
   await sendNoteOn(page, C5);
   await sendNoteOff(page, C5);
 
-  // Give the app time to (incorrectly) advance, then assert it did not.
-  await page.waitForTimeout(150);
+  // Let any (incorrect) advance render, then assert there was none.
+  await waitForRender(page);
   expect(await getHighlightedNoteIds(page)).toEqual(["p0-m1-n0-v0"]);
 });
 
@@ -99,12 +100,11 @@ test("mashing wrong keys alongside the correct one does not advance", async ({
   // so they are registered before E4 is evaluated.)
   await sendChordOn(page, [C5, E5, B4, E4]);
 
-  await page.waitForTimeout(150);
+  await waitForRender(page);
   expect(await getHighlightedNoteIds(page)).toEqual(["p0-m1-n0-v0"]);
 
   // Release everything, then play E4 cleanly — now it should advance.
   await sendChordOff(page, [C5, E5, B4, E4]);
-  await page.waitForTimeout(120);
   await sendNoteOn(page, E4);
   await sendNoteOff(page, E4);
 
@@ -162,7 +162,6 @@ test("a key released after the completion modal appears is not stuck held into t
   for (const note of [E4, C5, E5]) {
     await sendNoteOn(page, note);
     await sendNoteOff(page, note);
-    await page.waitForTimeout(120);
   }
 
   // Press B4 (the final note) but don't release it yet — completing the
@@ -185,7 +184,6 @@ test("a key released after the completion modal appears is not stuck held into t
   for (const note of [E4, C5, E5]) {
     await sendNoteOn(page, note);
     await sendNoteOff(page, note);
-    await page.waitForTimeout(120);
   }
   await waitForHighlightedNoteIds(page, ["p0-m1-n3-v0"]); // B4 wait point
 

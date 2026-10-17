@@ -63,7 +63,6 @@ async function playChord(
 ): Promise<void> {
   await sendChordOn(page, notes);
   await sendChordOff(page, notes);
-  await page.waitForTimeout(120);
 }
 
 test.beforeEach(async ({ page }) => {

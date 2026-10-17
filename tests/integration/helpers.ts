@@ -192,6 +192,21 @@ export async function advanceAudioTime(
 }
 
 /**
+ * Wait until the page has rendered (and painted) whatever the events sent so
+ * far changed: two animation frames. Note events are handled synchronously and
+ * the highlights render in the same commit, so this is enough to make a
+ * "nothing changed" assertion meaningful, without guessing at a timeout.
+ */
+export async function waitForRender(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+
+/**
  * Read the IDs of all currently-highlighted notes from the DOM. Returns IDs in
  * the canonical `p{part}-m{measure}-n{note}-v{voice}` form.
  */
