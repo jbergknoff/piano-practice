@@ -11,7 +11,6 @@ import {
   ScoreChip,
   formatDate,
 } from "../components/ResultModal";
-import type { WaitModeDebugEvent } from "../debug-log";
 import {
   type WaitModeAttempt,
   clearAttempts,
@@ -20,12 +19,8 @@ import {
   saveAttempt,
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
+import { playbackNoteId } from "../../lib/musicxml/musicxml-playback";
 import {
-  type PlaybackNote,
-  playbackNoteId,
-} from "../../lib/musicxml/musicxml-playback";
-import {
-  type MeasureRange,
   selectionEndBeat,
   selectionKeyForRange,
   selectionLabelForRange,
@@ -33,38 +28,16 @@ import {
 } from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
 import { useStableHighlights } from "./note-colors";
+import {
+  type WaitPoint,
+  buildWaitPoints,
+  initialMatcherState,
+  judgeNoteEvent,
+  rangeBounds,
+  releaseKey,
+} from "./wait-matching";
 
 export type { DebugBeatEvent } from "../debug-log";
-
-export interface WaitPoint {
-  beat: number;
-  noteNumbers: Set<number>;
-  /**
-   * Note numbers of slashed grace notes (acciaccatura) that immediately
-   * precede this wait point. Playing them is allowed and carries no penalty,
-   * but they are not required — the chord is considered complete without them.
-   */
-  optionalNoteNumbers: Set<number>;
-  /**
-   * Note numbers that are tied into this wait point from an earlier note (the
-   * `tieStop` side of a tie). The note is expected to still be sounding, so the
-   * chord is complete only while these are held — but if the user let the tied
-   * note go, it must be pressed again like a required note. Re-pressing one is
-   * never penalised. Kept separate from `noteNumbers` because a still-held tie
-   * needs no fresh attack, whereas every `noteNumbers` entry does.
-   */
-  tiedNoteNumbers: Set<number>;
-  isGrace: boolean;
-  /**
-   * Rendered measure this wait point belongs to (1-based, matching the focus
-   * range numbering). Grace notes are tagged with their main note's measure,
-   * even though the playback layer places them at beats just before the
-   * barline (mainBeat - k * GRACE_NOTE_BEATS), which would otherwise put them
-   * in the previous measure's beat span. Membership and ordering use this, not
-   * the raw beat, so grace notes stay with the measure they render in.
-   */
-  measure: number;
-}
 
 export interface WaitModeSettings {
   noteSensitivityMilliseconds: number;
@@ -72,190 +45,6 @@ export interface WaitModeSettings {
   baseBpm: number;
   accent: string;
   theme: ThemeTokens;
-}
-
-/**
- * Derive the ordered sequence of wait points from a score's playback notes.
- *
- * Slashed grace notes (acciaccatura) are treated as optional — they are not
- * required to advance the wait point, and playing them carries no penalty.
- *
- * When a slashed grace note occupies its own beat (its start beat differs from
- * the main note's beat), that beat is folded forward: the grace note numbers
- * are collected as `optionalNoteNumbers` on the following non-slashed-grace
- * wait point rather than becoming a wait point of their own.
- *
- * When a slashed grace note is clamped to the same beat as its main note (e.g.
- * at the very start of the piece), it is also optional — the beat entry's
- * `optionalNoteNumbers` holds the grace note numbers while `noteNumbers` holds
- * only the required (non-slashed) notes.
- *
- * The `tieStop` side of a tie is not a fresh attack, so it never creates a wait
- * point of its own; instead it is recorded as a tied note on the existing wait
- * point at the same beat (if any), so wait mode can require the note to still be
- * sounding there. A tie that lands on a beat with no other onset is dropped —
- * there is nothing to wait for.
- */
-export function buildWaitPoints(notes: PlaybackNote[]): WaitPoint[] {
-  // Per-beat tracking splits required vs optional vs tied note numbers so that
-  // slashed grace notes remain optional even when clamped to the same beat as
-  // their main note, and tied notes carry their "must still be held" status.
-  const beatMap = new Map<
-    number,
-    {
-      requiredNumbers: Set<number>;
-      optionalNumbers: Set<number>;
-      tiedNumbers: Set<number>;
-      isGrace: boolean;
-      isAllGraceSlash: boolean;
-      measure: number;
-    }
-  >();
-
-  // Tie stops are attached after the wait-point beats are known, so a tie that
-  // coincides with a real onset becomes a tied note on that wait point and a tie
-  // landing on an empty beat is simply ignored.
-  const tieStops: Array<{ beat: number; noteNumber: number }> = [];
-
-  for (const note of notes) {
-    if (note.tieStop) {
-      tieStops.push({ beat: note.startBeat, noteNumber: note.noteNumber });
-      continue;
-    }
-    const isSlashedGrace = (note.isGrace && note.isGraceSlash) ?? false;
-    const existing = beatMap.get(note.startBeat);
-    if (existing) {
-      if (isSlashedGrace) {
-        // Always make the grace optional at the wait point whose beat it
-        // shares — so the user can play it without penalty at that point.
-        // The post-processing pass below (using graceMainBeat) additionally
-        // ensures it is also optional at the main note's wait point.
-        existing.optionalNumbers.add(note.noteNumber);
-      } else {
-        existing.requiredNumbers.add(note.noteNumber);
-        if (!note.isGrace) {
-          // A real note defines the measure; once any non-grace note joins the
-          // group, treat it as that note's (real) measure rather than a grace's.
-          if (existing.isGrace) {
-            existing.measure = note.measureIndex + 1;
-          }
-          existing.isGrace = false;
-        }
-        existing.isAllGraceSlash = false;
-      }
-    } else if (isSlashedGrace) {
-      beatMap.set(note.startBeat, {
-        requiredNumbers: new Set(),
-        optionalNumbers: new Set([note.noteNumber]),
-        tiedNumbers: new Set(),
-        isGrace: true,
-        isAllGraceSlash: true,
-        measure: note.measureIndex + 1,
-      });
-    } else {
-      beatMap.set(note.startBeat, {
-        requiredNumbers: new Set([note.noteNumber]),
-        optionalNumbers: new Set(),
-        tiedNumbers: new Set(),
-        isGrace: note.isGrace ?? false,
-        isAllGraceSlash: false,
-        measure: note.measureIndex + 1,
-      });
-    }
-  }
-
-  // Attach each tie stop to the wait point at its beat. A note that is also
-  // freshly attacked at the same beat (already required) needs a real press, so
-  // it stays in requiredNumbers rather than becoming a held-only tied note.
-  for (const { beat, noteNumber } of tieStops) {
-    const entry = beatMap.get(beat);
-    if (entry && !entry.requiredNumbers.has(noteNumber)) {
-      entry.tiedNumbers.add(noteNumber);
-    }
-  }
-
-  const sorted = Array.from(beatMap.entries())
-    .map(
-      ([
-        beat,
-        {
-          requiredNumbers,
-          optionalNumbers,
-          tiedNumbers,
-          isGrace,
-          isAllGraceSlash,
-          measure,
-        },
-      ]) => ({
-        beat,
-        requiredNumbers,
-        optionalNumbers,
-        tiedNumbers,
-        isGrace,
-        isAllGraceSlash,
-        measure,
-      }),
-    )
-    // Sort by measure first so grace notes — whose beats fall just before the
-    // barline, inside the previous measure's beat span — stay grouped with
-    // the measure they belong to. Within a measure, order by beat.
-    .sort((a, b) => a.measure - b.measure || a.beat - b.beat);
-
-  // Pure slashed-grace beats (no required notes at that beat) are folded into
-  // the following wait point's optional set rather than becoming points of their
-  // own. Beats that mix slashed graces with real or non-slashed-grace notes
-  // keep the slashed graces as local optional notes.
-  const merged: WaitPoint[] = [];
-  const pendingOptional = new Set<number>();
-
-  for (const point of sorted) {
-    if (point.isAllGraceSlash) {
-      for (const noteNumber of point.optionalNumbers) {
-        pendingOptional.add(noteNumber);
-      }
-    } else {
-      const optionalNoteNumbers = new Set(pendingOptional);
-      for (const noteNumber of point.optionalNumbers) {
-        optionalNoteNumbers.add(noteNumber);
-      }
-      merged.push({
-        beat: point.beat,
-        noteNumbers: point.requiredNumbers,
-        optionalNoteNumbers,
-        tiedNoteNumbers: point.tiedNumbers,
-        isGrace: point.isGrace,
-        measure: point.measure,
-      });
-      pendingOptional.clear();
-    }
-  }
-
-  // Post-process: ensure every slashed grace note is optional at the wait
-  // point it actually ornaments. `graceMainBeat` is the exact `beatCursor` value
-  // stored at conversion time — the same double used as the main note's beatMap
-  // key — so this lookup is immune to the floating-point rounding that occurs
-  // when computing `startBeat` as `beatCursor - k * GRACE_NOTE_BEATS`. Without
-  // this, a grace whose startBeat differs by even one ULP from a co-resident
-  // arpeggio note's accumulated beat slips into `pendingOptional`, gets consumed
-  // by the arpeggio's wait point, and never reaches the main chord it ornaments.
-  const beatToMergedIndex = new Map(
-    merged.map((waitPoint, index) => [waitPoint.beat, index]),
-  );
-  for (const note of notes) {
-    if (
-      note.tieStop ||
-      !(note.isGrace && note.isGraceSlash) ||
-      note.graceMainBeat === undefined
-    ) {
-      continue;
-    }
-    const index = beatToMergedIndex.get(note.graceMainBeat);
-    if (index !== undefined) {
-      merged[index].optionalNoteNumbers.add(note.noteNumber);
-    }
-  }
-
-  return merged;
 }
 
 function formatTime(ms: number): string {
@@ -283,31 +72,6 @@ function waitPointCursorBeat(
   return waitPoint.beat;
 }
 
-/**
- * Returns the first wait-point index inside the range and the exclusive end
- * index. Wait points are sorted by (measure, beat), so each measure occupies a
- * contiguous slice; membership is by rendered measure number, which keeps
- * grace notes attached to the measure they render in rather than the previous
- * measure their pre-barline beats fall into.
- */
-function rangeBounds(
-  points: WaitPoint[],
-  range: MeasureRange | null,
-): { first: number; end: number } {
-  if (!range) {
-    return { first: 0, end: points.length };
-  }
-  let first = points.findIndex((p) => p.measure >= range.from);
-  if (first === -1) {
-    first = points.length;
-  }
-  let end = points.findIndex((p) => p.measure > range.to);
-  if (end === -1) {
-    end = points.length;
-  }
-  return { first, end };
-}
-
 export function useWaitMode(
   control: ModeControl,
   settings: WaitModeSettings,
@@ -326,26 +90,10 @@ export function useWaitMode(
   const completionModalRef = useRef(completionModal);
   completionModalRef.current = completionModal;
   const pointIndexRef = useRef(0);
-  const heldNotesRef = useRef<Set<number>>(new Set());
-  // Subset of heldNotesRef: notes the user is currently holding that are NOT
-  // part of the expected chord (they each fired the wrong-note path). While any
-  // of these is held the chord is not considered cleanly played, so advancing
-  // is blocked — this is what stops "mash a fistful of keys" from sliding past
-  // a wait point. Legato/sustained notes carried over from a previous chord
-  // never enter this set (they generate no fresh Note On), and grace-window
-  // forgiven notes are deliberately excluded too.
-  const wrongHeldNotesRef = useRef<Set<number>>(new Set());
-  // Subset of heldNotesRef: keys that received a *fresh* Note On (a press while
-  // the key was not already held) since the last advance. A wait point's
-  // required notes must each appear here to complete the chord — merely holding
-  // a key over from a previous chord is not enough. This is what forces a
-  // repeated note/chord to be re-struck for each occurrence rather than sliding
-  // through on a single sustained hold. Tied notes (`tiedNoteNumbers`) are the
-  // deliberate exception: they may be held over with no fresh press. Cleared on
-  // every advance so each wait point is judged on its own fresh presses.
-  const freshlyPressedNotesRef = useRef<Set<number>>(new Set());
-  const lastAdvanceTimeRef = useRef(0);
-  const wrongNoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which keys are down, which of them are wrong or freshly struck, and when
+  // the last advance was: the input to the pure matching rules in
+  // `wait-matching.ts`, replaced wholesale after every note event.
+  const matcherStateRef = useRef(initialMatcherState());
   const wrongNoteCountRef = useRef(0);
   const attemptStartTimeRef = useRef<number | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
@@ -376,10 +124,7 @@ export function useWaitMode(
   // from a clean slate. Stable (touches only refs) so it can sit in other
   // callbacks' dependency lists without churn.
   const resetAttempt = useCallback(() => {
-    heldNotesRef.current.clear();
-    wrongHeldNotesRef.current.clear();
-    freshlyPressedNotesRef.current.clear();
-    lastAdvanceTimeRef.current = 0;
+    matcherStateRef.current = initialMatcherState();
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
   }, []);
@@ -388,7 +133,7 @@ export function useWaitMode(
   // past the last point (e.g. an empty piece), to the selection start beat.
   // Consolidates the "jump to a wait point" sequence that recurs at every
   // advance, activation, range reset, and manual reset. Does not touch the
-  // live note-matching state (heldNotesRef etc.) — callers that need a fresh
+  // live note-matching state (matcherStateRef) — callers that need a fresh
   // attempt call `resetAttempt` themselves; the grace-anticipation advance
   // deliberately carries some of that state forward instead of resetting it.
   const jumpToPoint = useCallback((index: number) => {
@@ -428,10 +173,6 @@ export function useWaitMode(
     appliedRangeRef.current = controlRef.current.measureRange;
     setCompletionModal(null);
     resetAttempt();
-    if (wrongNoteTimerRef.current !== null) {
-      clearTimeout(wrongNoteTimerRef.current);
-      wrongNoteTimerRef.current = null;
-    }
   }, [control.musicxml]);
 
   // Restart from range start when the active range actually changes. Guarded
@@ -502,270 +243,87 @@ export function useWaitMode(
       // Apply any pending range-change reset before judging this note — see
       // `applyRangeReset`'s comment for why this can't wait for the effect.
       applyRangeReset();
+      const state = matcherStateRef.current;
       if (completionModalRef.current !== null) {
         // The modal blocks new chord matching, but a key release must still be
         // tracked. Otherwise a chord released while the modal is up (e.g. the
-        // final chord of the piece, let go after it completes) never clears
-        // from heldNotesRef, and those notes read as already-held at the start
-        // of the next playthrough.
+        // final chord of the piece, let go after it completes) would read as
+        // already held at the start of the next playthrough.
         if (kind === "off") {
-          heldNotesRef.current.delete(noteNumber);
-          wrongHeldNotesRef.current.delete(noteNumber);
-          freshlyPressedNotesRef.current.delete(noteNumber);
+          matcherStateRef.current = releaseKey(state, noteNumber);
         }
         return;
       }
       const ctrl = controlRef.current;
-      const sensitivityMs = settingsRef.current.noteSensitivityMilliseconds;
-
-      const held = heldNotesRef.current;
-      const now = Date.now();
-      const msSinceAdvance = now - lastAdvanceTimeRef.current;
-
-      // Whether this key was already physically down before this event. A Note On
-      // for an already-held key is a duplicate event (no intervening Note Off),
-      // not a fresh key press — see the wrong-note branch below.
-      const alreadyHeld = kind === "on" && held.has(noteNumber);
-
-      if (kind === "on") {
-        held.add(noteNumber);
-        // A genuine fresh attack (the key was not already down). Duplicate Note
-        // Ons for an already-held key are not fresh presses, so they never make a
-        // held-over note count toward a repeated chord.
-        if (!alreadyHeld) {
-          freshlyPressedNotesRef.current.add(noteNumber);
-        }
-        if (attemptStartTimeRef.current === null) {
-          attemptStartTimeRef.current = now;
-        }
-      } else {
-        held.delete(noteNumber);
-        wrongHeldNotesRef.current.delete(noteNumber);
-        freshlyPressedNotesRef.current.delete(noteNumber);
-        const points = waitPointsRef.current;
-        const idx = pointIndexRef.current;
-        const { end } = rangeBounds(points, ctrl.measureRange);
-        const wp = idx < end ? points[idx] : null;
-        const offBeat = wp?.beat ?? -1;
-        ctrl.appendToDebugLog({
-          mode: "wait",
-          t: now,
-          note: noteNumber,
-          kind: "off",
-          pointIndex: idx,
-          measure: wp?.measure ?? -1,
-          beat: offBeat,
-          expected: wp ? [...wp.noteNumbers, ...wp.tiedNoteNumbers] : [],
-          fresh: [...freshlyPressedNotesRef.current],
-          held: [...held],
-          msSinceAdvance,
-          outcome: "off",
-        });
-        return;
-      }
-
       const points = waitPointsRef.current;
-      const idx = pointIndexRef.current;
       const { first, end } = rangeBounds(points, ctrl.measureRange);
-
-      if (idx >= end) {
+      const pointIndex = pointIndexRef.current;
+      const now = Date.now();
+      const judgement = judgeNoteEvent(
+        state,
+        { noteNumber, kind },
+        {
+          points,
+          pointIndex,
+          end,
+          now,
+          sensitivityMilliseconds:
+            settingsRef.current.noteSensitivityMilliseconds,
+        },
+      );
+      matcherStateRef.current = judgement.state;
+      if (kind === "on" && attemptStartTimeRef.current === null) {
+        attemptStartTimeRef.current = now;
+      }
+      if (judgement.outcome === null) {
         return;
       }
 
-      const wp = points[idx];
-      const expected = wp.noteNumbers;
-      // Tied notes must still be sounding for the chord to be complete, but a
-      // still-held one needs no fresh press. Re-pressing one (after letting it go)
-      // is allowed, so it counts as an accepted note alongside the required ones.
-      const tied = wp.tiedNoteNumbers;
-      const beat = wp.beat;
-      const measure = wp.measure;
-      const heldSnapshot = [...held];
-      // Log the full requirement (fresh-attack notes plus tied-in held notes) so a
-      // chord that won't advance because a released tie is missing is diagnosable.
-      const expectedSnapshot = [...expected, ...tied];
-      const debugBase: Omit<WaitModeDebugEvent, "outcome"> = {
+      const waitPoint = pointIndex < end ? points[pointIndex] : null;
+      ctrl.appendToDebugLog({
         mode: "wait",
         t: now,
         note: noteNumber,
-        kind: "on",
-        pointIndex: idx,
-        measure,
-        beat,
-        expected: expectedSnapshot,
-        fresh: [...freshlyPressedNotesRef.current],
-        held: heldSnapshot,
-        msSinceAdvance,
-      };
+        kind,
+        pointIndex,
+        measure: waitPoint?.measure ?? -1,
+        beat: waitPoint?.beat ?? -1,
+        // The full requirement (fresh-attack notes plus tied-in held notes), so
+        // a chord that won't advance because a released tie is missing is
+        // diagnosable.
+        expected: waitPoint
+          ? [...waitPoint.noteNumbers, ...waitPoint.tiedNoteNumbers]
+          : [],
+        fresh: judgement.freshWhenJudged,
+        held: judgement.heldWhenJudged,
+        msSinceAdvance: now - state.lastAdvanceTime,
+        outcome: judgement.outcome,
+      });
 
-      if (!expected.has(noteNumber) && !tied.has(noteNumber)) {
-        // Slashed grace notes attached to this wait point are optional: playing
-        // them is permitted and carries no penalty, but they are not required.
-        if (wp.optionalNoteNumbers.has(noteNumber)) {
-          ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
-          return;
-        }
-        // When at a non-slashed grace wait point, notes belonging to the next
-        // wait point are "anticipated" — the player naturally presses grace and
-        // main-chord keys in one physical gesture and must not be penalised for
-        // it. If the grace chord is already complete (e.g. the grace note was
-        // debounced on an earlier tick and sits in fresh), also advance now so
-        // both wait points resolve in a single gesture.
-        if (wp.isGrace && !alreadyHeld) {
-          const anticipationIdx = idx + 1;
-          if (anticipationIdx < end) {
-            const anticipatedWp = points[anticipationIdx];
-            if (
-              anticipatedWp.noteNumbers.has(noteNumber) ||
-              anticipatedWp.optionalNoteNumbers.has(noteNumber) ||
-              anticipatedWp.tiedNoteNumbers.has(noteNumber)
-            ) {
-              const currentFresh = freshlyPressedNotesRef.current;
-              const graceComplete =
-                [...expected].every(
-                  (n) => held.has(n) && currentFresh.has(n),
-                ) &&
-                [...tied].every((n) => held.has(n)) &&
-                wrongHeldNotesRef.current.size === 0;
-              if (graceComplete) {
-                lastAdvanceTimeRef.current = now;
-                const savedFresh = new Set(currentFresh);
-                freshlyPressedNotesRef.current.clear();
-                for (const nextNoteNumber of anticipatedWp.noteNumbers) {
-                  if (savedFresh.has(nextNoteNumber)) {
-                    freshlyPressedNotesRef.current.add(nextNoteNumber);
-                  }
-                }
-                jumpToPoint(anticipationIdx);
-                ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
-              } else {
-                ctrl.appendToDebugLog({ ...debugBase, outcome: "optional" });
-              }
-              return;
-            }
-          }
-        }
-        // A Note On for a key that was already held is a duplicate event, not a
-        // fresh wrong key press: some instruments re-send Note On for
-        // sustained/pedalled notes, and the tail of a rolled chord re-articulates
-        // tones that are still down. Such a note must NOT enter wrongHeldNotesRef
-        // — otherwise an upper-chord tone the user is holding across consecutive
-        // wait points would block the next advance even though no new wrong key
-        // was ever pressed. (You physically cannot press an already-down key, so
-        // a fresh wrong press always arrives as a Note On while NOT already held.)
-        if (alreadyHeld) {
-          ctrl.appendToDebugLog({ ...debugBase, outcome: "duplicate" });
-          return;
-        }
-        // Any non-expected note the user is holding blocks the advance (see the
-        // wrongHeldNotesRef check below) — this is what makes mashing fail. We
-        // record it even inside the grace window, because otherwise a wrong key
-        // mashed within `sensitivityMs` of the previous advance would be
-        // forgiven and the correct key alongside it would slide straight past.
-        // The grace window only suppresses the *audible* wrong-note feedback, so
-        // a near-simultaneous fumble around a transition isn't punished twice.
-        wrongHeldNotesRef.current.add(noteNumber);
-        if (msSinceAdvance < sensitivityMs) {
-          ctrl.appendToDebugLog({ ...debugBase, outcome: "grace" });
-          return;
-        }
+      if (judgement.outcome === "wrong") {
         wrongNoteCountRef.current += 1;
         ctrl.piano.playHiHat(55);
-        if (wrongNoteTimerRef.current !== null) {
-          clearTimeout(wrongNoteTimerRef.current);
-        }
-        wrongNoteTimerRef.current = setTimeout(() => {
-          wrongNoteTimerRef.current = null;
-        }, 600);
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "wrong" });
+      }
+      if (judgement.advanceTo === undefined) {
         return;
       }
-
-      // Check chord completion before debounce: if every expected note has been
-      // freshly attacked (and any slashed grace that pre-fills a required note
-      // counts, since a folded grace press carries no intervening advance), the
-      // chord is unambiguously complete and should advance immediately even
-      // within the debounce window. Only debounce when the chord is still
-      // incomplete, to prevent a leftover key from the previous chord from
-      // accidentally triggering a premature advance. Required notes must be
-      // *freshly pressed* — a key merely held over from the previous chord does
-      // not satisfy a repeated note/chord, so each occurrence must be re-struck.
-      // Tied notes are the exception: they only need to remain held (or be
-      // pressed again).
-      const fresh = freshlyPressedNotesRef.current;
-      const chordComplete =
-        [...expected].every((n) => held.has(n) && fresh.has(n)) &&
-        [...tied].every((n) => held.has(n));
-
-      if (!chordComplete && msSinceAdvance < 50) {
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "debounce" });
+      if (judgement.advanceTo < end) {
+        jumpToPoint(judgement.advanceTo);
         return;
       }
-
-      // Even with every expected note down, refuse to advance while the user is
-      // also holding wrong notes. Without this, mashing a handful of keys that
-      // happens to include the right ones would slide past the wait point. The
-      // user must release the extra keys (the chord then advances on the next
-      // press of the expected notes).
-      if (chordComplete && wrongHeldNotesRef.current.size > 0) {
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "extra" });
-        return;
-      }
-
-      if (chordComplete) {
-        lastAdvanceTimeRef.current = now;
-        const nextIdx = idx + 1;
-        // When advancing from a non-slashed grace wait point, capture the notes
-        // pressed in this gesture before clearing so they can be retroactively
-        // credited as fresh presses for the next wait point. Players press grace
-        // and main-chord keys in one gesture; requiring a re-press of
-        // already-held main-chord notes after the grace advances is awkward.
-        const graceAnticipatedFresh =
-          wp.isGrace && nextIdx < end
-            ? new Set(freshlyPressedNotesRef.current)
-            : null;
-        // Each wait point is judged on its own fresh presses; reset the tally so
-        // notes still held into the next chord must be struck again to count.
-        freshlyPressedNotesRef.current.clear();
-        if (graceAnticipatedFresh !== null) {
-          const nextWp = points[nextIdx];
-          for (const nextNoteNumber of nextWp.noteNumbers) {
-            if (graceAnticipatedFresh.has(nextNoteNumber)) {
-              freshlyPressedNotesRef.current.add(nextNoteNumber);
-            }
-          }
-        }
-        if (nextIdx >= end) {
-          // Attempt complete — compute score, persist, show modal.
-          const startTime = attemptStartTimeRef.current;
-          if (startTime !== null) {
-            recordCompletion({
-              wrongNotes: wrongNoteCountRef.current,
-              elapsedMs: now - startTime,
-              totalPoints: end - first,
-            });
-          }
-          wrongNoteCountRef.current = 0;
-          attemptStartTimeRef.current = null;
-          jumpToPoint(first);
-        } else {
-          jumpToPoint(nextIdx);
-        }
-        ctrl.appendToDebugLog({ ...debugBase, outcome: "advance" });
-      } else {
-        // Distinguish "not all notes down yet" (incomplete) from "every note is
-        // down but a required one was held over rather than re-struck" (stale).
-        // The latter is the signature of a repeated note/chord that needs a fresh
-        // attack — without its own outcome it would read as a baffling INCOMPLETE
-        // with expected ⊆ held.
-        const heldComplete =
-          [...expected].every((n) => held.has(n)) &&
-          [...tied].every((n) => held.has(n));
-        ctrl.appendToDebugLog({
-          ...debugBase,
-          outcome: heldComplete ? "stale" : "incomplete",
+      // The last wait point of the range: the attempt is complete — compute
+      // the score, persist it, show the modal, and go back to the start.
+      const startTime = attemptStartTimeRef.current;
+      if (startTime !== null) {
+        recordCompletion({
+          wrongNotes: wrongNoteCountRef.current,
+          elapsedMs: now - startTime,
+          totalPoints: end - first,
         });
       }
+      wrongNoteCountRef.current = 0;
+      attemptStartTimeRef.current = null;
+      jumpToPoint(first);
     },
     [applyRangeReset, jumpToPoint],
   );
