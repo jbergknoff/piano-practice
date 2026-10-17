@@ -1,5 +1,4 @@
 import { useState } from "preact/hooks";
-import { scoreFileAccept } from "../../file-accept";
 import type { LibrarySummary } from "../../hooks/use-file-history";
 import type { LibraryEntry } from "../../hooks/use-file-library";
 import type { PianoController } from "../../hooks/use-piano";
@@ -228,7 +227,7 @@ export function LandingScreen({
         >
           <input
             type="file"
-            accept={scoreFileAccept(navigator.userAgent)}
+            accept=".mid,.midi,.musicxml,.mxl"
             onChange={onFile}
             style={{
               position: "absolute",
