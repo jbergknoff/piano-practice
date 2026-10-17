@@ -256,19 +256,21 @@ export function rangeBounds(
 export const DEBOUNCE_MILLISECONDS = 50;
 
 /**
- * The live state of the keyboard as wait mode sees it. Never mutated: every
- * function here returns a new state.
+ * Which keys are down, and what earlier judgments made of them: the part of
+ * wait mode's state that key presses and releases change. Never mutated:
+ * every function here returns a new one.
  */
-export interface MatcherState {
+export interface KeyPressState {
   /** Every key currently down. */
   held: ReadonlySet<number>;
   /**
-   * The held keys that are NOT part of the expected chord (each fired the
-   * wrong-note path). While any is down the chord is not cleanly played, so
-   * advancing is blocked — this is what stops "mash a fistful of keys" from
-   * sliding past a wait point. Legato notes carried over from a previous chord
-   * never enter it (they generate no fresh Note On), and neither do notes
-   * forgiven inside the grace window.
+   * The held keys that an earlier judgment found wrong (outcome `"wrong"`, or
+   * `"grace"` when forgiven). Kept here, rather than only reported, because
+   * later judgments depend on it: while any of these is still down the chord
+   * is not cleanly played, so advancing is blocked (outcome `"extra"`) — this
+   * is what stops "mash a fistful of keys" from sliding past a wait point.
+   * Legato notes carried over from a previous chord never enter it (they
+   * generate no fresh Note On).
    */
   wrongHeld: ReadonlySet<number>;
   /**
@@ -280,11 +282,11 @@ export interface MatcherState {
    * exception: they may be held over with no fresh press.
    */
   fresh: ReadonlySet<number>;
-  /** When the last advance happened (milliseconds, same clock as `now`). */
+  /** The `time` of the key press that completed the last wait point. */
   lastAdvanceTime: number;
 }
 
-export function initialMatcherState(): MatcherState {
+export function initialKeyPressState(): KeyPressState {
   return {
     held: new Set(),
     wrongHeld: new Set(),
@@ -293,52 +295,61 @@ export function initialMatcherState(): MatcherState {
   };
 }
 
-/** The state after a key is let go: it is no longer held, wrong or fresh. */
+/**
+ * The state after a key is let go: it is no longer held, wrong or fresh. A
+ * release is never judged — letting go can't complete, block or spoil a
+ * chord by itself — so, unlike a press, it needs no wait point to judge it
+ * against.
+ */
 export function releaseKey(
-  state: MatcherState,
+  keys: KeyPressState,
   noteNumber: number,
-): MatcherState {
-  const held = new Set(state.held);
-  const wrongHeld = new Set(state.wrongHeld);
-  const fresh = new Set(state.fresh);
+): KeyPressState {
+  const held = new Set(keys.held);
+  const wrongHeld = new Set(keys.wrongHeld);
+  const fresh = new Set(keys.fresh);
   held.delete(noteNumber);
   wrongHeld.delete(noteNumber);
   fresh.delete(noteNumber);
-  return { ...state, held, wrongHeld, fresh };
+  return { ...keys, held, wrongHeld, fresh };
 }
 
-/** Where the player is, and the rules' one tunable. */
-export interface MatchContext {
+/** Where in the piece the person practising is. */
+export interface PiecePosition {
   points: WaitPoint[];
   /** The wait point being played. */
   pointIndex: number;
   /** One past the last wait point in the selected range (see `rangeBounds`). */
   end: number;
-  /** Current time in milliseconds. */
-  now: number;
-  /**
-   * How long after an advance a wrong note is forgiven without penalty (it
-   * still blocks the chord until released).
-   */
-  sensitivityMilliseconds: number;
 }
 
-export type MatchOutcome = WaitModeDebugEvent["outcome"];
-
-export interface NoteJudgement {
-  state: MatcherState;
+export interface KeyPress {
+  noteNumber: number;
   /**
-   * What the event meant, as recorded in the debug log; `null` for a press
-   * past the end of the range, which there is nothing to judge against.
-   * `"wrong"` is the one outcome the caller penalises.
+   * When the key was pressed, in milliseconds. Any clock will do: the rules
+   * only compare it with the time of the last advance (the debounce and the
+   * wrong-note forgiveness window).
    */
-  outcome: MatchOutcome | null;
+  time: number;
+}
+
+/** What a press can mean, as recorded in the debug log. */
+export type KeyPressOutcome = Exclude<WaitModeDebugEvent["outcome"], "off">;
+
+export interface KeyPressJudgment {
+  keys: KeyPressState;
   /**
-   * Set when the event completed the wait point: the index to move to. Equal
-   * to `context.end` when the last wait point of the range was completed.
+   * What the press meant; `null` for a press past the end of the range, which
+   * there is nothing to judge against. `"wrong"` is the one outcome the
+   * caller penalises.
+   */
+  outcome: KeyPressOutcome | null;
+  /**
+   * Set when the press completed the wait point: the index to move to. Equal
+   * to `position.end` when the last wait point of the range was completed.
    */
   advanceTo?: number;
-  /** The held and freshly pressed keys at the moment the event was judged. */
+  /** The held and freshly pressed keys at the moment the press was judged. */
   heldWhenJudged: number[];
   freshWhenJudged: number[];
 }
@@ -371,35 +382,29 @@ function freshPressesCarriedInto(
   return carried;
 }
 
-/** Judge one key press or release against the current wait point. */
-export function judgeNoteEvent(
-  state: MatcherState,
-  event: { noteNumber: number; kind: "on" | "off" },
-  context: MatchContext,
-): NoteJudgement {
-  const { noteNumber, kind } = event;
-  const { points, pointIndex, end, now, sensitivityMilliseconds } = context;
-  const msSinceAdvance = now - state.lastAdvanceTime;
-
-  if (kind === "off") {
-    const released = releaseKey(state, noteNumber);
-    return {
-      state: released,
-      outcome: "off",
-      heldWhenJudged: [...released.held],
-      freshWhenJudged: [...released.fresh],
-    };
-  }
-
-  const held = new Set(state.held);
-  const wrongHeld = new Set(state.wrongHeld);
-  const fresh = new Set(state.fresh);
+/**
+ * Judge a key press against the current wait point. `sensitivityMilliseconds`
+ * is how long after an advance a wrong note is forgiven without penalty (it
+ * still blocks the chord until released).
+ */
+export function judgeKeyPress(
+  keys: KeyPressState,
+  press: KeyPress,
+  position: PiecePosition,
+  sensitivityMilliseconds: number,
+): KeyPressJudgment {
+  const { noteNumber, time } = press;
+  const { points, pointIndex, end } = position;
+  const msSinceAdvance = time - keys.lastAdvanceTime;
+  const held = new Set(keys.held);
+  const wrongHeld = new Set(keys.wrongHeld);
+  const fresh = new Set(keys.fresh);
 
   // A Note On for a key that is already down is a duplicate event (no Note Off
   // in between), not a fresh key press: some instruments re-send Note On for
   // sustained or pedalled notes, and the tail of a rolled chord re-articulates
   // tones that are still down.
-  const alreadyHeld = state.held.has(noteNumber);
+  const alreadyHeld = keys.held.has(noteNumber);
   held.add(noteNumber);
   if (!alreadyHeld) {
     fresh.add(noteNumber);
@@ -407,15 +412,15 @@ export function judgeNoteEvent(
   const heldWhenJudged = [...held];
   const freshWhenJudged = [...fresh];
   const judged = (
-    outcome: MatchOutcome | null,
-    changes: Partial<MatcherState> = {},
+    outcome: KeyPressOutcome | null,
+    changes: Partial<KeyPressState> = {},
     advanceTo?: number,
-  ): NoteJudgement => ({
-    state: {
+  ): KeyPressJudgment => ({
+    keys: {
       held,
       wrongHeld,
       fresh,
-      lastAdvanceTime: state.lastAdvanceTime,
+      lastAdvanceTime: keys.lastAdvanceTime,
       ...changes,
     },
     outcome,
@@ -465,7 +470,7 @@ export function judgeNoteEvent(
           "advance",
           {
             fresh: freshPressesCarriedInto(nextPoint, fresh),
-            lastAdvanceTime: now,
+            lastAdvanceTime: time,
           },
           nextIndex,
         );
@@ -527,7 +532,7 @@ export function judgeNoteEvent(
       : new Set<number>();
   return judged(
     "advance",
-    { fresh: carriedFresh, lastAdvanceTime: now },
+    { fresh: carriedFresh, lastAdvanceTime: time },
     nextIndex,
   );
 }

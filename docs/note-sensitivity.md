@@ -12,13 +12,13 @@ Note what the grace period does **not** do: it no longer lets an unexpected note
 
 ## Wrong notes block the advance
 
-Matching the expected chord means holding *exactly* the expected notes. `judgeNoteEvent` tracks the currently-held notes that are not part of the expected chord in the matcher state's `wrongHeld` set; while that set is non-empty the advance is refused (`outcome: "extra"`), even when every expected note is also down. Mashing a fistful of keys therefore fails: the extra keys are held alongside the correct one, so the chord is not cleanly played.
+Matching the expected chord means holding *exactly* the expected notes. `judgeKeyPress` tracks the currently-held notes that are not part of the expected chord in the `KeyPressState`'s `wrongHeld` set; while that set is non-empty the advance is refused (`outcome: "extra"`), even when every expected note is also down. Mashing a fistful of keys therefore fails: the extra keys are held alongside the correct one, so the chord is not cleanly played.
 
 Sustained/legato notes carried over from a previous chord never enter that set — they generate no fresh Note On — so legato passages still advance. Only a note that was *unexpected at the moment it was pressed* and is *still held* blocks. A quick brush during a fast run is released almost immediately, so it rarely blocks in practice; a deliberately-held wrong key does.
 
 ## Implementation
 
-The grace check lives in `judgeNoteEvent` in `src/modes/wait-matching.ts`, a pure function that `useWaitMode`'s `onNoteEvent` calls for every key event. The held wrong note is recorded first, then the grace window only decides between the `"grace"` and `"wrong"` outcomes:
+The grace check lives in `judgeKeyPress` in `src/modes/wait-matching.ts`, a pure function that `useWaitMode`'s `onNoteEvent` calls for every key press. The held wrong note is recorded first, then the grace window only decides between the `"grace"` and `"wrong"` outcomes:
 
 ```ts
 wrongHeld.add(noteNumber); // blocks the advance regardless
@@ -28,7 +28,7 @@ if (msSinceAdvance < sensitivityMilliseconds) {
 return judged("wrong"); // the hook buzzes and counts it
 ```
 
-`noteSensitivityMilliseconds` is part of the `WaitModeSettings` object passed into `useWaitMode` and mirrored to `settingsRef`, so the stable `onNoteEvent` callback can pass the latest value to `judgeNoteEvent` without going stale.
+`noteSensitivityMilliseconds` is part of the `WaitModeSettings` object passed into `useWaitMode` and mirrored to `settingsRef`, so the stable `onNoteEvent` callback can pass the latest value to `judgeKeyPress` without going stale.
 
 The 50 ms anti-racing debounce for *correct* notes (`DEBOUNCE_MILLISECONDS`) is unchanged — these are orthogonal concerns. Both are covered by unit tests in `src/modes/wait-matching.test.ts`.
 

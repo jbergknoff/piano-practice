@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   DEBOUNCE_MILLISECONDS,
-  type MatchOutcome,
+  type KeyPressOutcome,
   type WaitPoint,
-  initialMatcherState,
-  judgeNoteEvent,
+  initialKeyPressState,
+  judgeKeyPress,
   releaseKey,
 } from "./wait-matching";
 
@@ -27,45 +27,40 @@ function waitPoint(
 
 /**
  * Plays key events through the matcher the way `useWaitMode` does: keeps the
- * state and the current wait point, and moves to the next point on an advance.
+ * key state and the current wait point, and moves to the next point on an advance.
  * Each event happens `gap` milliseconds after the previous one (default: long
  * enough to be outside every time window).
  */
 function practise(points: WaitPoint[]) {
-  let state = initialMatcherState();
+  let keys = initialKeyPressState();
   let pointIndex = 0;
-  let now = 10_000;
-  function event(
-    kind: "on" | "off",
-    noteNumber: number,
-    gap: number,
-  ): MatchOutcome | null {
-    now += gap;
-    const judgement = judgeNoteEvent(
-      state,
-      { noteNumber, kind },
-      {
-        points,
-        pointIndex,
-        end: points.length,
-        now,
-        sensitivityMilliseconds: SENSITIVITY_MILLISECONDS,
-      },
+  let time = 10_000;
+  function press(noteNumber: number, gap = 1_000): KeyPressOutcome | null {
+    time += gap;
+    const judgment = judgeKeyPress(
+      keys,
+      { noteNumber, time },
+      { points, pointIndex, end: points.length },
+      SENSITIVITY_MILLISECONDS,
     );
-    state = judgement.state;
-    if (judgement.advanceTo !== undefined) {
-      pointIndex = judgement.advanceTo;
+    keys = judgment.keys;
+    if (judgment.advanceTo !== undefined) {
+      pointIndex = judgment.advanceTo;
     }
-    return judgement.outcome;
+    return judgment.outcome;
+  }
+  function release(noteNumber: number, gap = 1_000) {
+    time += gap;
+    keys = releaseKey(keys, noteNumber);
   }
   return {
-    press: (noteNumber: number, gap = 1_000) => event("on", noteNumber, gap),
-    release: (noteNumber: number, gap = 1_000) => event("off", noteNumber, gap),
+    press,
+    release,
     get pointIndex() {
       return pointIndex;
     },
-    get state() {
-      return state;
+    get keys() {
+      return keys;
     },
   };
 }
@@ -76,7 +71,7 @@ const E4 = 64;
 const G4 = 67;
 const WRONG = 70;
 
-describe("judgeNoteEvent", () => {
+describe("judgeKeyPress", () => {
   test("a chord advances once every note is down", () => {
     const player = practise([waitPoint([C4, E4]), waitPoint([D4])]);
     expect(player.press(C4)).toBe("incomplete");
@@ -93,20 +88,15 @@ describe("judgeNoteEvent", () => {
 
   test("a press past the end of the range is not judged, but the key is tracked", () => {
     const points = [waitPoint([C4])];
-    const judgement = judgeNoteEvent(
-      initialMatcherState(),
-      { noteNumber: D4, kind: "on" },
-      {
-        points,
-        pointIndex: 1,
-        end: 1,
-        now: 10_000,
-        sensitivityMilliseconds: SENSITIVITY_MILLISECONDS,
-      },
+    const judgment = judgeKeyPress(
+      initialKeyPressState(),
+      { noteNumber: D4, time: 10_000 },
+      { points, pointIndex: 1, end: 1 },
+      SENSITIVITY_MILLISECONDS,
     );
-    expect(judgement.outcome).toBeNull();
-    expect(judgement.advanceTo).toBeUndefined();
-    expect([...judgement.state.held]).toEqual([D4]);
+    expect(judgment.outcome).toBeNull();
+    expect(judgment.advanceTo).toBeUndefined();
+    expect([...judgment.keys.held]).toEqual([D4]);
   });
 
   test("a wrong key is penalised, and blocks the chord until it is released", () => {
@@ -225,20 +215,15 @@ describe("judgeNoteEvent", () => {
     expect(player.press(E4, 0)).toBe("advance");
   });
 
-  test("judging never mutates the state it was given", () => {
-    const state = initialMatcherState();
-    judgeNoteEvent(
-      state,
-      { noteNumber: WRONG, kind: "on" },
-      {
-        points: [waitPoint([C4])],
-        pointIndex: 0,
-        end: 1,
-        now: 10_000,
-        sensitivityMilliseconds: SENSITIVITY_MILLISECONDS,
-      },
+  test("judging never mutates the key state it was given", () => {
+    const keys = initialKeyPressState();
+    judgeKeyPress(
+      keys,
+      { noteNumber: WRONG, time: 10_000 },
+      { points: [waitPoint([C4])], pointIndex: 0, end: 1 },
+      SENSITIVITY_MILLISECONDS,
     );
-    expect(state).toEqual(initialMatcherState());
+    expect(keys).toEqual(initialKeyPressState());
   });
 });
 
@@ -247,7 +232,7 @@ describe("releaseKey", () => {
     const player = practise([waitPoint([C4, E4])]);
     player.press(WRONG);
     player.press(C4);
-    const released = releaseKey(releaseKey(player.state, WRONG), C4);
+    const released = releaseKey(releaseKey(player.keys, WRONG), C4);
     expect([...released.held]).toEqual([]);
     expect([...released.wrongHeld]).toEqual([]);
     expect([...released.fresh]).toEqual([]);

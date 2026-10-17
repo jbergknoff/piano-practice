@@ -20,6 +20,7 @@ import {
 } from "../hooks/use-file-history";
 import type { ThemeTokens } from "../theme";
 import { playbackNoteId } from "../../lib/musicxml/musicxml-playback";
+import type { WaitModeDebugEvent } from "../debug-log";
 import {
   selectionEndBeat,
   selectionKeyForRange,
@@ -31,8 +32,8 @@ import { useStableHighlights } from "./note-colors";
 import {
   type WaitPoint,
   buildWaitPoints,
-  initialMatcherState,
-  judgeNoteEvent,
+  initialKeyPressState,
+  judgeKeyPress,
   rangeBounds,
   releaseKey,
 } from "./wait-matching";
@@ -93,7 +94,7 @@ export function useWaitMode(
   // Which keys are down, which of them are wrong or freshly struck, and when
   // the last advance was: the input to the pure matching rules in
   // `wait-matching.ts`, replaced wholesale after every note event.
-  const matcherStateRef = useRef(initialMatcherState());
+  const keyPressStateRef = useRef(initialKeyPressState());
   const wrongNoteCountRef = useRef(0);
   const attemptStartTimeRef = useRef<number | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
@@ -124,7 +125,7 @@ export function useWaitMode(
   // from a clean slate. Stable (touches only refs) so it can sit in other
   // callbacks' dependency lists without churn.
   const resetAttempt = useCallback(() => {
-    matcherStateRef.current = initialMatcherState();
+    keyPressStateRef.current = initialKeyPressState();
     wrongNoteCountRef.current = 0;
     attemptStartTimeRef.current = null;
   }, []);
@@ -133,7 +134,7 @@ export function useWaitMode(
   // past the last point (e.g. an empty piece), to the selection start beat.
   // Consolidates the "jump to a wait point" sequence that recurs at every
   // advance, activation, range reset, and manual reset. Does not touch the
-  // live note-matching state (matcherStateRef) — callers that need a fresh
+  // live note-matching state (keyPressStateRef) — callers that need a fresh
   // attempt call `resetAttempt` themselves; the grace-anticipation advance
   // deliberately carries some of that state forward instead of resetting it.
   const jumpToPoint = useCallback((index: number) => {
@@ -243,72 +244,82 @@ export function useWaitMode(
       // Apply any pending range-change reset before judging this note — see
       // `applyRangeReset`'s comment for why this can't wait for the effect.
       applyRangeReset();
-      const state = matcherStateRef.current;
-      if (completionModalRef.current !== null) {
-        // The modal blocks new chord matching, but a key release must still be
-        // tracked. Otherwise a chord released while the modal is up (e.g. the
-        // final chord of the piece, let go after it completes) would read as
-        // already held at the start of the next playthrough.
-        if (kind === "off") {
-          matcherStateRef.current = releaseKey(state, noteNumber);
-        }
-        return;
-      }
+      const keys = keyPressStateRef.current;
       const ctrl = controlRef.current;
       const points = waitPointsRef.current;
       const { first, end } = rangeBounds(points, ctrl.measureRange);
       const pointIndex = pointIndexRef.current;
       const now = Date.now();
-      const judgement = judgeNoteEvent(
-        state,
-        { noteNumber, kind },
-        {
-          points,
+      const waitPoint = pointIndex < end ? points[pointIndex] : null;
+      const logEvent = (
+        outcome: WaitModeDebugEvent["outcome"],
+        held: number[],
+        fresh: number[],
+      ) =>
+        ctrl.appendToDebugLog({
+          mode: "wait",
+          t: now,
+          note: noteNumber,
+          kind,
           pointIndex,
-          end,
-          now,
-          sensitivityMilliseconds:
-            settingsRef.current.noteSensitivityMilliseconds,
-        },
-      );
-      matcherStateRef.current = judgement.state;
-      if (kind === "on" && attemptStartTimeRef.current === null) {
-        attemptStartTimeRef.current = now;
-      }
-      if (judgement.outcome === null) {
+          measure: waitPoint?.measure ?? -1,
+          beat: waitPoint?.beat ?? -1,
+          // The full requirement (fresh-attack notes plus tied-in held
+          // notes), so a chord that won't advance because a released tie is
+          // missing is diagnosable.
+          expected: waitPoint
+            ? [...waitPoint.noteNumbers, ...waitPoint.tiedNoteNumbers]
+            : [],
+          fresh,
+          held,
+          msSinceAdvance: now - keys.lastAdvanceTime,
+          outcome,
+        });
+
+      if (kind === "off") {
+        const released = releaseKey(keys, noteNumber);
+        keyPressStateRef.current = released;
+        // A release is still tracked while the result modal is up: otherwise
+        // a chord let go after it completes (e.g. the final chord of the
+        // piece) would read as already held at the start of the next
+        // playthrough. It is only logged outside the modal, like a press.
+        if (completionModalRef.current === null) {
+          logEvent("off", [...released.held], [...released.fresh]);
+        }
         return;
       }
+      // The modal blocks new chord matching.
+      if (completionModalRef.current !== null) {
+        return;
+      }
+      const judgment = judgeKeyPress(
+        keys,
+        { noteNumber, time: now },
+        { points, pointIndex, end },
+        settingsRef.current.noteSensitivityMilliseconds,
+      );
+      keyPressStateRef.current = judgment.keys;
+      if (attemptStartTimeRef.current === null) {
+        attemptStartTimeRef.current = now;
+      }
+      if (judgment.outcome === null) {
+        return;
+      }
+      logEvent(
+        judgment.outcome,
+        judgment.heldWhenJudged,
+        judgment.freshWhenJudged,
+      );
 
-      const waitPoint = pointIndex < end ? points[pointIndex] : null;
-      ctrl.appendToDebugLog({
-        mode: "wait",
-        t: now,
-        note: noteNumber,
-        kind,
-        pointIndex,
-        measure: waitPoint?.measure ?? -1,
-        beat: waitPoint?.beat ?? -1,
-        // The full requirement (fresh-attack notes plus tied-in held notes), so
-        // a chord that won't advance because a released tie is missing is
-        // diagnosable.
-        expected: waitPoint
-          ? [...waitPoint.noteNumbers, ...waitPoint.tiedNoteNumbers]
-          : [],
-        fresh: judgement.freshWhenJudged,
-        held: judgement.heldWhenJudged,
-        msSinceAdvance: now - state.lastAdvanceTime,
-        outcome: judgement.outcome,
-      });
-
-      if (judgement.outcome === "wrong") {
+      if (judgment.outcome === "wrong") {
         wrongNoteCountRef.current += 1;
         ctrl.piano.playHiHat(55);
       }
-      if (judgement.advanceTo === undefined) {
+      if (judgment.advanceTo === undefined) {
         return;
       }
-      if (judgement.advanceTo < end) {
-        jumpToPoint(judgement.advanceTo);
+      if (judgment.advanceTo < end) {
+        jumpToPoint(judgment.advanceTo);
         return;
       }
       // The last wait point of the range: the attempt is complete — compute
