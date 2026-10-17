@@ -670,8 +670,7 @@ export function useWaitMode(
           return;
         }
         wrongNoteCountRef.current += 1;
-        // Channel 9 = GM percussion; note 42 = Closed Hi-Hat
-        ctrl.bluetooth.sendNote(42, 55, 80, 9);
+        ctrl.piano.playHiHat(55);
         if (wrongNoteTimerRef.current !== null) {
           clearTimeout(wrongNoteTimerRef.current);
         }

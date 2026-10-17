@@ -23,7 +23,7 @@ const screenshotsEnabled = !process.env.SKIP_SCREENSHOTS;
  * the equality check.
  *
  * At 120 bpm, one quarter beat = 0.5s of audio. The fake AudioContext's
- * `currentTime` starts at 0 and `MidiPlayer.startSchedule` adds a 0.05s
+ * `currentTime` starts at 0 and `BeatScheduler.startSchedule` adds a 0.05s
  * LOOKAHEAD, so the effective beat is (currentTime - 0.05) * 2.
  *
  * The exact ID sets here were captured from the rendered DOM at known stable

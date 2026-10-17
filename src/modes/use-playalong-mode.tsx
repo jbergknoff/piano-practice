@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
+import { ClickTrack } from "../../lib/midi/click-track";
 import {
   type PlaybackNote,
   playbackNoteId,
@@ -45,7 +46,7 @@ export interface PlayalongSettings {
   timingBeats: number;
   /** When true, the song is played aloud via Web Audio (phone speaker). */
   playMusic: boolean;
-  /** When true, hi-hat metronome ticks are sent to the piano via BLE MIDI. */
+  /** When true, hi-hat metronome ticks are sent to the piano throughout playback. */
   metronome: boolean;
   /**
    * When true, a metronome count-in precedes playback. When false, playback
@@ -95,10 +96,8 @@ export function usePlayalongMode(
   const [playerMarkers, setPlayerMarkers] = useState<
     ReadonlyArray<NoteHighlight>
   >([]);
-  const [countInBeat, setCountInBeat] = useState<{
-    beat: number;
-    timeSigNum: number;
-  } | null>(null);
+  // 1-based beat of the bar the count-in is on, for the overlay.
+  const [countInBeat, setCountInBeat] = useState<number | null>(null);
   const [resultModal, setResultModal] = useState<{
     history: PlayalongAttempt[];
     selectionLabel: string;
@@ -112,36 +111,12 @@ export function usePlayalongMode(
   const extraNoteCountRef = useRef(0);
   const heldNotesRef = useRef<Set<number>>(new Set());
   const playerMarkersRef = useRef<NoteHighlight[]>([]);
-  const countInCancelRef = useRef<(() => void) | null>(null);
   const uninstallCallbacksRef = useRef<(() => void) | null>(null);
   const uninstallAudioRoutingRef = useRef<(() => void) | null>(null);
-  const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  function stopMetronome() {
-    if (metronomeTimerRef.current !== null) {
-      clearInterval(metronomeTimerRef.current);
-      metronomeTimerRef.current = null;
-    }
-  }
-
-  function startMetronome() {
-    stopMetronome();
-    const ctrl = controlRef.current;
-    const mx = ctrl.musicxml;
-    if (!mx) {
-      return;
-    }
-    const msPerBeat = (60 / settingsRef.current.bpm) * 1000;
-    const timeSigNum = mx.timeSigNum;
-    let beatIdx = 0;
-    const tick = () => {
-      const isDownbeat = beatIdx % timeSigNum === 0;
-      ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
-      beatIdx++;
-    };
-    tick();
-    metronomeTimerRef.current = setInterval(tick, msPerBeat);
-  }
+  // Takes this session's metronome (count-in and clicks) off the shared
+  // player. The player outlives the session (other modes use it too), so a
+  // metronome left on it would keep clicking after Stop, or in Listen mode.
+  const removeMetronomeRef = useRef<(() => void) | null>(null);
 
   const controlRef = useRef(control);
   controlRef.current = control;
@@ -214,12 +189,12 @@ export function usePlayalongMode(
   }
 
   function recordCompletion(score: number) {
-    const ctrl = controlRef.current;
-    const hash = ctrl.fileHash;
+    const modeControl = controlRef.current;
+    const hash = modeControl.fileHash;
     if (!hash) {
       return;
     }
-    const range = ctrl.measureRange;
+    const range = modeControl.measureRange;
     const selectionKey = selectionKeyForRange(range);
     const attempt: PlayalongAttempt = {
       timestamp: Date.now(),
@@ -242,13 +217,12 @@ export function usePlayalongMode(
   // stopPlayalong (user stop/reset/mode-switch), the musicxml effect (new file),
   // and indirectly the measureRange effect (range change while complete).
   function resetPlayalongState() {
-    countInCancelRef.current?.();
-    countInCancelRef.current = null;
     uninstallAudioRoutingRef.current?.();
     uninstallAudioRoutingRef.current = null;
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = null;
-    stopMetronome();
+    removeMetronomeRef.current?.();
+    removeMetronomeRef.current = null;
     phaseRef.current = "idle";
     setPhase("idle");
     const empty = new Set<string>();
@@ -264,34 +238,43 @@ export function usePlayalongMode(
 
   function stopPlayalong() {
     resetPlayalongState();
-    const ctrl = controlRef.current;
-    ctrl.player.pause();
-    ctrl.setIsPlaying(false);
-    const range = ctrl.measureRange;
-    const startBeat = selectionStartBeat(range, ctrl.measureStartBeats);
-    ctrl.player.seek(startBeat);
-    ctrl.setCursor(startBeat, "jump");
+    const modeControl = controlRef.current;
+    modeControl.player.pause();
+    modeControl.setIsPlaying(false);
+    const range = modeControl.measureRange;
+    const startBeat = selectionStartBeat(range, modeControl.measureStartBeats);
+    modeControl.player.seek(startBeat);
+    modeControl.setCursor(startBeat, "jump");
   }
 
-  async function startPlaying() {
-    const ctrl = controlRef.current;
-    const player = ctrl.player;
+  // Start the clock from the play position. With `countInBeats`, it starts
+  // that many beats early and the session stays "counting-in" until the clock
+  // reaches the play position; otherwise it is "playing" straight away.
+  async function startPlaying(countInBeats = 0) {
+    const modeControl = controlRef.current;
+    const player = modeControl.player;
+    const scoreConversion = modeControl.musicxml;
+    if (!scoreConversion) {
+      return;
+    }
 
-    phaseRef.current = "playing";
-    setPhase("playing");
+    const phase: PlayalongPhase = countInBeats > 0 ? "counting-in" : "playing";
+    phaseRef.current = phase;
+    setPhase(phase);
 
     // Install onEnd so we can finalize score + uninstall audio routing.
     uninstallCallbacksRef.current?.();
     uninstallCallbacksRef.current = player.installCallbacks({
       onEnd: (beat) => {
-        ctrl.setIsPlaying(false);
-        ctrl.setCursor(beat, "jump");
+        modeControl.setIsPlaying(false);
+        modeControl.setCursor(beat, "jump");
         if (phaseRef.current !== "playing") {
           return;
         }
         uninstallAudioRoutingRef.current?.();
         uninstallAudioRoutingRef.current = null;
-        stopMetronome();
+        removeMetronomeRef.current?.();
+        removeMetronomeRef.current = null;
         phaseRef.current = "complete";
         setPhase("complete");
         recordCompletion(computeScore());
@@ -306,17 +289,44 @@ export function usePlayalongMode(
       });
     }
 
-    if (settingsRef.current.metronome) {
-      startMetronome();
+    // One click track covers both the count-in (the clicks before the play
+    // position) and the metronome (the clicks after it), on the same clock as
+    // the music, so the first note lands exactly one beat after the last
+    // count-in click.
+    const startBeat = player.currentBeat();
+    const metronome = settingsRef.current.metronome;
+    if (countInBeats > 0 || metronome) {
+      removeMetronomeRef.current = player.addPlaybackTrack(
+        new ClickTrack({
+          firstBeat: startBeat - countInBeats,
+          endBeat: metronome ? Number.POSITIVE_INFINITY : startBeat,
+          beatsPerBar: scoreConversion.timeSigNum,
+          onClick: (click) => {
+            modeControl.piano.playHiHat(click.beatInBar === 0 ? 80 : 55);
+            if (click.beat < startBeat) {
+              setCountInBeat(click.beatInBar + 1);
+            }
+          },
+        }),
+      );
     }
 
-    await player.play();
+    await player.play({
+      leadInBeats: countInBeats,
+      onLeadInEnd: () => {
+        setCountInBeat(null);
+        if (phaseRef.current === "counting-in") {
+          phaseRef.current = "playing";
+          setPhase("playing");
+        }
+      },
+    });
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong / computeScore / recordCompletion / startPlaying read only from refs; stable by design
   const handlePlayPause = useCallback(async () => {
-    const ctrl = controlRef.current;
-    const player = ctrl.player;
+    const modeControl = controlRef.current;
+    const player = modeControl.player;
 
     if (
       phaseRef.current === "counting-in" ||
@@ -327,15 +337,15 @@ export function usePlayalongMode(
       return;
     }
 
-    const mx = ctrl.musicxml;
-    if (!mx) {
+    const scoreConversion = modeControl.musicxml;
+    if (!scoreConversion) {
       return;
     }
 
-    const range = ctrl.measureRange;
-    const startBeat = selectionStartBeat(range, ctrl.measureStartBeats);
+    const range = modeControl.measureRange;
+    const startBeat = selectionStartBeat(range, modeControl.measureStartBeats);
     player.seek(startBeat);
-    ctrl.setCursor(startBeat, "jump");
+    modeControl.setCursor(startBeat, "jump");
 
     // Reset score state.
     const empty = new Set<string>();
@@ -344,7 +354,7 @@ export function usePlayalongMode(
     extraNoteCountRef.current = 0;
     playerMarkersRef.current = [];
     setPlayerMarkers([]);
-    ctrl.setIsPlaying(true);
+    modeControl.setIsPlaying(true);
 
     if (!settingsRef.current.countIn) {
       // Skip count-in: wait for the user's first note to begin playback.
@@ -353,32 +363,8 @@ export function usePlayalongMode(
       return;
     }
 
-    phaseRef.current = "counting-in";
-    setPhase("counting-in");
-
-    const countInBeats = 2 * mx.timeSigNum;
-    const { cancel, done } = player.playCountIn(
-      countInBeats,
-      mx.timeSigNum,
-      (i) => {
-        const isDownbeat = i % mx.timeSigNum === 0;
-        ctrl.bluetooth.sendNote(42, isDownbeat ? 80 : 55, 80, 9);
-        setCountInBeat({ beat: i, timeSigNum: mx.timeSigNum });
-      },
-    );
-    countInCancelRef.current = cancel;
-
-    await done;
-    setCountInBeat(null);
-
-    if ((phaseRef.current as PlayalongPhase) !== "counting-in") {
-      // Stopped during count-in — stopPlayalong already cleaned up.
-      ctrl.setIsPlaying(false);
-      return;
-    }
-    countInCancelRef.current = null;
-
-    await startPlaying();
+    // Two bars of count-in.
+    await startPlaying(2 * scoreConversion.timeSigNum);
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: stopPlayalong reads only from refs; stable by design
@@ -387,9 +373,9 @@ export function usePlayalongMode(
   }, []);
 
   const handleSeek = useCallback((beat: number) => {
-    const ctrl = controlRef.current;
-    ctrl.player.seek(beat);
-    ctrl.setCursor(beat, "jump");
+    const modeControl = controlRef.current;
+    modeControl.player.seek(beat);
+    modeControl.setCursor(beat, "jump");
   }, []);
 
   const activate = useCallback(() => {
@@ -405,18 +391,18 @@ export function usePlayalongMode(
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
   // biome-ignore lint/correctness/useExhaustiveDependencies: startPlaying reads only from refs; stable by design
   const onNoteEvent = useCallback((noteNumber: number, kind: "on" | "off") => {
-    const ctrl = controlRef.current;
+    const modeControl = controlRef.current;
     const now = Date.now();
     // Read the audio clock directly: currentBeatRef only advances on the
     // player's throttled position updates (every 50 ms), so it can lag the
     // true playback position by a tenth of a beat at 120 BPM.
-    const beat = ctrl.player.currentBeat();
-    const measure = measureNumberForBeat(ctrl.measureStartBeats, beat);
+    const beat = modeControl.player.currentBeat();
+    const measure = measureNumberForBeat(modeControl.measureStartBeats, beat);
     const held = heldNotesRef.current;
 
     if (kind === "off") {
       held.delete(noteNumber);
-      ctrl.appendToDebugLog({
+      modeControl.appendToDebugLog({
         mode: "playalong",
         t: now,
         note: noteNumber,
@@ -438,7 +424,7 @@ export function usePlayalongMode(
     }
 
     if (phaseRef.current !== "playing") {
-      ctrl.appendToDebugLog({
+      modeControl.appendToDebugLog({
         mode: "playalong",
         t: now,
         note: noteNumber,
@@ -452,7 +438,7 @@ export function usePlayalongMode(
     }
 
     const notes = selectionNotesRef.current;
-    const tol = settingsRef.current.timingBeats;
+    const toleranceBeats = settingsRef.current.timingBeats;
 
     let matched = false;
     const newHits = new Set(hitNoteIdsRef.current);
@@ -460,7 +446,7 @@ export function usePlayalongMode(
     for (const note of notes) {
       if (
         note.noteNumber === noteNumber &&
-        Math.abs(note.startBeat - beat) <= tol
+        Math.abs(note.startBeat - beat) <= toleranceBeats
       ) {
         const id = playbackNoteId(note);
         if (!newHits.has(id)) {
@@ -489,7 +475,7 @@ export function usePlayalongMode(
     playerMarkersRef.current = nextMarkers;
     setPlayerMarkers(nextMarkers);
 
-    ctrl.appendToDebugLog({
+    modeControl.appendToDebugLog({
       mode: "playalong",
       t: now,
       note: noteNumber,
@@ -602,14 +588,14 @@ export function usePlayalongMode(
               setResultModal(null);
               // Keep phase="complete" so green/red note colors remain for review.
               // Seek to start so the sheet is positioned at the beginning.
-              const ctrl = controlRef.current;
-              const range = ctrl.measureRange;
+              const modeControl = controlRef.current;
+              const range = modeControl.measureRange;
               const startBeat = selectionStartBeat(
                 range,
-                ctrl.measureStartBeats,
+                modeControl.measureStartBeats,
               );
-              ctrl.player.seek(startBeat);
-              ctrl.setCursor(startBeat, "jump");
+              modeControl.player.seek(startBeat);
+              modeControl.setCursor(startBeat, "jump");
             }}
             previousRange={control.rangeNavigation.previous}
             nextRange={control.rangeNavigation.next}
@@ -718,14 +704,7 @@ function TransportOverlayCard({
   );
 }
 
-function CountInOverlay({
-  countInBeat,
-}: {
-  countInBeat: { beat: number; timeSigNum: number } | null;
-}) {
-  const beatDisplay = countInBeat
-    ? (countInBeat.beat % countInBeat.timeSigNum) + 1
-    : null;
+function CountInOverlay({ countInBeat }: { countInBeat: number | null }) {
   return (
     <TransportOverlayCard padding="14px 28px" caption="Count in…">
       <div
@@ -737,7 +716,7 @@ function CountInOverlay({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        {beatDisplay ?? ""}
+        {countInBeat ?? ""}
       </div>
     </TransportOverlayCard>
   );
