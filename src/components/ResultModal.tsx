@@ -1,14 +1,6 @@
 import type { ComponentChildren } from "preact";
 import type { MeasureRange, NamedRange } from "../selection";
-import {
-  color,
-  withAlpha,
-  FONT_SANS,
-  glassPanel,
-  miniButtonStyle,
-  modalIconButtonStyle,
-  serifTitle,
-} from "../theme";
+import { color, withAlpha, FONT_SANS, glassPanel, serifTitle } from "../theme";
 import { ChevronIcon, TrashIcon } from "./icons";
 import { Modal } from "./Modal";
 
@@ -265,7 +257,7 @@ export function ResultModal({
                 aria-label="Clear all"
                 title="Clear all"
                 onClick={onClearRows}
-                style={miniButtonStyle()}
+                class="mini-button"
               >
                 <TrashIcon size={13} />
               </button>
@@ -334,7 +326,7 @@ export function ResultModal({
                     type="button"
                     aria-label="Delete"
                     onClick={() => onDeleteRow(row.key)}
-                    style={miniButtonStyle()}
+                    class="mini-button"
                   >
                     <TrashIcon size={12} />
                   </button>
@@ -398,7 +390,7 @@ function RangeNavigationButtons({
             onNavigateToRange({ from: range.from, to: range.to });
           }
         }}
-        style={modalIconButtonStyle(range !== null)}
+        class="icon-button"
       >
         <ChevronIcon direction={direction === "next" ? "right" : "left"} />
       </button>

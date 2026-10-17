@@ -8,7 +8,7 @@ import {
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
 import { type MeasureRange, selectionKeyForRange } from "../selection";
-import { color, miniButtonStyle, withAlpha } from "../theme";
+import { color, withAlpha } from "../theme";
 import { Drawer } from "./Drawer";
 import { ModalHeader } from "./Modal";
 import { PencilIcon, PlusIcon } from "./icons";
@@ -212,7 +212,7 @@ export function SelectionRangesDrawer({
             type="button"
             onClick={onCreateBookmark}
             title="New bookmark"
-            style={miniButtonStyle()}
+            class="mini-button"
           >
             <PlusIcon />
           </button>

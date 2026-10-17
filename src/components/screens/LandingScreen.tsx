@@ -10,7 +10,6 @@ import {
   FONT_MONO,
   FONT_SANS,
   glassPanel,
-  miniButtonStyle,
   serifTitle,
 } from "../../theme";
 import { ConnectionBadge } from "../ConnectionBadge";
@@ -109,11 +108,8 @@ function LibraryRow({
           }
         }}
         title="Delete"
-        style={{
-          ...miniButtonStyle(),
-          alignSelf: "center",
-          marginRight: 8,
-        }}
+        class="mini-button"
+        style={{ alignSelf: "center", marginRight: 8 }}
       >
         <TrashIcon />
       </button>

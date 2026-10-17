@@ -6,7 +6,6 @@ import {
   FONT_MONO,
   FONT_SANS,
   glassPanel,
-  modalActionButtonStyle,
   radius,
 } from "../theme";
 import { BluetoothIcon, PianoIcon, UsbIcon } from "./icons";
@@ -339,8 +338,8 @@ export function ConnectionBadge({
                 setShowChooserModal(false);
                 piano.connectBluetooth();
               }}
+              class="action-button accent"
               style={{
-                ...modalActionButtonStyle("accent"),
                 width: "100%",
                 display: "flex",
                 alignItems: "center",
@@ -357,8 +356,8 @@ export function ConnectionBadge({
                 setShowChooserModal(false);
                 piano.connectMidi();
               }}
+              class="action-button accent"
               style={{
-                ...modalActionButtonStyle("accent"),
                 width: "100%",
                 display: "flex",
                 alignItems: "center",
@@ -411,7 +410,7 @@ export function ConnectionBadge({
             <button
               type="button"
               onClick={() => setShowStatusModal(false)}
-              style={modalActionButtonStyle("accent")}
+              class="action-button accent"
             >
               Done
             </button>
@@ -468,7 +467,7 @@ export function ConnectionBadge({
             <button
               type="button"
               onClick={() => setShowErrorModal(false)}
-              style={modalActionButtonStyle("accent")}
+              class="action-button accent"
             >
               Okay
             </button>
