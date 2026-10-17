@@ -30,7 +30,7 @@ return judged("wrong"); // the hook buzzes and counts it
 
 `noteSensitivityMilliseconds` is part of the `WaitModeSettings` object passed into `useWaitMode` and mirrored to `settingsRef`, so the stable `onNoteEvent` callback can pass the latest value to `judgeKeyPress` without going stale.
 
-The 50 ms anti-racing debounce for *correct* notes (`DEBOUNCE_MILLISECONDS`) is unchanged — these are orthogonal concerns. Both are covered by unit tests in `src/modes/wait-matching.test.ts`.
+It is the only time-based rule in wait mode, and it never affects whether a chord advances, only whether a wrong note is penalised. (A 50 ms debounce for correct notes used to sit alongside it, but once a completed chord was allowed to advance inside it, it only relabelled incomplete chords in the debug log, so it was removed.) It is covered by unit tests in `src/modes/wait-matching.test.ts`.
 
 ## Configuration
 

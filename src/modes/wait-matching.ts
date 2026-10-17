@@ -248,14 +248,6 @@ export function rangeBounds(
 }
 
 /**
- * A correct note arriving within this many milliseconds of an advance, while
- * the chord is still incomplete, is ignored rather than judged: it is most
- * likely a leftover key from the chord just played, and must not count
- * towards (or against) the next one.
- */
-export const DEBOUNCE_MILLISECONDS = 50;
-
-/**
  * Which keys are down, and what earlier judgments made of them: the part of
  * wait mode's state that key presses and releases change. Never mutated:
  * every function here returns a new one.
@@ -327,8 +319,8 @@ export interface KeyPress {
   noteNumber: number;
   /**
    * When the key was pressed, in milliseconds. Any clock will do: the rules
-   * only compare it with the time of the last advance (the debounce and the
-   * wrong-note forgiveness window).
+   * only compare it with the time of the last advance, to decide whether a
+   * wrong note falls in the forgiveness window.
    */
   time: number;
 }
@@ -449,8 +441,9 @@ export function judgeKeyPress(
     // At a non-slashed grace wait point, notes of the next wait point are
     // "anticipated": the player naturally presses grace and main-chord keys in
     // one gesture and must not be penalised for it. If the grace chord is
-    // already complete (e.g. its note was debounced earlier and sits in
-    // `fresh`), advance now, so both wait points resolve in one gesture.
+    // already complete (e.g. its note is down, but a wrong key held at the time
+    // blocked the advance and has since been let go), advance now, so both
+    // wait points resolve in one gesture.
     if (waitPoint.isGrace && !alreadyHeld && nextIndex < end) {
       const nextPoint = points[nextIndex];
       if (
@@ -496,20 +489,14 @@ export function judgeKeyPress(
     return judged("wrong");
   }
 
-  // Check completion before the debounce: once every required note has been
-  // freshly struck (and every tied note is held), the chord is unambiguously
-  // complete and advances at once, even inside the debounce window. Only an
-  // incomplete chord is debounced, so a leftover key from the previous chord
-  // can't trigger a premature advance.
+  // Complete once every required note has been freshly struck and every tied
+  // note is held.
   const chordComplete =
     isSubsetOf(required, held) &&
     isSubsetOf(required, fresh) &&
     isSubsetOf(tied, held);
 
   if (!chordComplete) {
-    if (msSinceAdvance < DEBOUNCE_MILLISECONDS) {
-      return judged("debounce");
-    }
     // "Not all notes down yet" (incomplete) versus "every note is down, but a
     // required one was held over rather than re-struck" (stale). The latter is
     // the signature of a repeated note or chord that needs a fresh attack.

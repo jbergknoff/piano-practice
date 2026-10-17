@@ -341,7 +341,7 @@ The notation is drawn with SMuFL glyphs (Unicode Private-Use-Area codepoints) th
 
 The shared types live in `src/debug-log.ts`:
 
-- `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, freshly-pressed notes (`fresh` — the subset of held that got a fresh attack since the last advance; required notes must be fresh to complete the chord), milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `stale`, `extra`, `debounce`, `optional`, `duplicate`, `off`).
+- `WaitModeDebugEvent` — captures note, kind (on/off), wait-point index, measure, beat, expected chord, held notes, freshly-pressed notes (`fresh` — the subset of held that got a fresh attack since the last advance; required notes must be fresh to complete the chord), milliseconds since last advance, and outcome (`advance`, `wrong`, `grace`, `incomplete`, `stale`, `extra`, `optional`, `duplicate`, `off`). Logs from before October 2026 can also show `debounce`, a since-removed label for an incomplete chord pressed within 50 ms of an advance; read it as `incomplete`/`stale`.
 - `PlayalongDebugEvent` — captures note, kind, measure, beat, held notes, and outcome (`matched`, `extra`, `off`, `inactive`).
 - Both share the `DebugBeatEvent` discriminated union, keyed on the `mode` field.
 - `newDebugBuffer()` returns a `CircularBuffer<DebugBeatEvent>` pre-sized to `DEBUG_LOG_MAX`.
@@ -352,7 +352,7 @@ App exposes a `getDebugLog()` callback that reads the buffer; it's passed throug
 
 See `docs/debug-log.md` for the full format reference and a field-by-field guide to the three main diagnostic cases: (1) correct chord not recognised in Wait mode, (2) wrong chord accepted in Wait mode, (3) correct note scored as EXTRA in Playalong mode.
 
-When investigating a note-matching bug from a submitted log, the key fields are `expected` vs `held` at the failing event, and `msSinceAdvance` to determine whether grace-period or debounce logic was involved.
+When investigating a note-matching bug from a submitted log, the key fields are `expected` vs `held` at the failing event, and `msSinceAdvance` to determine whether the grace period (wrong notes forgiven right after an advance) was involved.
 
 ## Integration tests
 

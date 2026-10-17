@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  DEBOUNCE_MILLISECONDS,
   type KeyPressOutcome,
   type WaitPoint,
   initialKeyPressState,
@@ -134,16 +133,14 @@ describe("judgeKeyPress", () => {
     expect(player.press(C4)).toBe("advance");
   });
 
-  test("an incomplete chord is debounced right after an advance; a complete one is not", () => {
+  test("presses right after an advance are judged like any other", () => {
     const player = practise([
       waitPoint([C4]),
       waitPoint([D4, E4]),
       waitPoint([G4]),
     ]);
     player.press(C4);
-    expect(player.press(D4, DEBOUNCE_MILLISECONDS - 1)).toBe("debounce");
-    // D4's press still counted as fresh, so E4 completes the chord even inside
-    // the debounce window.
+    expect(player.press(D4, 1)).toBe("incomplete");
     expect(player.press(E4, 0)).toBe("advance");
     expect(player.pointIndex).toBe(2);
   });
