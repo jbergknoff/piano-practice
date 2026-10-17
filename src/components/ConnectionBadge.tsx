@@ -448,7 +448,7 @@ export function ConnectionBadge({
               fontSize: 11.5,
               lineHeight: 1.5,
               color: color.ink,
-              background: withAlpha(color.inkFaint, 0.12),
+              background: withAlpha(color.ink, 0.03),
               border: `0.5px solid ${color.border}`,
               borderRadius: radius.md,
               userSelect: "text",
