@@ -40,7 +40,6 @@ export interface WaitModeDebugEvent extends DebugEventBase {
     | "incomplete" // correct note pressed but not all expected notes held yet
     | "stale" // all expected notes held, but a required one was not re-struck
     | "extra" // chord complete but wrong notes still held → advance blocked
-    | "debounce" // within anti-race window after last advance
     | "optional" // slashed grace note played — not penalized, not required
     | "duplicate" // Note On for an already-held key (sustained/re-sent) — ignored
     | "off"; // note-off event (no matching logic runs)

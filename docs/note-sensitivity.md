@@ -12,28 +12,25 @@ Note what the grace period does **not** do: it no longer lets an unexpected note
 
 ## Wrong notes block the advance
 
-Matching the expected chord means holding *exactly* the expected notes. `onNoteEvent` tracks the currently-held notes that are not part of the expected chord in `wrongHeldNotesRef`; while that set is non-empty the advance is refused (`outcome: "extra"`), even when every expected note is also down. Mashing a fistful of keys therefore fails: the extra keys are held alongside the correct one, so the chord is not cleanly played.
+Matching the expected chord means holding *exactly* the expected notes. `judgeKeyPress` tracks the currently-held notes that are not part of the expected chord in the `KeyPressState`'s `wrongHeld` set; while that set is non-empty the advance is refused (`outcome: "extra"`), even when every expected note is also down. Mashing a fistful of keys therefore fails: the extra keys are held alongside the correct one, so the chord is not cleanly played.
 
 Sustained/legato notes carried over from a previous chord never enter that set — they generate no fresh Note On — so legato passages still advance. Only a note that was *unexpected at the moment it was pressed* and is *still held* blocks. A quick brush during a fast run is released almost immediately, so it rarely blocks in practice; a deliberately-held wrong key does.
 
 ## Implementation
 
-The grace check lives in `onNoteEvent` in `src/modes/use-wait-mode.tsx`. The held wrong note is recorded first, then the grace window only decides whether to buzz:
+The grace check lives in `judgeKeyPress` in `src/modes/wait-matching.ts`, a pure function that `useWaitMode`'s `onNoteEvent` calls for every key press. The held wrong note is recorded first, then the grace window only decides between the `"grace"` and `"wrong"` outcomes:
 
 ```ts
-if (!expected.has(noteNumber)) {
-  wrongHeldNotesRef.current.add(noteNumber); // blocks the advance regardless
-  if (msSinceAdvance < sensitivityMs) {
-    return; // within grace window — record it, but don't buzz
-  }
-  // outside the window — buzz + count as a wrong note
-  ...
+wrongHeld.add(noteNumber); // blocks the advance regardless
+if (msSinceAdvance < sensitivityMilliseconds) {
+  return judged("grace"); // within grace window — recorded, but no buzz
 }
+return judged("wrong"); // the hook buzzes and counts it
 ```
 
-`noteSensitivityMilliseconds` is part of the `WaitModeSettings` object passed into `useWaitMode` and mirrored to `settingsRef` so the stable `onNoteEvent` callback (empty deps array) can always read the latest value without going stale.
+`noteSensitivityMilliseconds` is part of the `WaitModeSettings` object passed into `useWaitMode` and mirrored to `settingsRef`, so the stable `onNoteEvent` callback can pass the latest value to `judgeKeyPress` without going stale.
 
-The existing 50 ms anti-racing debounce for *correct* notes is unchanged — these are orthogonal concerns.
+It is the only time-based rule in wait mode, and it never affects whether a chord advances, only whether a wrong note is penalised. (A 50 ms debounce for correct notes used to sit alongside it, but once a completed chord was allowed to advance inside it, it only relabelled incomplete chords in the debug log, so it was removed.) It is covered by unit tests in `src/modes/wait-matching.test.ts`.
 
 ## Configuration
 

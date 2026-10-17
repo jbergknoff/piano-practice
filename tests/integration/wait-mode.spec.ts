@@ -120,9 +120,6 @@ test("playing the full first measure advances through every wait point", async (
 
   await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]);
 
-  // Wait mode has a 50ms debounce between successful advances (see
-  // use-wait-mode.tsx: msSinceAdvance < 50 → "debounce"). Pause between
-  // notes to let the gate clear.
   const sequence: { note: number; expectedNextId: string | null }[] = [
     { note: E4, expectedNextId: "p0-m1-n1-v0" },
     { note: C5, expectedNextId: "p0-m1-n2-v0" },
@@ -134,8 +131,6 @@ test("playing the full first measure advances through every wait point", async (
     await sendNoteOn(page, note);
     await sendNoteOff(page, note);
     await waitForHighlightedNoteIds(page, [expectedNextId as string]);
-    // Clear the 50ms debounce before sending the next chord.
-    await page.waitForTimeout(120);
   }
 });
 
@@ -203,28 +198,20 @@ test("a key released after the completion modal appears is not stuck held into t
   });
 });
 
-test("a note pressed 60ms after an advance is not debounced", async ({
-  page,
-}) => {
-  // Regression test: the debounce window was previously 100ms, which
-  // swallowed genuine quick re-presses (e.g. a note released 9ms after an
-  // advance then re-pressed 98ms after — well outside any MIDI bounce window
-  // but still inside the old 100ms gate). The threshold was reduced to 50ms;
-  // this test confirms that a re-press at ~60ms advances correctly.
+test("a note pressed right after an advance counts", async ({ page }) => {
+  // Regression test: a debounce window after each advance (first 100ms, then
+  // 50ms, since removed) once swallowed genuine quick presses — e.g. a note
+  // released 9ms after an advance then re-pressed 98ms after. A press right
+  // after an advance must be judged like any other.
   await loadFile(page, "c-major-melody.mid");
   await waitForMockBluetoothConnected(page);
   await switchToWaitMode(page);
 
   await waitForHighlightedNoteIds(page, ["p0-m1-n0-v0"]); // E4
 
-  // Advance past E4. The debounce timer starts at this moment.
+  // Advance past E4, then press C5 straight away: it should advance to E5.
   await sendNoteOn(page, E4);
   await sendNoteOff(page, E4);
-
-  // Wait 60ms — inside the old 100ms window but above the new 50ms threshold.
-  // Under the old code C5 would have been debounced here; under the new code
-  // it should advance to E5.
-  await page.waitForTimeout(60);
   await sendNoteOn(page, C5);
   await sendNoteOff(page, C5);
 

@@ -48,15 +48,13 @@ const HL_CHORD4 = ["p0-m5-n3-v0", "p0-m5-n3-v1", "p1-m5-n1-v0", "p1-m5-n1-v1"];
 const HL_CHORD5 = ["p0-m5-n4-v0", "p0-m5-n4-v1", "p1-m5-n2-v0", "p1-m5-n2-v1"];
 const HL_FINAL = ["p0-m5-n5-v0", "p0-m5-n5-v1", "p1-m5-n3-v0", "p1-m5-n3-v1"];
 
-// Wait mode advances on Note On; pause between presses to clear the 50 ms
-// debounce window (see use-wait-mode.tsx).
+// Wait mode advances on Note On.
 async function playNote(
   page: import("@playwright/test").Page,
   note: number,
 ): Promise<void> {
   await sendNoteOn(page, note);
   await sendNoteOff(page, note);
-  await page.waitForTimeout(120);
 }
 
 async function playChord(

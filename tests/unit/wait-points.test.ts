@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { musicXmlToConversion } from "../../lib/musicxml/musicxml-playback";
-import { buildWaitPoints } from "../../src/modes/use-wait-mode";
+import { buildWaitPoints } from "../../src/modes/wait-matching";
 
 // MIDI note numbers used in assertions (pitchToMidiNumber: (octave+1)*12 + semitone + alter).
 // C5=72, C#5=73, D5=74, E5=76, F#5=78, G5=79
