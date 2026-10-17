@@ -24,6 +24,7 @@ import { LandingScreen } from "./components/screens/LandingScreen";
 import { PracticeScreen } from "./components/screens/PracticeScreen";
 import { type DebugBeatEvent, newDebugBuffer } from "./debug-log";
 import { DemoOverlay } from "./demo/DemoOverlay";
+import { scoreFileAccept } from "./file-accept";
 import { demoFocusRange, isDemoMode } from "./demo/fake-bluetooth";
 import {
   type LibraryEntry,
@@ -475,7 +476,7 @@ export function App() {
       <input
         ref={openFileInputRef}
         type="file"
-        accept=".mid,.midi,audio/midi,.musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml"
+        accept={scoreFileAccept(navigator.userAgent)}
         onChange={handleFileInput}
         style={{ display: "none" }}
       />
