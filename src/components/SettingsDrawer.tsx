@@ -1,5 +1,5 @@
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
-import { type ThemeTokens, chipToggleButtonStyle, radius } from "../theme";
+import { chipToggleButtonStyle, radius, color } from "../theme";
 import { Drawer } from "./Drawer";
 import { ModalHeader } from "./Modal";
 import { ResetIcon } from "./icons";
@@ -7,8 +7,6 @@ import { ResetIcon } from "./icons";
 interface SettingsDrawerProps {
   open: boolean;
   onClose: () => void;
-  theme: ThemeTokens;
-  accent: string;
   tracks: TrackInfo[];
   selectedTracks: number[];
   onTrackToggle: (index: number) => void;
@@ -23,8 +21,6 @@ interface SettingsDrawerProps {
 export function SettingsDrawer({
   open,
   onClose,
-  theme,
-  accent,
   tracks,
   selectedTracks,
   onTrackToggle,
@@ -43,17 +39,16 @@ export function SettingsDrawer({
       label="Settings"
       style={{
         width: 320,
-        background: theme.panelSolid,
-        borderLeft: `0.5px solid ${theme.border}`,
+        background: color.panelSolid,
+        borderLeft: `0.5px solid ${color.border}`,
         boxShadow: "-20px 0 40px rgba(0,0,0,0.18)",
         padding: "22px 24px",
         gap: 18,
-        color: theme.ink,
+        color: color.ink,
         overflowY: "auto",
       }}
     >
       <ModalHeader
-        theme={theme}
         title="Settings"
         onClose={onClose}
         closeLabel="Close settings"
@@ -61,7 +56,7 @@ export function SettingsDrawer({
 
       {/* Tracks (if multiple) */}
       {tracks.length > 1 && (
-        <DrawerRow theme={theme} label="Tracks" hint="">
+        <DrawerRow label="Tracks" hint="">
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {tracks.map((track) => (
               <label
@@ -78,9 +73,9 @@ export function SettingsDrawer({
                   type="checkbox"
                   checked={selectedTracks.includes(track.index)}
                   onChange={() => onTrackToggle(track.index)}
-                  style={{ accentColor: accent }}
+                  style={{ accentColor: color.accent }}
                 />
-                <span style={{ color: theme.ink }}>
+                <span style={{ color: color.ink }}>
                   {track.name} ({track.noteCount} notes)
                 </span>
               </label>
@@ -97,15 +92,13 @@ export function SettingsDrawer({
             fontWeight: 600,
             letterSpacing: "0.06em",
             textTransform: "uppercase",
-            color: theme.inkSoft,
+            color: color.inkSoft,
           }}
         >
           Playalong Mode
         </span>
 
         <ToggleRow
-          theme={theme}
-          accent={accent}
           label="Play music aloud"
           options={[
             { label: "On", value: true },
@@ -116,8 +109,6 @@ export function SettingsDrawer({
         />
 
         <ToggleRow
-          theme={theme}
-          accent={accent}
           label="Metronome"
           options={[
             { label: "On", value: true },
@@ -128,8 +119,6 @@ export function SettingsDrawer({
         />
 
         <ToggleRow
-          theme={theme}
-          accent={accent}
           label="Start on"
           options={[
             { label: "Count-in", value: true },
@@ -144,15 +133,11 @@ export function SettingsDrawer({
 }
 
 function ToggleRow({
-  theme,
-  accent,
   label,
   options,
   value,
   onChange,
 }: {
-  theme: ThemeTokens;
-  accent: string;
   label: string;
   options: Array<{ label: string; value: boolean }>;
   value: boolean;
@@ -167,7 +152,7 @@ function ToggleRow({
         gap: 12,
       }}
     >
-      <span style={{ fontSize: 12, fontWeight: 500, color: theme.ink }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: color.ink }}>
         {label}
       </span>
       <div
@@ -180,8 +165,8 @@ function ToggleRow({
           // solid background the blur had nothing to blur, but the GPU still
           // recomputed it every frame of the drawer's slide, which made the
           // settings drawer choppy on a phone.
-          background: theme.panel,
-          border: `0.5px solid ${theme.border}`,
+          background: color.panel,
+          border: `0.5px solid ${color.border}`,
           borderRadius: radius.md,
           flexShrink: 0,
         }}
@@ -191,7 +176,7 @@ function ToggleRow({
             key={String(option.value)}
             type="button"
             onClick={() => onChange(option.value)}
-            style={chipToggleButtonStyle(theme, accent, value === option.value)}
+            style={chipToggleButtonStyle(value === option.value)}
             aria-pressed={value === option.value}
           >
             {option.label}
@@ -203,13 +188,11 @@ function ToggleRow({
 }
 
 function DrawerRow({
-  theme,
   label,
   hint,
   onReset,
   children,
 }: {
-  theme: ThemeTokens;
   label: string;
   hint: string;
   onReset?: () => void;
@@ -224,12 +207,12 @@ function DrawerRow({
           alignItems: "baseline",
         }}
       >
-        <span style={{ fontSize: 12, fontWeight: 500, color: theme.ink }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: color.ink }}>
           {label}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {hint && (
-            <span style={{ fontSize: 11, color: theme.inkSoft }}>{hint}</span>
+            <span style={{ fontSize: 11, color: color.inkSoft }}>{hint}</span>
           )}
           {onReset && (
             <button
@@ -239,7 +222,7 @@ function DrawerRow({
                 background: "transparent",
                 border: "none",
                 cursor: "pointer",
-                color: theme.inkSoft,
+                color: color.inkSoft,
                 padding: 4,
                 lineHeight: 0,
               }}

@@ -1,6 +1,6 @@
 import { useRef, useState } from "preact/hooks";
-import type { ThemeTokens } from "../theme";
 import {
+  color,
   FONT_SANS,
   glassPanel,
   modalActionButtonStyle,
@@ -21,8 +21,6 @@ interface NumberPromptModalProps {
   confirmLabel: string;
   onConfirm: (value: number) => void;
   onCancel: () => void;
-  theme: ThemeTokens;
-  accent: string;
 }
 
 /**
@@ -37,8 +35,6 @@ export function NumberPromptModal({
   confirmLabel,
   onConfirm,
   onCancel,
-  theme,
-  accent,
 }: NumberPromptModalProps) {
   const [draft, setDraft] = useState(String(initialValue));
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,7 +50,7 @@ export function NumberPromptModal({
         inputRef.current?.select();
       }}
       style={{
-        ...glassPanel(theme, 24, 160),
+        ...glassPanel(24, 160),
         borderRadius: 16,
         padding: "24px 28px",
         boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
@@ -75,8 +71,8 @@ export function NumberPromptModal({
           }
         }}
       >
-        <div style={{ ...serifTitle(theme, 22), marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
+        <div style={{ ...serifTitle(22), marginBottom: 4 }}>{title}</div>
+        <div style={{ fontSize: 11, color: color.inkSoft, marginBottom: 16 }}>
           {hint}
         </div>
         <input
@@ -94,9 +90,9 @@ export function NumberPromptModal({
             padding: "10px 12px",
             fontSize: 22,
             textAlign: "center",
-            color: theme.ink,
-            background: theme.panelSolid,
-            border: `0.5px solid ${theme.border}`,
+            color: color.ink,
+            background: color.panelSolid,
+            border: `0.5px solid ${color.border}`,
             borderRadius: 10,
             outline: "none",
             fontFamily: FONT_SANS,
@@ -114,14 +110,14 @@ export function NumberPromptModal({
           <button
             type="button"
             onClick={onCancel}
-            style={modalActionButtonStyle(theme, "ghost")}
+            style={modalActionButtonStyle("ghost")}
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!isValid}
-            style={modalActionButtonStyle(theme, "accent", accent, isValid)}
+            style={modalActionButtonStyle("accent", isValid)}
           >
             {confirmLabel}
           </button>

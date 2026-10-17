@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
-import { FONT_SANS, glassPanel, type ThemeTokens } from "../theme";
+import { FONT_SANS, glassPanel, color } from "../theme";
 import { useModalDialog } from "./dialog-support";
 
 export interface ContextMenuItem {
@@ -25,13 +25,11 @@ export function ContextMenu({
   clientY,
   items,
   onClose,
-  theme,
 }: {
   clientX: number;
   clientY: number;
   items: ContextMenuItem[];
   onClose: () => void;
-  theme: ThemeTokens;
 }) {
   const menuRef = useRef<HTMLDialogElement>(null);
   const onCloseRef = useRef(onClose);
@@ -64,7 +62,7 @@ export function ContextMenu({
       style={{
         left: clientX + 4,
         top: clientY + 4,
-        ...glassPanel(theme),
+        ...glassPanel(),
         borderRadius: 12,
         padding: 4,
         boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
@@ -88,7 +86,7 @@ export function ContextMenu({
             padding: "8px 12px",
             textAlign: "left",
             fontSize: 13,
-            color: theme.ink,
+            color: color.ink,
             borderRadius: 8,
             fontFamily: FONT_SANS,
             width: "100%",

@@ -49,12 +49,10 @@ describe("soundingHighlights – Arabesque focus measure 6", () => {
   });
 
   test("focusing measure 6 highlights only measure-6 notes", () => {
-    const highlights = soundingHighlights(
-      conv.notes,
-      measure6Start,
-      { from: 6, to: 6 },
-      "orange",
-    );
+    const highlights = soundingHighlights(conv.notes, measure6Start, {
+      from: 6,
+      to: 6,
+    });
     expect(highlights.length).toBeGreaterThan(0);
     for (const highlight of highlights) {
       // IDs are p{part}-m{measureNumber}-...; measure 6 uses measureNumber 6.
@@ -65,7 +63,7 @@ describe("soundingHighlights – Arabesque focus measure 6", () => {
   });
 
   test("whole piece (null range) keeps the raw sounding set", () => {
-    const highlights = soundingHighlights(conv.notes, measure6Start, null, "x");
+    const highlights = soundingHighlights(conv.notes, measure6Start, null);
     const rawSounding = conv.notes.filter(
       (note) =>
         note.startBeat <= measure6Start &&

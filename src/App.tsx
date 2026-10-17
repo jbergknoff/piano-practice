@@ -48,7 +48,6 @@ import { useWakeLock } from "./hooks/use-wake-lock";
 import type { PracticeMode } from "./modes/mode-control";
 import { prettyTitle } from "./pretty-title";
 import type { MeasureRange } from "./selection";
-import { ACCENT_COLORS, THEMES, type ThemeName } from "./theme";
 
 function isMusicXmlFile(name: string): boolean {
   return /\.(musicxml|xml|mxl)$/i.test(name);
@@ -113,11 +112,6 @@ export function App() {
   const handleCurrentBeatChange = useCallback((beat: number) => {
     currentBeatRef.current = beat;
   }, []);
-
-  // ── UI tokens ─────────────────────────────────────────────────────────────
-  const themeName: ThemeName = "cream";
-  const accent = ACCENT_COLORS[0];
-  const theme = THEMES[themeName];
 
   const musicxml = useMemo<ScoreConversion | null>(() => {
     if (loadedXml) {
@@ -463,8 +457,6 @@ export function App() {
     }
     return (
       <LandingScreen
-        theme={theme}
-        accent={accent}
         fileError={fileError}
         piano={piano}
         onFile={handleFileInput}
@@ -494,8 +486,6 @@ export function App() {
           what keeps one piece's session state from leaking into the next. */}
       <PracticeScreen
         key={fileHash}
-        theme={theme}
-        accent={accent}
         fileName={fileName ?? ""}
         pieceTitle={pieceTitle}
         musicxml={musicxml}
@@ -526,12 +516,7 @@ export function App() {
         getDebugLog={getDebugLog}
         clearDebugLog={clearDebugLog}
       />
-      {demo && (
-        <DemoOverlay
-          noteEventDispatchRef={noteEventDispatchRef}
-          accent={accent}
-        />
-      )}
+      {demo && <DemoOverlay noteEventDispatchRef={noteEventDispatchRef} />}
     </>
   );
 }

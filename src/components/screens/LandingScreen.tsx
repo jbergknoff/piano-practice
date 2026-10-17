@@ -3,13 +3,13 @@ import type { LibrarySummary } from "../../hooks/use-file-history";
 import type { LibraryEntry } from "../../hooks/use-file-library";
 import type { PianoController } from "../../hooks/use-piano";
 import { prettyTitle } from "../../pretty-title";
-import type { ThemeTokens } from "../../theme";
 import {
+  color,
+  withAlpha,
   blurFilter,
   FONT_MONO,
   FONT_SANS,
   glassPanel,
-  hexA,
   miniButtonStyle,
   serifTitle,
 } from "../../theme";
@@ -22,8 +22,6 @@ import { OpenFileIcon, TrashIcon } from "../icons";
 type LibraryListEntry = LibraryEntry & LibrarySummary;
 
 interface LandingScreenProps {
-  theme: ThemeTokens;
-  accent: string;
   fileError: string | null;
   piano: PianoController;
   onFile: (e: Event) => void;
@@ -34,12 +32,10 @@ interface LandingScreenProps {
 }
 
 function LibraryRow({
-  theme,
   entry,
   onSelect,
   onDelete,
 }: {
-  theme: ThemeTokens;
   entry: LibraryListEntry;
   onSelect: () => void;
   onDelete: () => void;
@@ -52,8 +48,8 @@ function LibraryRow({
         alignItems: "stretch",
         gap: 6,
         borderRadius: 10,
-        border: `0.5px solid ${theme.border}`,
-        background: theme.panel,
+        border: `0.5px solid ${color.border}`,
+        background: color.panel,
         transition: "border-color 0.15s, background 0.15s",
       }}
     >
@@ -78,7 +74,7 @@ function LibraryRow({
           style={{
             fontSize: 13,
             fontWeight: 500,
-            color: theme.ink,
+            color: color.ink,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -87,13 +83,13 @@ function LibraryRow({
           {title}
         </span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: theme.inkSoft }}>
+          <span style={{ fontSize: 11, color: color.inkSoft }}>
             {entry.lastPracticedAt !== null
               ? formatDate(entry.lastPracticedAt)
               : "Not yet practiced"}
           </span>
           {entry.mode && (
-            <span style={{ fontSize: 11, color: theme.inkFaint }}>
+            <span style={{ fontSize: 11, color: color.inkFaint }}>
               {entry.mode}
             </span>
           )}
@@ -114,7 +110,7 @@ function LibraryRow({
         }}
         title="Delete"
         style={{
-          ...miniButtonStyle(theme),
+          ...miniButtonStyle(),
           alignSelf: "center",
           marginRight: 8,
         }}
@@ -126,8 +122,6 @@ function LibraryRow({
 }
 
 export function LandingScreen({
-  theme,
-  accent,
   fileError,
   piano,
   onFile,
@@ -145,8 +139,8 @@ export function LandingScreen({
         width: "100%",
         height: "100%",
         boxSizing: "border-box",
-        background: `radial-gradient(120% 80% at 50% 0%, ${theme.bg} 0%, ${theme.bgDeep} 100%)`,
-        color: theme.ink,
+        background: `radial-gradient(120% 80% at 50% 0%, ${color.bg} 0%, ${color.bgDeep} 100%)`,
+        color: color.ink,
         fontFamily: FONT_SANS,
         position: "relative",
         overflow: "hidden",
@@ -169,7 +163,7 @@ export function LandingScreen({
 
       {/* Fullscreen toggle — top right, matching practice screen */}
       <div style={{ position: "absolute", top: 18, right: 22, zIndex: 3 }}>
-        <FullscreenButton theme={theme} />
+        <FullscreenButton />
       </div>
 
       {/* Connection badge + help — bottom right, matching practice screen */}
@@ -184,13 +178,8 @@ export function LandingScreen({
           gap: 10,
         }}
       >
-        {!connected && <HelpBadge theme={theme} accent={accent} />}
-        <ConnectionBadge
-          theme={theme}
-          accent={accent}
-          piano={piano}
-          compact={true}
-        />
+        {!connected && <HelpBadge />}
+        <ConnectionBadge piano={piano} compact={true} />
       </div>
 
       {/* Centered drop zone + library */}
@@ -228,14 +217,14 @@ export function LandingScreen({
             gap: 18,
             padding: "32px 32px 56px",
             boxSizing: "border-box",
-            background: hovering ? hexA(accent, 0.08) : theme.panel,
-            border: `1.5px dashed ${hovering ? accent : hexA(theme.ink, 0.18)}`,
+            background: hovering ? withAlpha(color.accent, 0.08) : color.panel,
+            border: `1.5px dashed ${hovering ? color.accent : withAlpha(color.ink, 0.18)}`,
             borderRadius: 24,
             ...blurFilter("blur(20px) saturate(160%)"),
             cursor: "pointer",
             position: "relative",
             boxShadow: hovering
-              ? `0 8px 30px ${hexA(accent, 0.18)}`
+              ? `0 8px 30px ${withAlpha(color.accent, 0.18)}`
               : "0 4px 14px rgba(0,0,0,0.06)",
             transition: "all 0.18s ease",
           }}
@@ -258,8 +247,8 @@ export function LandingScreen({
               width: 56,
               height: 56,
               borderRadius: "50%",
-              background: hexA(accent, 0.12),
-              color: accent,
+              background: withAlpha(color.accent, 0.12),
+              color: color.accent,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -269,10 +258,10 @@ export function LandingScreen({
           </div>
 
           <div style={{ textAlign: "center" }}>
-            <div style={{ ...serifTitle(theme, 28), lineHeight: 1.2 }}>
+            <div style={{ ...serifTitle(28), lineHeight: 1.2 }}>
               Drop a piece here
             </div>
-            <div style={{ fontSize: 13, color: theme.inkSoft, marginTop: 6 }}>
+            <div style={{ fontSize: 13, color: color.inkSoft, marginTop: 6 }}>
               or click to browse
             </div>
           </div>
@@ -282,7 +271,7 @@ export function LandingScreen({
               style={{
                 margin: 0,
                 fontSize: 12,
-                color: theme.error,
+                color: color.error,
                 textAlign: "center",
               }}
             >
@@ -308,8 +297,8 @@ export function LandingScreen({
                   letterSpacing: "0.04em",
                   padding: "2px 6px",
                   borderRadius: 4,
-                  background: theme.border,
-                  color: theme.inkSoft,
+                  background: color.border,
+                  color: color.inkSoft,
                 }}
               >
                 {ext}
@@ -328,15 +317,14 @@ export function LandingScreen({
               borderRadius: 16,
               overflowY: "auto",
               maxHeight: 260,
-              ...glassPanel(theme),
+              ...glassPanel(),
             }}
           >
-            <span style={serifTitle(theme, 16)}>Your pieces</span>
+            <span style={serifTitle(16)}>Your pieces</span>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {entries.map((entry) => (
                 <LibraryRow
                   key={entry.hash}
-                  theme={theme}
                   entry={entry}
                   onSelect={() => onSelectEntry(entry)}
                   onDelete={() => onDeleteEntry(entry.hash)}

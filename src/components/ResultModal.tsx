@@ -1,10 +1,10 @@
 import type { ComponentChildren } from "preact";
 import type { MeasureRange, NamedRange } from "../selection";
-import type { ThemeTokens } from "../theme";
 import {
+  color,
+  withAlpha,
   FONT_SANS,
   glassPanel,
-  hexA,
   miniButtonStyle,
   modalIconButtonStyle,
   serifTitle,
@@ -73,8 +73,6 @@ export interface ResultRow {
 }
 
 interface ResultModalProps {
-  theme: ThemeTokens;
-  accent: string;
   selectionLabel: string;
   latest: {
     score: number;
@@ -97,8 +95,6 @@ interface ResultModalProps {
 }
 
 export function ResultModal({
-  theme,
-  accent,
   selectionLabel,
   latest,
   history,
@@ -117,7 +113,7 @@ export function ResultModal({
       label={`${selectionLabel} complete`}
       onClose={onClose}
       style={{
-        ...glassPanel(theme, 28, 180),
+        ...glassPanel(28, 180),
         borderRadius: 20,
         padding: "28px 32px 24px",
         boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
@@ -130,12 +126,11 @@ export function ResultModal({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ ...serifTitle(theme), lineHeight: 1.1, flex: 1 }}>
+        <div style={{ ...serifTitle(), lineHeight: 1.1, flex: 1 }}>
           {selectionLabel} complete
         </div>
         {onNavigateToRange && (previousRange || nextRange) && (
           <RangeNavigationButtons
-            theme={theme}
             previousRange={previousRange}
             nextRange={nextRange}
             onNavigateToRange={onNavigateToRange}
@@ -146,8 +141,8 @@ export function ResultModal({
       {latest && (
         <div
           style={{
-            background: hexA(accent, 0.07),
-            border: `0.5px solid ${hexA(accent, 0.2)}`,
+            background: withAlpha(color.accent, 0.07),
+            border: `0.5px solid ${withAlpha(color.accent, 0.2)}`,
             borderRadius: 12,
             padding: "14px 16px",
             display: "flex",
@@ -166,7 +161,7 @@ export function ResultModal({
               <span
                 style={{
                   fontSize: 10,
-                  color: theme.inkSoft,
+                  color: color.inkSoft,
                   letterSpacing: "0.06em",
                   textTransform: "uppercase",
                 }}
@@ -186,7 +181,7 @@ export function ResultModal({
               </span>
             </div>
             {latest.headerRight && (
-              <span style={{ fontSize: 12, color: theme.inkSoft }}>
+              <span style={{ fontSize: 12, color: color.inkSoft }}>
                 {latest.headerRight}
               </span>
             )}
@@ -198,7 +193,7 @@ export function ResultModal({
                 display: "grid",
                 gridTemplateColumns: `repeat(${latest.stats.length}, 1fr)`,
                 gap: 8,
-                borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
+                borderTop: `0.5px solid ${withAlpha(color.accent, 0.15)}`,
                 paddingTop: 10,
               }}
             >
@@ -210,7 +205,7 @@ export function ResultModal({
                   <span
                     style={{
                       fontSize: 10,
-                      color: theme.inkSoft,
+                      color: color.inkSoft,
                       letterSpacing: "0.06em",
                       textTransform: "uppercase",
                     }}
@@ -221,7 +216,7 @@ export function ResultModal({
                     style={{
                       fontSize: 16,
                       fontWeight: 600,
-                      color: theme.ink,
+                      color: color.ink,
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
@@ -234,10 +229,10 @@ export function ResultModal({
 
           <div
             style={{
-              borderTop: `0.5px solid ${hexA(accent, 0.15)}`,
+              borderTop: `0.5px solid ${withAlpha(color.accent, 0.15)}`,
               paddingTop: 10,
               fontSize: 13,
-              color: theme.inkSoft,
+              color: color.inkSoft,
             }}
           >
             {motivationalMessage(latest.score)}
@@ -257,7 +252,7 @@ export function ResultModal({
             <div
               style={{
                 fontSize: 10,
-                color: theme.inkSoft,
+                color: color.inkSoft,
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
               }}
@@ -270,7 +265,7 @@ export function ResultModal({
                 aria-label="Clear all"
                 title="Clear all"
                 onClick={onClearRows}
-                style={miniButtonStyle(theme)}
+                style={miniButtonStyle()}
               >
                 <TrashIcon size={13} />
               </button>
@@ -278,7 +273,7 @@ export function ResultModal({
           </div>
           <div
             style={{
-              border: `0.5px solid ${theme.border}`,
+              border: `0.5px solid ${color.border}`,
               borderRadius: 10,
               overflow: "hidden",
             }}
@@ -288,8 +283,8 @@ export function ResultModal({
                 display: "grid",
                 gridTemplateColumns: effectiveGridTemplate,
                 padding: "7px 12px",
-                background: hexA(theme.ink, 0.04),
-                borderBottom: `0.5px solid ${theme.border}`,
+                background: withAlpha(color.ink, 0.04),
+                borderBottom: `0.5px solid ${color.border}`,
               }}
             >
               {history.columns.map((h) => (
@@ -297,7 +292,7 @@ export function ResultModal({
                   key={h}
                   style={{
                     fontSize: 10,
-                    color: theme.inkSoft,
+                    color: color.inkSoft,
                     letterSpacing: "0.05em",
                     textTransform: "uppercase",
                   }}
@@ -316,16 +311,18 @@ export function ResultModal({
                   padding: "7px 12px",
                   borderBottom:
                     i < history.rows.length - 1
-                      ? `0.5px solid ${theme.border}`
+                      ? `0.5px solid ${color.border}`
                       : undefined,
                   alignItems: "center",
-                  background: row.isLatest ? hexA(accent, 0.06) : undefined,
+                  background: row.isLatest
+                    ? withAlpha(color.accent, 0.06)
+                    : undefined,
                 }}
               >
                 <span
                   style={{
                     fontSize: 12,
-                    color: row.isLatest ? theme.ink : theme.inkSoft,
+                    color: row.isLatest ? color.ink : color.inkSoft,
                     fontWeight: row.isLatest ? 500 : 400,
                   }}
                 >
@@ -337,7 +334,7 @@ export function ResultModal({
                     type="button"
                     aria-label="Delete"
                     onClick={() => onDeleteRow(row.key)}
-                    style={miniButtonStyle(theme)}
+                    style={miniButtonStyle()}
                   >
                     <TrashIcon size={12} />
                   </button>
@@ -353,7 +350,7 @@ export function ResultModal({
         onClick={onClose}
         style={{
           alignSelf: "flex-end",
-          background: accent,
+          background: color.accent,
           color: "#FFF7E5",
           border: "none",
           borderRadius: 10,
@@ -362,7 +359,7 @@ export function ResultModal({
           fontWeight: 600,
           cursor: "pointer",
           fontFamily: FONT_SANS,
-          boxShadow: `0 4px 12px ${hexA(accent, 0.35)}`,
+          boxShadow: `0 4px 12px ${withAlpha(color.accent, 0.35)}`,
           letterSpacing: "0.02em",
         }}
       >
@@ -376,12 +373,10 @@ export function ResultModal({
 // still rendered (dimmed and inert) so the pair keeps a stable position. The
 // destination's name is in the tooltip/accessible label.
 function RangeNavigationButtons({
-  theme,
   previousRange,
   nextRange,
   onNavigateToRange,
 }: {
-  theme: ThemeTokens;
   previousRange: NamedRange | null;
   nextRange: NamedRange | null;
   onNavigateToRange: (range: MeasureRange) => void;
@@ -403,7 +398,7 @@ function RangeNavigationButtons({
             onNavigateToRange({ from: range.from, to: range.to });
           }
         }}
-        style={modalIconButtonStyle(theme, range !== null)}
+        style={modalIconButtonStyle(range !== null)}
       >
         <ChevronIcon direction={direction === "next" ? "right" : "left"} />
       </button>

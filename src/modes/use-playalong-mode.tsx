@@ -30,7 +30,7 @@ import {
   selectionLabelForRange,
   selectionStartBeat,
 } from "../selection";
-import type { ThemeTokens } from "../theme";
+
 import { blurFilter } from "../theme";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
 import { soundingHighlights, useStableHighlights } from "./note-colors";
@@ -55,8 +55,6 @@ export interface PlayalongSettings {
   countIn: boolean;
   /** Current BPM — recorded with each attempt for the history table. */
   bpm: number;
-  accent: string;
-  theme: ThemeTokens;
 }
 
 export interface PlayalongModeHandle extends ModeHandle {
@@ -526,7 +524,6 @@ export function usePlayalongMode(
           musicxml.notes,
           control.currentBeat,
           control.measureRange,
-          settings.accent,
         ),
       );
     }
@@ -541,7 +538,6 @@ export function usePlayalongMode(
     playerMarkers,
     selectionNotes,
     settings.timingBeats,
-    settings.accent,
   ]);
   const noteHighlights = useStableHighlights(computedHighlights);
 
@@ -570,8 +566,6 @@ export function usePlayalongMode(
           }));
         return (
           <ResultModal
-            theme={settings.theme}
-            accent={settings.accent}
             selectionLabel={resultModal.selectionLabel}
             latest={
               latest
