@@ -248,6 +248,109 @@ export function rangeBounds(
 }
 
 /**
+ * Returns the beat to use for cursor and player positioning when jumping to a
+ * wait point. Grace notes have a raw beat just before the barline of their
+ * rendered measure (mainBeat - k * GRACE_NOTE_BEATS), which would place the
+ * cursor in the previous measure's visual span — potentially even behind the
+ * beat we just came from. Using the rendered measure's start beat keeps the
+ * cursor co-located with the highlighted note.
+ */
+export function waitPointCursorBeat(
+  waitPoint: WaitPoint,
+  measureStartBeats: number[],
+): number {
+  if (waitPoint.isGrace) {
+    return measureStartBeats[waitPoint.measure - 1] ?? waitPoint.beat;
+  }
+  return waitPoint.beat;
+}
+
+/**
+ * Where wait mode starts when it is switched on: the range's first wait
+ * point, or, with no range, the last wait point at or before the cursor. That
+ * lands on a main chord, so it walks back over any grace notes leading into
+ * it (they sort immediately before their main chord) so the player starts on
+ * the graces.
+ */
+export function startingPointIndex(
+  points: WaitPoint[],
+  range: MeasureRange | null,
+  cursorBeat: number,
+): number {
+  if (range) {
+    return rangeBounds(points, range).first;
+  }
+  let index = 0;
+  for (let candidate = 0; candidate < points.length; candidate++) {
+    if (points[candidate].beat > cursorBeat) {
+      break;
+    }
+    index = candidate;
+  }
+  while (index > 0 && points[index - 1].isGrace) {
+    index -= 1;
+  }
+  return index;
+}
+
+/**
+ * The wait point a seek to `beat` lands on: the last one in the range at or
+ * before it, or the range's first if the beat is before them all.
+ */
+export function pointIndexAtBeat(
+  points: WaitPoint[],
+  range: MeasureRange | null,
+  beat: number,
+): number {
+  const { first, end } = rangeBounds(points, range);
+  let index = first;
+  for (let candidate = first; candidate < end; candidate++) {
+    if (points[candidate].beat > beat) {
+      break;
+    }
+    index = candidate;
+  }
+  return index;
+}
+
+/**
+ * How long playing `selectionBeats` should take at the piece's own tempo, in
+ * milliseconds; 0 when the tempo is unknown.
+ */
+export function expectedDurationMilliseconds(
+  selectionBeats: number,
+  bpm: number,
+): number {
+  return bpm > 0 ? (selectionBeats / bpm) * 60_000 : 0;
+}
+
+/**
+ * A completed attempt's score out of 100: 70% accuracy (wrong notes per wait
+ * point, floored at 0) and 30% tempo (taking no longer than expected earns
+ * full marks; slower earns proportionally less). With no expected duration,
+ * tempo counts in full.
+ */
+export function scoreAttempt(attempt: {
+  wrongNotes: number;
+  elapsedMilliseconds: number;
+  waitPointCount: number;
+  expectedDurationMilliseconds: number;
+}): number {
+  const accuracy =
+    attempt.waitPointCount > 0
+      ? Math.max(0, 1 - attempt.wrongNotes / attempt.waitPointCount)
+      : 1;
+  const tempo =
+    attempt.expectedDurationMilliseconds > 0
+      ? Math.min(
+          1,
+          attempt.expectedDurationMilliseconds / attempt.elapsedMilliseconds,
+        )
+      : 1;
+  return Math.round(0.7 * accuracy * 100 + 0.3 * tempo * 100);
+}
+
+/**
  * Which keys are down, and what earlier judgments made of them: the part of
  * wait mode's state that key presses and releases change. Never mutated:
  * every function here returns a new one.

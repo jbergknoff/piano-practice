@@ -33,9 +33,14 @@ import {
   type WaitPoint,
   buildWaitPoints,
   initialKeyPressState,
+  expectedDurationMilliseconds,
   judgeKeyPress,
+  pointIndexAtBeat,
   rangeBounds,
   releaseKey,
+  scoreAttempt,
+  startingPointIndex,
+  waitPointCursorBeat,
 } from "./wait-matching";
 
 export type { DebugBeatEvent } from "../debug-log";
@@ -51,24 +56,6 @@ function formatTime(ms: number): string {
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-/**
- * Returns the beat to use for cursor and player positioning when jumping to a
- * wait point. Grace notes have a raw beat just before the barline of their
- * rendered measure (mainBeat - k * GRACE_NOTE_BEATS), which would place the
- * cursor in the previous measure's visual span — potentially even behind the
- * beat we just came from. Using the rendered measure's start beat keeps the
- * cursor co-located with the highlighted note.
- */
-function waitPointCursorBeat(
-  waitPoint: WaitPoint,
-  measureStartBeats: number[],
-): number {
-  if (waitPoint.isGrace) {
-    return measureStartBeats[waitPoint.measure - 1] ?? waitPoint.beat;
-  }
-  return waitPoint.beat;
 }
 
 export function useWaitMode(
@@ -354,18 +341,16 @@ export function useWaitMode(
     const selectionBeats =
       selectionEndBeat(range, measureStartBeats, mx.totalBeats) -
       selectionStartBeat(range, measureStartBeats);
-    const bpm = settingsRef.current.baseBpm;
-    const expectedDurationMs = bpm > 0 ? (selectionBeats / bpm) * 60_000 : 0;
-
-    const accuracy =
-      stats.totalPoints > 0
-        ? Math.max(0, 1 - stats.wrongNotes / stats.totalPoints)
-        : 1;
-    const tempo =
-      expectedDurationMs > 0
-        ? Math.min(1, expectedDurationMs / stats.elapsedMs)
-        : 1;
-    const score = Math.round(0.7 * accuracy * 100 + 0.3 * tempo * 100);
+    const expectedDurationMs = expectedDurationMilliseconds(
+      selectionBeats,
+      settingsRef.current.baseBpm,
+    );
+    const score = scoreAttempt({
+      wrongNotes: stats.wrongNotes,
+      elapsedMilliseconds: stats.elapsedMs,
+      waitPointCount: stats.totalPoints,
+      expectedDurationMilliseconds: expectedDurationMs,
+    });
 
     const attempt: WaitModeAttempt = {
       timestamp: Date.now(),
@@ -394,37 +379,16 @@ export function useWaitMode(
     const ctrl = controlRef.current;
     const points = waitPointsRef.current;
     const range = ctrl.measureRange;
-    const { first } = rangeBounds(points, range);
-
-    // Pick start point: range start if a range is active, else nearest wait
-    // point at or before the current cursor.
-    let startIdx: number;
-    if (range) {
-      startIdx = first;
-    } else {
-      startIdx = 0;
-      const currentBeat = ctrl.currentBeatRef.current;
-      for (let i = 0; i < points.length; i++) {
-        if (points[i].beat <= currentBeat) {
-          startIdx = i;
-        } else {
-          break;
-        }
-      }
-      // The cursor-based loop above lands on the main chord nearest the cursor.
-      // Walk back to the first grace note for that chord so the user starts
-      // from the grace notes, not the main chord. Grace notes are sorted
-      // immediately before their main chord (same measure), so they form a
-      // contiguous run here.
-      while (startIdx > 0 && points[startIdx - 1].isGrace) {
-        startIdx -= 1;
-      }
-    }
+    const startIndex = startingPointIndex(
+      points,
+      range,
+      ctrl.currentBeatRef.current,
+    );
 
     // Stop playback, snap cursor / player to the start point.
     ctrl.player.pause();
     ctrl.setIsPlaying(false);
-    jumpToPoint(startIdx);
+    jumpToPoint(startIndex);
     appliedRangeRef.current = range;
     resetAttempt();
 
@@ -460,17 +424,13 @@ export function useWaitMode(
   const handleSeek = useCallback(
     (beat: number) => {
       const ctrl = controlRef.current;
-      const points = waitPointsRef.current;
-      const { first, end } = rangeBounds(points, ctrl.measureRange);
-      let idx = first;
-      for (let i = first; i < end; i++) {
-        if (points[i].beat > beat) {
-          break;
-        }
-        idx = i;
-      }
-      setPointIndex(idx);
-      pointIndexRef.current = idx;
+      const index = pointIndexAtBeat(
+        waitPointsRef.current,
+        ctrl.measureRange,
+        beat,
+      );
+      setPointIndex(index);
+      pointIndexRef.current = index;
       // A seek starts a fresh attempt from the new position: reset both the
       // live matching state and the per-attempt scoring tally.
       resetAttempt();

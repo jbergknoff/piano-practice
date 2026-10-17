@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  getHighlightedNoteIds,
   installMocks,
   loadFile,
   mockCrypto,
@@ -9,6 +10,7 @@ import {
   sendNoteOn,
   waitForHighlightedNoteIds,
   waitForMockBluetoothConnected,
+  waitForRender,
 } from "./helpers";
 
 // tied-note.musicxml is a single 4/4 measure:
@@ -50,12 +52,11 @@ test("a released tied note must be pressed again to advance past its tie-stop", 
   await sendChordOn(page, [C5, E5]);
   await sendChordOff(page, [C5, E5]);
   await waitForHighlightedNoteIds(page, HL_BEAT2);
-  await page.waitForTimeout(80);
 
   // Playing only G5 must NOT advance: the tied C5 is not sounding.
   await sendNoteOn(page, G5);
-  await page.waitForTimeout(250);
-  await waitForHighlightedNoteIds(page, HL_BEAT2);
+  await waitForRender(page);
+  expect(await getHighlightedNoteIds(page)).toEqual([...HL_BEAT2].sort());
 
   // Pressing the released C5 (with G5 still down) completes the chord.
   await sendNoteOn(page, C5);
@@ -77,7 +78,6 @@ test("a held tied note advances without being pressed again", async ({
   await sendChordOn(page, [C5, E5]);
   await sendNoteOff(page, E5);
   await waitForHighlightedNoteIds(page, HL_BEAT2);
-  await page.waitForTimeout(80);
 
   // C5 is still down, so playing the fresh G5 alone completes the chord.
   await sendNoteOn(page, G5);
