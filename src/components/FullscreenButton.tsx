@@ -1,5 +1,5 @@
 import { useFullscreen } from "../hooks/use-fullscreen";
-import type { ThemeTokens } from "../theme";
+
 import { cornerButtonStyle } from "../theme";
 import { CollapseIcon, ExpandIcon } from "./icons";
 
@@ -8,7 +8,7 @@ import { CollapseIcon, ExpandIcon } from "./icons";
  * the platform matrix). Renders nothing where fullscreen is unavailable, so
  * iPhone Safari sees no dead button.
  */
-export function FullscreenButton({ theme }: { theme: ThemeTokens }) {
+export function FullscreenButton() {
   const { supported, isFullscreen, toggle } = useFullscreen();
 
   if (!supported) {
@@ -19,7 +19,7 @@ export function FullscreenButton({ theme }: { theme: ThemeTokens }) {
     <button
       type="button"
       onClick={toggle}
-      style={cornerButtonStyle(theme)}
+      style={cornerButtonStyle()}
       title={isFullscreen ? "Exit fullscreen" : "Fullscreen (landscape)"}
     >
       {isFullscreen ? <CollapseIcon /> : <ExpandIcon />}

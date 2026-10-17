@@ -8,8 +8,7 @@ import {
   loadPlayalongAttemptHistory,
 } from "../hooks/use-file-history";
 import { type MeasureRange, selectionKeyForRange } from "../selection";
-import type { ThemeTokens } from "../theme";
-import { miniButtonStyle } from "../theme";
+import { color, miniButtonStyle, withAlpha } from "../theme";
 import { Drawer } from "./Drawer";
 import { ModalHeader } from "./Modal";
 import { PencilIcon, PlusIcon } from "./icons";
@@ -17,8 +16,6 @@ import { PencilIcon, PlusIcon } from "./icons";
 interface SelectionRangesDrawerProps {
   open: boolean;
   onClose: () => void;
-  theme: ThemeTokens;
-  accent: string;
   totalMeasures: number;
   measureRange: MeasureRange | null;
   onMeasureRangeChange: (r: MeasureRange | null) => void;
@@ -72,13 +69,11 @@ function MiniBar({
   from,
   to,
   total,
-  accent,
   active,
 }: {
   from: number;
   to: number;
   total: number;
-  accent: string;
   active: boolean;
 }) {
   const left = (from - 1) / total;
@@ -101,7 +96,7 @@ function MiniBar({
           top: 0,
           bottom: 0,
           borderRadius: 3,
-          background: active ? accent : "rgba(128,128,128,0.45)",
+          background: active ? color.accent : "rgba(128,128,128,0.45)",
         }}
       />
     </div>
@@ -116,8 +111,6 @@ interface Preset {
 export function SelectionRangesDrawer({
   open,
   onClose,
-  theme,
-  accent,
   totalMeasures,
   measureRange,
   onMeasureRangeChange,
@@ -199,35 +192,34 @@ export function SelectionRangesDrawer({
       label="Ranges"
       style={{
         width: 300,
-        background: theme.panelSolid,
-        borderRight: `0.5px solid ${theme.border}`,
+        background: color.panelSolid,
+        borderRight: `0.5px solid ${color.border}`,
         boxShadow: "20px 0 40px rgba(0,0,0,0.18)",
         padding: "22px 24px",
         gap: 20,
-        color: theme.ink,
+        color: color.ink,
         overflowY: "auto",
         boxSizing: "border-box",
       }}
     >
-      <ModalHeader theme={theme} title="Ranges" onClose={onClose} />
+      <ModalHeader title="Ranges" onClose={onClose} />
 
       {/* Bookmarks */}
       <Section
         label="Bookmarks"
-        theme={theme}
         action={
           <button
             type="button"
             onClick={onCreateBookmark}
             title="New bookmark"
-            style={miniButtonStyle(theme)}
+            style={miniButtonStyle()}
           >
             <PlusIcon />
           </button>
         }
       >
         {bookmarks.length === 0 ? (
-          <span style={{ fontSize: 11, color: theme.inkFaint }}>
+          <span style={{ fontSize: 11, color: color.inkFaint }}>
             No bookmarks yet
           </span>
         ) : (
@@ -246,14 +238,11 @@ export function SelectionRangesDrawer({
                 best={bestForRange(range)}
                 bestPlayalong={bestPlayalongForRange(range)}
                 active={active}
-                accent={accent}
-                theme={theme}
                 miniBar={
                   <MiniBar
                     from={bookmark.from}
                     to={bookmark.to}
                     total={n}
-                    accent={accent}
                     active={active}
                   />
                 }
@@ -265,7 +254,7 @@ export function SelectionRangesDrawer({
         )}
       </Section>
 
-      <div style={{ height: 1, background: theme.border }} />
+      <div style={{ height: 1, background: color.border }} />
 
       {/* Whole piece */}
       <PresetButton
@@ -274,23 +263,13 @@ export function SelectionRangesDrawer({
         best={bestForRange(null)}
         bestPlayalong={bestPlayalongForRange(null)}
         active={wholeIsActive}
-        accent={accent}
-        theme={theme}
-        miniBar={
-          <MiniBar
-            from={1}
-            to={n}
-            total={n}
-            accent={accent}
-            active={wholeIsActive}
-          />
-        }
+        miniBar={<MiniBar from={1} to={n} total={n} active={wholeIsActive} />}
         onClick={() => handleSelect(null)}
       />
 
       {/* Repeat sections */}
       {repeatSections.length > 0 && (
-        <Section label="Sections" theme={theme}>
+        <Section label="Sections">
           {repeatSections.map((sec) => {
             const range = { from: sec.from, to: sec.to };
             const active = rangesEqual(measureRange, range);
@@ -302,14 +281,11 @@ export function SelectionRangesDrawer({
                 best={bestForRange(range)}
                 bestPlayalong={bestPlayalongForRange(range)}
                 active={active}
-                accent={accent}
-                theme={theme}
                 miniBar={
                   <MiniBar
                     from={sec.from}
                     to={sec.to}
                     total={n}
-                    accent={accent}
                     active={active}
                   />
                 }
@@ -322,7 +298,7 @@ export function SelectionRangesDrawer({
 
       {/* Halves */}
       {n >= 2 && (
-        <Section label="Halves" theme={theme}>
+        <Section label="Halves">
           {halves.map((p) => {
             const active = rangesEqual(measureRange, p.range);
             return (
@@ -333,15 +309,12 @@ export function SelectionRangesDrawer({
                 best={bestForRange(p.range)}
                 bestPlayalong={bestPlayalongForRange(p.range)}
                 active={active}
-                accent={accent}
-                theme={theme}
                 miniBar={
                   p.range ? (
                     <MiniBar
                       from={p.range.from}
                       to={p.range.to}
                       total={n}
-                      accent={accent}
                       active={active}
                     />
                   ) : null
@@ -355,7 +328,7 @@ export function SelectionRangesDrawer({
 
       {/* Quarters */}
       {n >= 4 && (
-        <Section label="Quarters" theme={theme}>
+        <Section label="Quarters">
           <div
             style={{
               display: "grid",
@@ -373,15 +346,12 @@ export function SelectionRangesDrawer({
                   best={bestForRange(p.range)}
                   bestPlayalong={bestPlayalongForRange(p.range)}
                   active={active}
-                  accent={accent}
-                  theme={theme}
                   miniBar={
                     p.range ? (
                       <MiniBar
                         from={p.range.from}
                         to={p.range.to}
                         total={n}
-                        accent={accent}
                         active={active}
                       />
                     ) : null
@@ -399,12 +369,10 @@ export function SelectionRangesDrawer({
 
 function Section({
   label,
-  theme,
   action,
   children,
 }: {
   label: string;
-  theme: ThemeTokens;
   action?: preact.ComponentChildren;
   children: preact.ComponentChildren;
 }) {
@@ -423,7 +391,7 @@ function Section({
             fontWeight: 500,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: theme.inkSoft,
+            color: color.inkSoft,
           }}
         >
           {label}
@@ -441,8 +409,6 @@ function RangeContent({
   best,
   bestPlayalong,
   active,
-  accent,
-  theme,
   miniBar,
 }: {
   label: string;
@@ -450,8 +416,6 @@ function RangeContent({
   best: WaitModeAttempt | null;
   bestPlayalong: PlayalongAttempt | null;
   active: boolean;
-  accent: string;
-  theme: ThemeTokens;
   miniBar: preact.ComponentChildren;
 }) {
   const hasAny = best !== null || bestPlayalong !== null;
@@ -469,7 +433,7 @@ function RangeContent({
           style={{
             fontSize: 12,
             fontWeight: active ? 600 : 400,
-            color: active ? accent : theme.ink,
+            color: active ? color.accent : color.ink,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -478,7 +442,7 @@ function RangeContent({
           {label}
         </span>
         <span
-          style={{ fontSize: 10, color: theme.inkSoft, whiteSpace: "nowrap" }}
+          style={{ fontSize: 10, color: color.inkSoft, whiteSpace: "nowrap" }}
         >
           {sublabel}
         </span>
@@ -506,7 +470,7 @@ function RangeContent({
           )}
         </div>
       ) : (
-        <span style={{ fontSize: 10, color: theme.inkFaint }}>
+        <span style={{ fontSize: 10, color: color.inkFaint }}>
           No attempts yet
         </span>
       )}
@@ -520,8 +484,6 @@ function PresetButton({
   best,
   bestPlayalong,
   active,
-  accent,
-  theme,
   miniBar,
   onClick,
 }: {
@@ -530,8 +492,6 @@ function PresetButton({
   best: WaitModeAttempt | null;
   bestPlayalong: PlayalongAttempt | null;
   active: boolean;
-  accent: string;
-  theme: ThemeTokens;
   miniBar: preact.ComponentChildren;
   onClick: () => void;
 }) {
@@ -547,9 +507,9 @@ function PresetButton({
         padding: "10px 12px",
         borderRadius: 10,
         border: active
-          ? `1.5px solid ${accent}`
-          : `0.5px solid ${theme.border}`,
-        background: active ? `${accent}18` : theme.panel,
+          ? `1.5px solid ${color.accent}`
+          : `0.5px solid ${color.border}`,
+        background: active ? withAlpha(color.accent, 0x18 / 255) : color.panel,
         cursor: "pointer",
         textAlign: "left",
         width: "100%",
@@ -563,8 +523,6 @@ function PresetButton({
         best={best}
         bestPlayalong={bestPlayalong}
         active={active}
-        accent={accent}
-        theme={theme}
         miniBar={miniBar}
       />
     </button>
@@ -577,8 +535,6 @@ function BookmarkButton({
   best,
   bestPlayalong,
   active,
-  accent,
-  theme,
   miniBar,
   onClick,
   onEdit,
@@ -588,8 +544,6 @@ function BookmarkButton({
   best: WaitModeAttempt | null;
   bestPlayalong: PlayalongAttempt | null;
   active: boolean;
-  accent: string;
-  theme: ThemeTokens;
   miniBar: preact.ComponentChildren;
   onClick: () => void;
   onEdit: () => void;
@@ -602,9 +556,9 @@ function BookmarkButton({
         gap: 6,
         borderRadius: 10,
         border: active
-          ? `1.5px solid ${accent}`
-          : `0.5px solid ${theme.border}`,
-        background: active ? `${accent}18` : theme.panel,
+          ? `1.5px solid ${color.accent}`
+          : `0.5px solid ${color.border}`,
+        background: active ? withAlpha(color.accent, 0x18 / 255) : color.panel,
         transition: "border-color 0.15s, background 0.15s",
       }}
     >
@@ -631,8 +585,6 @@ function BookmarkButton({
           best={best}
           bestPlayalong={bestPlayalong}
           active={active}
-          accent={accent}
-          theme={theme}
           miniBar={miniBar}
         />
       </button>
@@ -648,8 +600,8 @@ function BookmarkButton({
           flexShrink: 0,
           background: "transparent",
           border: "none",
-          borderLeft: `0.5px solid ${theme.border}`,
-          color: theme.inkSoft,
+          borderLeft: `0.5px solid ${color.border}`,
+          color: color.inkSoft,
           cursor: "pointer",
           outline: "none",
         }}

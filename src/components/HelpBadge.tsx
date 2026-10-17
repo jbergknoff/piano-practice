@@ -1,7 +1,13 @@
 import { useState } from "preact/hooks";
 import type { DebugBeatEvent } from "../modes/use-wait-mode";
-import type { ThemeTokens } from "../theme";
-import { blurFilter, FONT_MONO, FONT_SANS, hexA, radius } from "../theme";
+import {
+  color,
+  withAlpha,
+  blurFilter,
+  FONT_MONO,
+  FONT_SANS,
+  radius,
+} from "../theme";
 import { DebugLogTab } from "./DebugLogTab";
 import { Modal, ModalHeader } from "./Modal";
 import { BluetoothIcon } from "./icons";
@@ -15,13 +21,9 @@ const emptyLog = (): DebugBeatEvent[] => [];
 const noopClear = () => {};
 
 export function HelpBadge({
-  theme,
-  accent,
   getDebugLog = emptyLog,
   clearDebugLog = noopClear,
 }: {
-  theme: ThemeTokens;
-  accent: string;
   getDebugLog?: () => DebugBeatEvent[];
   clearDebugLog?: () => void;
 }) {
@@ -38,10 +40,10 @@ export function HelpBadge({
           width: 38,
           height: 38,
           borderRadius: radius.lg,
-          border: `1px solid ${theme.border}`,
-          background: theme.panel,
+          border: `1px solid ${color.border}`,
+          background: color.panel,
           ...blurFilter("blur(12px)"),
-          color: theme.inkSoft,
+          color: color.inkSoft,
           fontSize: 12,
           fontFamily: FONT_SANS,
           fontWeight: 600,
@@ -61,8 +63,8 @@ export function HelpBadge({
           label="Help"
           onClose={() => setOpen(false)}
           style={{
-            background: theme.panelSolid,
-            border: `0.5px solid ${theme.border}`,
+            background: color.panelSolid,
+            border: `0.5px solid ${color.border}`,
             borderRadius: 20,
             boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
             width: "min(400px, calc(100vw - 40px))",
@@ -74,7 +76,6 @@ export function HelpBadge({
           }}
         >
           <ModalHeader
-            theme={theme}
             title="Help"
             onClose={() => setOpen(false)}
             style={{ padding: "20px 24px 0", flexShrink: 0 }}
@@ -104,9 +105,9 @@ export function HelpBadge({
                   style={{
                     padding: "5px 14px",
                     borderRadius: 20,
-                    border: active ? "none" : `0.5px solid ${theme.border}`,
-                    background: active ? accent : "transparent",
-                    color: active ? "#FFF7E5" : theme.inkSoft,
+                    border: active ? "none" : `0.5px solid ${color.border}`,
+                    background: active ? color.accent : "transparent",
+                    color: active ? "#FFF7E5" : color.inkSoft,
                     fontSize: 12,
                     fontWeight: active ? 600 : 400,
                     cursor: "pointer",
@@ -130,13 +131,11 @@ export function HelpBadge({
             }}
           >
             {tab === "about" ? (
-              <AboutTab theme={theme} accent={accent} />
+              <AboutTab />
             ) : tab === "bluetooth" ? (
-              <BluetoothTab theme={theme} accent={accent} />
+              <BluetoothTab />
             ) : (
               <DebugLogTab
-                theme={theme}
-                accent={accent}
                 getDebugLog={getDebugLog}
                 clearDebugLog={clearDebugLog}
               />
@@ -148,20 +147,14 @@ export function HelpBadge({
   );
 }
 
-function AboutTab({
-  theme,
-  accent,
-}: {
-  theme: ThemeTokens;
-  accent: string;
-}) {
+function AboutTab() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <p
         style={{
           margin: 0,
           fontSize: 13,
-          color: theme.inkSoft,
+          color: color.inkSoft,
           lineHeight: 1.55,
         }}
       >
@@ -171,7 +164,7 @@ function AboutTab({
           href="https://github.com/jbergknoff/piano-practice"
           target="_blank"
           rel="noreferrer"
-          style={{ color: accent, textDecoration: "none" }}
+          style={{ color: color.accent, textDecoration: "none" }}
         >
           Source on GitHub ↗
         </a>
@@ -184,7 +177,7 @@ function AboutTab({
             fontWeight: 500,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            color: theme.inkSoft,
+            color: color.inkSoft,
           }}
         >
           Modes
@@ -209,18 +202,18 @@ function AboutTab({
             style={{
               padding: "10px 12px",
               borderRadius: 10,
-              border: `0.5px solid ${theme.border}`,
-              background: hexA(theme.ink, 0.03),
+              border: `0.5px solid ${color.border}`,
+              background: withAlpha(color.ink, 0.03),
               display: "flex",
               flexDirection: "column",
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 12, fontWeight: 600, color: theme.ink }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: color.ink }}>
               {name}
             </span>
             <span
-              style={{ fontSize: 12, color: theme.inkSoft, lineHeight: 1.5 }}
+              style={{ fontSize: 12, color: color.inkSoft, lineHeight: 1.5 }}
             >
               {desc}
             </span>
@@ -231,13 +224,7 @@ function AboutTab({
   );
 }
 
-function BluetoothTab({
-  theme,
-  accent,
-}: {
-  theme: ThemeTokens;
-  accent: string;
-}) {
+function BluetoothTab() {
   const steps: { key: string; content: preact.ComponentChildren }[] = [
     {
       key: "pair",
@@ -256,7 +243,7 @@ function BluetoothTab({
               gap: 3,
               padding: "1px 6px",
               borderRadius: 6,
-              background: hexA(theme.ink, 0.08),
+              background: withAlpha(color.ink, 0.08),
               verticalAlign: "middle",
             }}
           >
@@ -289,8 +276,8 @@ function BluetoothTab({
                 width: 18,
                 height: 18,
                 borderRadius: "50%",
-                background: hexA(accent, 0.14),
-                color: accent,
+                background: withAlpha(color.accent, 0.14),
+                color: color.accent,
                 fontSize: 10,
                 fontWeight: 700,
                 display: "flex",
@@ -303,7 +290,7 @@ function BluetoothTab({
               {i + 1}
             </span>
             <span
-              style={{ fontSize: 12, color: theme.inkSoft, lineHeight: 1.45 }}
+              style={{ fontSize: 12, color: color.inkSoft, lineHeight: 1.45 }}
             >
               {content}
             </span>
@@ -316,10 +303,10 @@ function BluetoothTab({
           style={{
             padding: "10px 12px",
             borderRadius: 10,
-            border: `0.5px solid ${theme.border}`,
-            background: hexA(theme.ink, 0.03),
+            border: `0.5px solid ${color.border}`,
+            background: withAlpha(color.ink, 0.03),
             fontSize: 11,
-            color: theme.inkSoft,
+            color: color.inkSoft,
             lineHeight: 1.5,
           }}
         >
@@ -342,7 +329,7 @@ function BluetoothTab({
       <div
         style={{
           fontSize: 11,
-          color: theme.inkFaint,
+          color: color.inkFaint,
           lineHeight: 1.4,
           paddingTop: 2,
         }}
@@ -352,7 +339,7 @@ function BluetoothTab({
           href="https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md"
           target="_blank"
           rel="noreferrer"
-          style={{ color: accent, textDecoration: "none" }}
+          style={{ color: color.accent, textDecoration: "none" }}
         >
           Implementation status ↗
         </a>

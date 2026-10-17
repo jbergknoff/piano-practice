@@ -3,19 +3,10 @@ import { selectionStartBeat } from "../selection";
 import type { ModeControl, ModeHandle, NoteHighlight } from "./mode-control";
 import { soundingHighlights, useStableHighlights } from "./note-colors";
 
-export interface ListenModeSettings {
-  accent: string;
-}
-
-export function useListenMode(
-  control: ModeControl,
-  settings: ListenModeSettings,
-): ModeHandle {
+export function useListenMode(control: ModeControl): ModeHandle {
   const activeRef = useRef(false);
   const controlRef = useRef(control);
   controlRef.current = control;
-  const settingsRef = useRef(settings);
-  settingsRef.current = settings;
 
   const handlePlayPause = useCallback(async () => {
     const ctrl = controlRef.current;
@@ -67,14 +58,8 @@ export function useListenMode(
       musicxml.notes,
       currentBeat,
       control.measureRange,
-      settings.accent,
     );
-  }, [
-    control.musicxml,
-    control.currentBeat,
-    control.measureRange,
-    settings.accent,
-  ]);
+  }, [control.musicxml, control.currentBeat, control.measureRange]);
   const noteHighlights = useStableHighlights(computedHighlights);
 
   return {

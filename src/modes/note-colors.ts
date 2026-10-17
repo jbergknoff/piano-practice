@@ -4,6 +4,7 @@ import {
   playbackNoteId,
 } from "../../lib/musicxml/musicxml-playback";
 import { type MeasureRange, measureInRange } from "../selection";
+import { colorValue } from "../theme";
 import type { NoteHighlight } from "./mode-control";
 
 /**
@@ -28,7 +29,6 @@ export function soundingHighlights(
   notes: PlaybackNote[],
   currentBeat: number,
   range: MeasureRange | null,
-  accent: string,
 ): NoteHighlight[] {
   const highlights: NoteHighlight[] = [];
   for (const note of notes) {
@@ -42,7 +42,7 @@ export function soundingHighlights(
       highlights.push({
         kind: "score",
         id: playbackNoteId(note),
-        color: accent,
+        color: colorValue.accent,
       });
     }
   }

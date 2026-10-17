@@ -30,15 +30,17 @@ import {
   selectionEndBeat,
   selectionStartBeat,
 } from "../../selection";
-import type { ThemeTokens } from "../../theme";
 import {
+  color,
+  withAlpha,
   chipToggleButtonStyle,
   cornerButtonStyle,
   FONT_SANS,
   glassPanel,
-  hexA,
   miniButtonStyle,
   serifTitle,
+  colorValue,
+  focusRangeTint,
 } from "../../theme";
 import { ContextMenu } from "../ContextMenu";
 import { ConnectionBadge } from "../ConnectionBadge";
@@ -66,8 +68,6 @@ import {
 } from "../icons";
 
 interface PracticeScreenProps {
-  theme: ThemeTokens;
-  accent: string;
   fileName: string;
   pieceTitle: string;
   musicxml: ScoreConversion | null;
@@ -108,8 +108,6 @@ interface PracticeScreenProps {
 }
 
 export function PracticeScreen({
-  theme,
-  accent,
   fileName,
   pieceTitle,
   musicxml,
@@ -327,8 +325,6 @@ export function PracticeScreen({
   const wait = useWaitMode(control, {
     noteSensitivityMilliseconds,
     baseBpm,
-    accent,
-    theme,
   });
   const playalong = usePlayalongMode(control, {
     timingBeats: playalongTimingBeats,
@@ -336,10 +332,8 @@ export function PracticeScreen({
     metronome: playalongMetronome,
     countIn: playalongCountIn,
     bpm,
-    accent,
-    theme,
   });
-  const listen = useListenMode(control, { accent });
+  const listen = useListenMode(control);
 
   const active =
     mode === "wait" ? wait : mode === "playalong" ? playalong : listen;
@@ -449,8 +443,8 @@ export function PracticeScreen({
       style={{
         width: "100%",
         height: "100%",
-        background: theme.bg,
-        color: theme.ink,
+        background: color.bg,
+        color: color.ink,
         fontFamily: FONT_SANS,
         position: "relative",
         overflow: "hidden",
@@ -473,11 +467,11 @@ export function PracticeScreen({
         <SheetMusicDisplay
           musicxml={musicxml.musicxml}
           noteHighlights={active.noteHighlights}
-          accentColor={accent}
+          accentColor={colorValue.accent}
           textFontFamily={FONT_SANS}
-          inkColor={theme.ink}
+          inkColor={colorValue.ink}
           focusRange={measureRange}
-          focusColor={hexA(accent, 0.09)}
+          focusColor={focusRangeTint}
           onFocusRangeChange={onMeasureRangeChange}
           snapBeatRef={snapBeatRef}
           snapGeneration={snapGeneration}
@@ -487,7 +481,7 @@ export function PracticeScreen({
           onSheetContextMenu={(info) => {
             setContextMenu(info);
           }}
-          stickySignatureBackground={theme.bg}
+          stickySignatureBackground={color.bg}
           containerStyle={{
             position: "absolute",
             inset: 0,
@@ -506,7 +500,7 @@ export function PracticeScreen({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: theme.inkFaint,
+            color: color.inkFaint,
             fontSize: 14,
           }}
         >
@@ -523,7 +517,7 @@ export function PracticeScreen({
           bottom: 56,
           width: 50,
           pointerEvents: "none",
-          background: `linear-gradient(90deg, ${theme.bg} 0%, transparent 100%)`,
+          background: `linear-gradient(90deg, ${color.bg} 0%, transparent 100%)`,
           zIndex: 1,
         }}
       />
@@ -536,7 +530,7 @@ export function PracticeScreen({
           bottom: 56,
           width: 50,
           pointerEvents: "none",
-          background: `linear-gradient(270deg, ${theme.bg} 0%, transparent 100%)`,
+          background: `linear-gradient(270deg, ${color.bg} 0%, transparent 100%)`,
           zIndex: 1,
         }}
       />
@@ -557,7 +551,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onGoToLanding}
-            style={cornerButtonStyle(theme)}
+            style={cornerButtonStyle()}
             title="Back to your pieces"
           >
             <HomeIcon />
@@ -565,7 +559,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onOpenFile}
-            style={cornerButtonStyle(theme)}
+            style={cornerButtonStyle()}
             title="Open file"
           >
             <OpenFileIcon />
@@ -583,7 +577,7 @@ export function PracticeScreen({
           >
             <div
               style={{
-                ...serifTitle(theme, 28),
+                ...serifTitle(28),
                 lineHeight: 1,
                 letterSpacing: "-0.01em",
               }}
@@ -605,7 +599,7 @@ export function PracticeScreen({
           zIndex: 2,
         }}
       >
-        <FullscreenButton theme={theme} />
+        <FullscreenButton />
       </div>
 
       {/* BOTTOM LEFT: transport controls + mode selector */}
@@ -619,7 +613,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={() => setRangesDrawerOpen(true)}
-              style={cornerButtonStyle(theme)}
+              style={cornerButtonStyle()}
               title="Select range"
             >
               <BookmarkIcon />
@@ -629,7 +623,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handleReset}
-              style={cornerButtonStyle(theme)}
+              style={cornerButtonStyle()}
               title={
                 measureRange
                   ? "Return to start of selection. Click to reset."
@@ -643,7 +637,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handlePlayPause}
-              style={cornerButtonStyle(theme)}
+              style={cornerButtonStyle()}
               title={showStopIcon ? "Stop" : isPlaying ? "Pause" : "Play"}
             >
               {showStopIcon ? (
@@ -668,7 +662,7 @@ export function PracticeScreen({
                   style={{
                     height: 38,
                     padding: "0 8px",
-                    ...glassPanel(theme),
+                    ...glassPanel(),
                     borderRadius: 12,
                     display: "flex",
                     alignItems: "center",
@@ -682,7 +676,7 @@ export function PracticeScreen({
                   <span
                     style={{
                       fontSize: 10,
-                      color: theme.inkSoft,
+                      color: color.inkSoft,
                       letterSpacing: "0.06em",
                       textTransform: "uppercase",
                       padding: "0 0 0 2px",
@@ -698,7 +692,7 @@ export function PracticeScreen({
                         style={{
                           fontWeight: 600,
                           fontSize: 13,
-                          color: theme.ink,
+                          color: color.ink,
                         }}
                       >
                         {bpm}
@@ -711,7 +705,7 @@ export function PracticeScreen({
                     onClick={() => setBpmInputModalOpen(true)}
                     title="Set a custom tempo"
                     style={{
-                      ...miniButtonStyle(theme),
+                      ...miniButtonStyle(),
                       flexShrink: 0,
                       marginRight: 2,
                     }}
@@ -725,7 +719,7 @@ export function PracticeScreen({
                       onClick={() => onBpmChange(baseBpm)}
                       title="Reset to default tempo"
                       style={{
-                        ...miniButtonStyle(theme),
+                        ...miniButtonStyle(),
                         flexShrink: 0,
                         marginRight: 2,
                       }}
@@ -742,7 +736,7 @@ export function PracticeScreen({
                           key={presetPercentages[index]}
                           type="button"
                           onClick={() => onBpmChange(targetBpm)}
-                          style={chipToggleButtonStyle(theme, accent, isActive)}
+                          style={chipToggleButtonStyle(isActive)}
                           aria-pressed={isActive}
                         >
                           {targetBpm}
@@ -760,7 +754,7 @@ export function PracticeScreen({
             class="bl-modes"
             style={{
               padding: "4px 6px",
-              ...glassPanel(theme),
+              ...glassPanel(),
               borderRadius: 12,
               display: "flex",
               alignItems: "center",
@@ -784,16 +778,16 @@ export function PracticeScreen({
                   disabled={disabled}
                   onClick={() => handleModeChange(m)}
                   style={{
-                    ...miniButtonStyle(theme),
+                    ...miniButtonStyle(),
                     padding: "0 14px",
                     minWidth: 60,
                     height: 30,
-                    background: isActive ? accent : "transparent",
-                    color: isActive ? "#FFF7E5" : theme.ink,
+                    background: isActive ? color.accent : "transparent",
+                    color: isActive ? "#FFF7E5" : color.ink,
                     fontWeight: isActive ? 600 : 400,
                     fontSize: 12,
                     boxShadow: isActive
-                      ? `0 2px 8px ${hexA(accent, 0.35)}`
+                      ? `0 2px 8px ${withAlpha(color.accent, 0.35)}`
                       : undefined,
                     cursor: disabled ? "not-allowed" : "pointer",
                     opacity: disabled ? 0.35 : 1,
@@ -831,22 +825,12 @@ export function PracticeScreen({
           zIndex: 4,
         }}
       >
-        <HelpBadge
-          theme={theme}
-          accent={accent}
-          getDebugLog={getDebugLog}
-          clearDebugLog={clearDebugLog}
-        />
-        <ConnectionBadge
-          theme={theme}
-          accent={accent}
-          piano={piano}
-          compact={true}
-        />
+        <HelpBadge getDebugLog={getDebugLog} clearDebugLog={clearDebugLog} />
+        <ConnectionBadge piano={piano} compact={true} />
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          style={cornerButtonStyle(theme)}
+          style={cornerButtonStyle()}
           title="Settings"
         >
           <GearIcon />
@@ -873,7 +857,6 @@ export function PracticeScreen({
           clientX={contextMenu.clientX}
           clientY={contextMenu.clientY}
           onClose={() => setContextMenu(null)}
-          theme={theme}
           items={[
             {
               label: `Focus measure ${contextMenu.measureNumber}`,
@@ -927,8 +910,6 @@ export function PracticeScreen({
           onSave={bookmarks.saveEditor}
           onCancel={bookmarks.closeEditor}
           onDelete={bookmarks.deleteEditing}
-          theme={theme}
-          accent={accent}
         />
       )}
 
@@ -938,14 +919,14 @@ export function PracticeScreen({
           label="Piece info"
           onClose={() => setPieceInfoOpen(false)}
           style={{
-            ...glassPanel(theme, 24, 160),
+            ...glassPanel(24, 160),
             borderRadius: 16,
             padding: "24px 28px",
             boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
             minWidth: 280,
           }}
         >
-          <div style={{ ...serifTitle(theme, 24), marginBottom: 20 }}>
+          <div style={{ ...serifTitle(24), marginBottom: 20 }}>
             {pieceTitle}
           </div>
           {(
@@ -974,16 +955,16 @@ export function PracticeScreen({
                 alignItems: "baseline",
                 gap: 24,
                 padding: "7px 0",
-                borderTop: `0.5px solid ${theme.border}`,
+                borderTop: `0.5px solid ${color.border}`,
                 fontSize: 13,
               }}
             >
-              <span style={{ color: theme.inkSoft, whiteSpace: "nowrap" }}>
+              <span style={{ color: color.inkSoft, whiteSpace: "nowrap" }}>
                 {label}
               </span>
               <span
                 style={{
-                  color: theme.ink,
+                  color: color.ink,
                   textAlign: "right",
                   wordBreak: "break-all",
                 }}
@@ -998,8 +979,6 @@ export function PracticeScreen({
       <SelectionRangesDrawer
         open={rangesDrawerOpen}
         onClose={() => setRangesDrawerOpen(false)}
-        theme={theme}
-        accent={accent}
         totalMeasures={totalMeasures}
         measureRange={measureRange}
         onMeasureRangeChange={onMeasureRangeChange}
@@ -1019,8 +998,6 @@ export function PracticeScreen({
       <SettingsDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        theme={theme}
-        accent={accent}
         tracks={tracks}
         selectedTracks={selectedTracks}
         onTrackToggle={onTrackToggle}
@@ -1045,8 +1022,6 @@ export function PracticeScreen({
             setBpmInputModalOpen(false);
           }}
           onCancel={() => setBpmInputModalOpen(false)}
-          theme={theme}
-          accent={accent}
         />
       )}
 
@@ -1063,8 +1038,6 @@ export function PracticeScreen({
             setMeasureJumpDefault(null);
           }}
           onCancel={() => setMeasureJumpDefault(null)}
-          theme={theme}
-          accent={accent}
         />
       )}
 

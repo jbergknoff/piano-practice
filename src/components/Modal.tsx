@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useRef } from "preact/hooks";
-import { closeButtonStyle, serifTitle, type ThemeTokens } from "../theme";
+import { closeButtonStyle, serifTitle } from "../theme";
 import { useModalDialog } from "./dialog-support";
 
 interface ModalProps {
@@ -48,14 +48,12 @@ export function Modal({ onClose, onShow, label, style, children }: ModalProps) {
 
 /** Title plus ✕ close button, the header row shared by modals and drawers. */
 export function ModalHeader({
-  theme,
   title,
   titleSize = 22,
   onClose,
   closeLabel = "Close",
   style,
 }: {
-  theme: ThemeTokens;
   title: ComponentChildren;
   titleSize?: number;
   onClose: () => void;
@@ -71,12 +69,12 @@ export function ModalHeader({
         ...style,
       }}
     >
-      <span style={serifTitle(theme, titleSize)}>{title}</span>
+      <span style={serifTitle(titleSize)}>{title}</span>
       <button
         type="button"
         onClick={onClose}
         aria-label={closeLabel}
-        style={closeButtonStyle(theme)}
+        style={closeButtonStyle()}
       >
         ✕
       </button>

@@ -97,6 +97,10 @@ async function centerX(
   return box.x + box.width / 2;
 }
 
+function cursorX(page: import("@playwright/test").Page): Promise<number> {
+  return centerX(page, '[data-cursor="true"]');
+}
+
 test("focusing a grace-led measure highlights its leading grace note as the first wait point", async ({
   page,
 }) => {
@@ -128,25 +132,33 @@ test("the cursor sits on the grace wait point, then moves onto the main note", a
   // Grace is the wait point: the cursor must sit on the grace notehead, not on
   // the main note to its right (the two share a downbeat, so a beat-only cursor
   // could not tell them apart).
+  //
+  // The cursor is placed in an effect that runs after paint, a frame after the
+  // highlight it follows, so a measurement taken as soon as the highlight
+  // appears can still see it at the previous wait point (13 px off, in CI).
+  // Poll the cursor itself: it is the thing that has to move.
   await waitForHighlightedNoteIds(page, HL_GRACE1);
   const grace1X = await centerX(page, '[data-color-id="p0-m5-n0-v0"]');
-  const cursorOnGrace1X = await centerX(page, '[data-cursor="true"]');
-  expect(Math.abs(cursorOnGrace1X - grace1X)).toBeLessThan(8);
+  await expect
+    .poll(async () => Math.abs((await cursorX(page)) - grace1X))
+    .toBeLessThan(8);
+  const cursorOnGrace1X = await cursorX(page);
 
   // The second grace is also a wait point — the cursor follows it.
   await playNote(page, GRACE1);
   await waitForHighlightedNoteIds(page, HL_GRACE2);
-  const cursorOnGrace2X = await centerX(page, '[data-cursor="true"]');
-  expect(cursorOnGrace2X).toBeGreaterThan(cursorOnGrace1X);
+  await expect.poll(() => cursorX(page)).toBeGreaterThan(cursorOnGrace1X);
+  const cursorOnGrace2X = await cursorX(page);
 
   // Advance past both graces: the wait point is now the first main note, and the
   // cursor must follow it to the right — off the graces.
   await playNote(page, GRACE2);
   await waitForHighlightedNoteIds(page, HL_CHORD3);
   const mainNoteX = await centerX(page, '[data-color-id="p0-m5-n2-v0"]');
-  const cursorOnMainX = await centerX(page, '[data-cursor="true"]');
-  expect(Math.abs(cursorOnMainX - mainNoteX)).toBeLessThan(8);
-  expect(cursorOnMainX).toBeGreaterThan(cursorOnGrace2X);
+  await expect
+    .poll(async () => Math.abs((await cursorX(page)) - mainNoteX))
+    .toBeLessThan(8);
+  expect(await cursorX(page)).toBeGreaterThan(cursorOnGrace2X);
 });
 
 test("playing through the focused measure highlights every note, ending on the final note and the results modal", async ({

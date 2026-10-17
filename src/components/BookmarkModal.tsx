@@ -1,8 +1,8 @@
 import { useRef } from "preact/hooks";
 import type { BookmarkEditorState } from "../hooks/use-bookmarks";
 import { selectionLabelForRange } from "../selection";
-import type { ThemeTokens } from "../theme";
 import {
+  color,
   FONT_SANS,
   glassPanel,
   modalActionButtonStyle,
@@ -23,8 +23,6 @@ interface BookmarkModalProps {
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
-  theme: ThemeTokens;
-  accent: string;
 }
 
 export function BookmarkModal({
@@ -40,8 +38,6 @@ export function BookmarkModal({
   onSave,
   onCancel,
   onDelete,
-  theme,
-  accent,
 }: BookmarkModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,7 +58,7 @@ export function BookmarkModal({
         inputRef.current?.select();
       }}
       style={{
-        ...glassPanel(theme, 24, 160),
+        ...glassPanel(24, 160),
         borderRadius: 16,
         padding: "24px 28px",
         boxShadow: "0 16px 48px rgba(0,0,0,0.18)",
@@ -85,7 +81,7 @@ export function BookmarkModal({
           }
         }}
       >
-        <div style={{ ...serifTitle(theme, 24), marginBottom: 4 }}>{title}</div>
+        <div style={{ ...serifTitle(24), marginBottom: 4 }}>{title}</div>
         {editor.kind === "create" ? (
           <div
             style={{
@@ -102,7 +98,7 @@ export function BookmarkModal({
                 gap: 4,
               }}
             >
-              <span style={{ fontSize: 11, color: theme.inkSoft }}>From</span>
+              <span style={{ fontSize: 11, color: color.inkSoft }}>From</span>
               <input
                 type="number"
                 min={1}
@@ -111,7 +107,7 @@ export function BookmarkModal({
                 onInput={(e) =>
                   onFromDraftChange((e.target as HTMLInputElement).value)
                 }
-                style={boundsInputStyle(theme)}
+                style={boundsInputStyle()}
               />
             </label>
             <label
@@ -122,7 +118,7 @@ export function BookmarkModal({
                 gap: 4,
               }}
             >
-              <span style={{ fontSize: 11, color: theme.inkSoft }}>To</span>
+              <span style={{ fontSize: 11, color: color.inkSoft }}>To</span>
               <input
                 type="number"
                 min={1}
@@ -131,12 +127,12 @@ export function BookmarkModal({
                 onInput={(e) =>
                   onToDraftChange((e.target as HTMLInputElement).value)
                 }
-                style={boundsInputStyle(theme)}
+                style={boundsInputStyle()}
               />
             </label>
           </div>
         ) : (
-          <div style={{ fontSize: 11, color: theme.inkSoft, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: color.inkSoft, marginBottom: 16 }}>
             {rangeLabel}
           </div>
         )}
@@ -153,9 +149,9 @@ export function BookmarkModal({
             boxSizing: "border-box",
             padding: "10px 12px",
             fontSize: 14,
-            color: theme.ink,
-            background: theme.panelSolid,
-            border: `0.5px solid ${theme.border}`,
+            color: color.ink,
+            background: color.panelSolid,
+            border: `0.5px solid ${color.border}`,
             borderRadius: 10,
             outline: "none",
             fontFamily: FONT_SANS,
@@ -194,14 +190,14 @@ export function BookmarkModal({
             <button
               type="button"
               onClick={onCancel}
-              style={modalActionButtonStyle(theme, "ghost")}
+              style={modalActionButtonStyle("ghost")}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSave}
-              style={modalActionButtonStyle(theme, "accent", accent, canSave)}
+              style={modalActionButtonStyle("accent", canSave)}
             >
               Save
             </button>
@@ -212,15 +208,15 @@ export function BookmarkModal({
   );
 }
 
-function boundsInputStyle(theme: ThemeTokens) {
+function boundsInputStyle() {
   return {
     width: "100%",
     boxSizing: "border-box" as const,
     padding: "10px 12px",
     fontSize: 14,
-    color: theme.ink,
-    background: theme.panelSolid,
-    border: `0.5px solid ${theme.border}`,
+    color: color.ink,
+    background: color.panelSolid,
+    border: `0.5px solid ${color.border}`,
     borderRadius: 10,
     outline: "none",
     fontFamily: FONT_SANS,

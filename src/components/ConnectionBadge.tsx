@@ -1,11 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import type { PianoController, PianoSource } from "../hooks/use-piano";
-import type { ThemeTokens } from "../theme";
 import {
+  color,
+  withAlpha,
   FONT_MONO,
   FONT_SANS,
   glassPanel,
-  hexA,
   modalActionButtonStyle,
   radius,
 } from "../theme";
@@ -24,21 +24,21 @@ const IS_CHROMIUM = IS_CHROME_LIKE || IS_EDGE || IS_BRAVE;
 const BT_IMPL_STATUS_URL =
   "https://github.com/WebBluetoothCG/web-bluetooth/blob/main/implementation-status.md";
 
-function compatibilityLink(accent: string, label: string) {
+function compatibilityLink(label: string) {
   return (
     <a
       href={BT_IMPL_STATUS_URL}
       target="_blank"
       rel="noreferrer"
-      style={{ color: accent, textDecoration: "none" }}
+      style={{ color: color.accent, textDecoration: "none" }}
     >
       {label}
     </a>
   );
 }
 
-function unsupportedBody(accent: string) {
-  const link = compatibilityLink(accent, "implementation status page ↗");
+function unsupportedBody() {
+  const link = compatibilityLink("implementation status page ↗");
 
   if (IS_BRAVE) {
     return (
@@ -80,7 +80,7 @@ function unsupportedBody(accent: string) {
   );
 }
 
-function errorBody(accent: string, source: PianoSource | null) {
+function errorBody(source: PianoSource | null) {
   if (source === "midi") {
     return (
       <span>
@@ -95,8 +95,8 @@ function errorBody(accent: string, source: PianoSource | null) {
       The browser couldn't connect to the selected device over Bluetooth. This
       error comes from your browser's Web Bluetooth API. Not every browser and
       operating system fully supports BLE MIDI — see the{" "}
-      {compatibilityLink(accent, "Web Bluetooth compatibility matrix ↗")} for
-      what's known to work.
+      {compatibilityLink("Web Bluetooth compatibility matrix ↗")} for what's
+      known to work.
       {IS_CHROMIUM && (
         <>
           {" "}
@@ -112,13 +112,9 @@ function errorBody(accent: string, source: PianoSource | null) {
 }
 
 export function ConnectionBadge({
-  theme,
-  accent,
   piano,
   compact,
 }: {
-  theme: ThemeTokens;
-  accent: string;
   piano: PianoController;
   compact: boolean;
 }) {
@@ -144,17 +140,17 @@ export function ConnectionBadge({
     ? "#5E8C5A"
     : hasError
       ? "#c62828"
-      : theme.inkFaint;
+      : color.inkFaint;
 
   const pillStyle = {
     height: 38,
-    ...glassPanel(theme),
+    ...glassPanel(),
     borderRadius: radius.lg,
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     display: "inline-flex",
     alignItems: "center",
     cursor: "pointer",
-    color: hasError ? "#c62828" : theme.inkSoft,
+    color: hasError ? "#c62828" : color.inkSoft,
     outline: "none",
   };
 
@@ -165,7 +161,9 @@ export function ConnectionBadge({
         height: 6,
         borderRadius: "50%",
         background: dotColor,
-        boxShadow: connected ? `0 0 0 3px ${hexA("#5E8C5A", 0.18)}` : "none",
+        boxShadow: connected
+          ? `0 0 0 3px ${withAlpha("#5E8C5A", 0.18)}`
+          : "none",
         flexShrink: 0,
       }}
     />
@@ -224,8 +222,8 @@ export function ConnectionBadge({
   }
 
   const modalStyle = {
-    background: theme.panelSolid,
-    border: `0.5px solid ${theme.border}`,
+    background: color.panelSolid,
+    border: `0.5px solid ${color.border}`,
     borderRadius: 20,
     boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
     width: "min(360px, calc(100vw - 40px))",
@@ -263,7 +261,7 @@ export function ConnectionBadge({
               ...pillStyle,
               padding: "0 12px",
               gap: 7,
-              color: hasError ? "#c62828" : theme.ink,
+              color: hasError ? "#c62828" : color.ink,
             } as Record<string, string | number>
           }
         >
@@ -290,7 +288,6 @@ export function ConnectionBadge({
           style={modalStyle}
         >
           <ModalHeader
-            theme={theme}
             title="Can't connect a piano"
             titleSize={20}
             onClose={() => setShowUnsupportedModal(false)}
@@ -299,11 +296,11 @@ export function ConnectionBadge({
             style={{
               margin: 0,
               fontSize: 13,
-              color: theme.inkSoft,
+              color: color.inkSoft,
               lineHeight: 1.6,
             }}
           >
-            {unsupportedBody(accent)}
+            {unsupportedBody()}
           </p>
         </Modal>
       )}
@@ -315,7 +312,6 @@ export function ConnectionBadge({
           style={modalStyle}
         >
           <ModalHeader
-            theme={theme}
             title="Connect a piano"
             titleSize={20}
             onClose={() => setShowChooserModal(false)}
@@ -324,7 +320,7 @@ export function ConnectionBadge({
             style={{
               margin: 0,
               fontSize: 13,
-              color: theme.inkSoft,
+              color: color.inkSoft,
               lineHeight: 1.6,
             }}
           >
@@ -344,7 +340,7 @@ export function ConnectionBadge({
                 piano.connectBluetooth();
               }}
               style={{
-                ...modalActionButtonStyle(theme, "accent", accent),
+                ...modalActionButtonStyle("accent"),
                 width: "100%",
                 display: "flex",
                 alignItems: "center",
@@ -362,7 +358,7 @@ export function ConnectionBadge({
                 piano.connectMidi();
               }}
               style={{
-                ...modalActionButtonStyle(theme, "accent", accent),
+                ...modalActionButtonStyle("accent"),
                 width: "100%",
                 display: "flex",
                 alignItems: "center",
@@ -384,7 +380,6 @@ export function ConnectionBadge({
           style={modalStyle}
         >
           <ModalHeader
-            theme={theme}
             title="Piano connection"
             titleSize={20}
             onClose={() => setShowStatusModal(false)}
@@ -395,7 +390,7 @@ export function ConnectionBadge({
               alignItems: "center",
               gap: 8,
               fontSize: 13,
-              color: theme.ink,
+              color: color.ink,
             }}
           >
             <span
@@ -408,7 +403,7 @@ export function ConnectionBadge({
               }}
             />
             {piano.deviceName}
-            <span style={{ color: theme.inkSoft }}>
+            <span style={{ color: color.inkSoft }}>
               {piano.source === "midi" ? "· via MIDI" : "· via Bluetooth"}
             </span>
           </div>
@@ -416,7 +411,7 @@ export function ConnectionBadge({
             <button
               type="button"
               onClick={() => setShowStatusModal(false)}
-              style={modalActionButtonStyle(theme, "accent", accent)}
+              style={modalActionButtonStyle("accent")}
             >
               Done
             </button>
@@ -431,7 +426,6 @@ export function ConnectionBadge({
           style={modalStyle}
         >
           <ModalHeader
-            theme={theme}
             title="Connection failed"
             titleSize={20}
             onClose={() => setShowErrorModal(false)}
@@ -440,11 +434,11 @@ export function ConnectionBadge({
             style={{
               margin: 0,
               fontSize: 13,
-              color: theme.inkSoft,
+              color: color.inkSoft,
               lineHeight: 1.6,
             }}
           >
-            {errorBody(accent, piano.source)}
+            {errorBody(piano.source)}
           </p>
           <div
             style={{
@@ -453,9 +447,9 @@ export function ConnectionBadge({
               fontFamily: FONT_MONO,
               fontSize: 11.5,
               lineHeight: 1.5,
-              color: theme.ink,
-              background: hexA(theme.inkFaint, 0.12),
-              border: `0.5px solid ${theme.border}`,
+              color: color.ink,
+              background: withAlpha(color.ink, 0.03),
+              border: `0.5px solid ${color.border}`,
               borderRadius: radius.md,
               userSelect: "text",
               whiteSpace: "pre-wrap",
@@ -474,7 +468,7 @@ export function ConnectionBadge({
             <button
               type="button"
               onClick={() => setShowErrorModal(false)}
-              style={modalActionButtonStyle(theme, "accent", accent)}
+              style={modalActionButtonStyle("accent")}
             >
               Okay
             </button>

@@ -1,10 +1,10 @@
 import { useState } from "preact/hooks";
 import { DEBUG_LOG_MAX, type DebugBeatEvent } from "../debug-log";
-import type { ThemeTokens } from "../theme";
 import {
+  color,
+  withAlpha,
   FONT_MONO,
   FONT_SANS,
-  hexA,
   miniButtonStyle,
   modalActionButtonStyle,
 } from "../theme";
@@ -70,13 +70,9 @@ function formatDebugLog(events: DebugBeatEvent[]): string {
 type SubmitPhase = "idle" | "form" | "pending" | "success" | "error";
 
 export function DebugLogTab({
-  theme,
-  accent,
   getDebugLog,
   clearDebugLog,
 }: {
-  theme: ThemeTokens;
-  accent: string;
   getDebugLog: () => DebugBeatEvent[];
   clearDebugLog: () => void;
 }) {
@@ -142,7 +138,7 @@ export function DebugLogTab({
         style={{
           margin: 0,
           fontSize: 12,
-          color: theme.inkSoft,
+          color: color.inkSoft,
           lineHeight: 1.5,
         }}
       >
@@ -159,7 +155,7 @@ export function DebugLogTab({
             padding: "5px 14px",
             borderRadius: 20,
             border: "none",
-            background: accent,
+            background: color.accent,
             color: "#FFF7E5",
             fontSize: 12,
             fontWeight: 600,
@@ -178,9 +174,9 @@ export function DebugLogTab({
             style={{
               padding: "5px 14px",
               borderRadius: 20,
-              border: `0.5px solid ${theme.border}`,
+              border: `0.5px solid ${color.border}`,
               background: "transparent",
-              color: hasEvents ? theme.ink : theme.inkFaint,
+              color: hasEvents ? color.ink : color.inkFaint,
               fontSize: 12,
               fontWeight: 600,
               cursor: hasEvents ? "pointer" : "not-allowed",
@@ -195,7 +191,7 @@ export function DebugLogTab({
           <span
             style={{
               fontSize: 12,
-              color: theme.inkSoft,
+              color: color.inkSoft,
               fontFamily: FONT_SANS,
             }}
           >
@@ -206,7 +202,7 @@ export function DebugLogTab({
           <span
             style={{
               fontSize: 12,
-              color: theme.error,
+              color: color.error,
               fontFamily: FONT_SANS,
             }}
           >
@@ -217,7 +213,7 @@ export function DebugLogTab({
               style={{
                 background: "none",
                 border: "none",
-                color: theme.error,
+                color: color.error,
                 fontSize: 12,
                 cursor: "pointer",
                 padding: 0,
@@ -233,7 +229,7 @@ export function DebugLogTab({
           type="button"
           aria-label="Clear log"
           onClick={handleClear}
-          style={{ ...miniButtonStyle(theme), marginLeft: "auto" }}
+          style={{ ...miniButtonStyle(), marginLeft: "auto" }}
         >
           <TrashIcon size={14} />
         </button>
@@ -258,9 +254,9 @@ export function DebugLogTab({
               resize: "vertical",
               padding: "8px 10px",
               borderRadius: 8,
-              border: `0.5px solid ${theme.border}`,
-              background: hexA(theme.ink, 0.03),
-              color: theme.ink,
+              border: `0.5px solid ${color.border}`,
+              background: withAlpha(color.ink, 0.03),
+              color: color.ink,
               fontFamily: FONT_SANS,
               fontSize: 12,
               outline: "none",
@@ -272,7 +268,7 @@ export function DebugLogTab({
               type="button"
               onClick={handleCancelSubmit}
               disabled={submitPhase === "pending"}
-              style={modalActionButtonStyle(theme, "ghost")}
+              style={modalActionButtonStyle("ghost")}
             >
               Cancel
             </button>
@@ -281,9 +277,7 @@ export function DebugLogTab({
               onClick={handleSubmit}
               disabled={submitPhase === "pending"}
               style={modalActionButtonStyle(
-                theme,
                 "accent",
-                accent,
                 submitPhase !== "pending",
               )}
             >
@@ -299,11 +293,11 @@ export function DebugLogTab({
           margin: 0,
           padding: "10px 12px",
           borderRadius: 10,
-          border: `0.5px solid ${theme.border}`,
-          background: hexA(theme.ink, 0.03),
+          border: `0.5px solid ${color.border}`,
+          background: withAlpha(color.ink, 0.03),
           fontFamily: FONT_MONO,
           fontSize: 10,
-          color: theme.inkSoft,
+          color: color.inkSoft,
           lineHeight: 1.6,
           overflowX: "auto",
           whiteSpace: "pre",

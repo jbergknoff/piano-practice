@@ -1,12 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
-import { hexA } from "../theme";
+import { withAlpha, color } from "../theme";
 
 interface DemoOverlayProps {
   /** App-owned dispatch ref — the exact path real BLE input ends up calling. */
   noteEventDispatchRef: {
     current: ((noteNumber: number, kind: "on" | "off") => void) | null;
   };
-  accent: string;
 }
 
 // Roughly C3..B5 — a busy mid-keyboard range.
@@ -25,10 +24,7 @@ const NOTE_HOLD_MS = 150;
  * piano. Nothing here touches PracticeScreen; it depends only on the dispatch
  * ref. Mounted only under ?demo=1.
  */
-export function DemoOverlay({
-  noteEventDispatchRef,
-  accent,
-}: DemoOverlayProps) {
+export function DemoOverlay({ noteEventDispatchRef }: DemoOverlayProps) {
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
@@ -66,7 +62,7 @@ export function DemoOverlay({
         gap: 10,
         padding: "5px 8px 5px 14px",
         borderRadius: 999,
-        background: hexA(accent, 0.92),
+        background: withAlpha(color.accent, 0.92),
         color: "#FFF7E5",
         boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
       }}

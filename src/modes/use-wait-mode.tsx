@@ -18,7 +18,7 @@ import {
   loadAttemptHistory,
   saveAttempt,
 } from "../hooks/use-file-history";
-import type { ThemeTokens } from "../theme";
+import { color, colorValue } from "../theme";
 import { playbackNoteId } from "../../lib/musicxml/musicxml-playback";
 import type { WaitModeDebugEvent } from "../debug-log";
 import {
@@ -44,8 +44,6 @@ export interface WaitModeSettings {
   noteSensitivityMilliseconds: number;
   /** The piece's own default tempo — used to compute expected attempt duration for scoring, independent of any BPM the user dialed in for listen/playalong. */
   baseBpm: number;
-  accent: string;
-  theme: ThemeTokens;
 }
 
 function formatTime(ms: number): string {
@@ -228,11 +226,11 @@ export function useWaitMode(
       highlights.push({
         kind: "score",
         id: playbackNoteId(note),
-        color: settings.accent,
+        color: colorValue.accent,
       });
     }
     return highlights;
-  }, [active, control.musicxml, waitPoints, pointIndex, settings.accent]);
+  }, [active, control.musicxml, waitPoints, pointIndex]);
   const noteHighlights = useStableHighlights(computedHighlights);
 
   // Stable: reads only from refs so it never goes stale inside the BLE listener.
@@ -498,7 +496,7 @@ export function useWaitMode(
                 key="wrong"
                 style={{
                   fontSize: 12,
-                  color: settings.theme.ink,
+                  color: color.ink,
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
@@ -509,8 +507,6 @@ export function useWaitMode(
           }));
         return (
           <ResultModal
-            theme={settings.theme}
-            accent={settings.accent}
             selectionLabel={completionModal.selectionLabel}
             latest={
               latest
