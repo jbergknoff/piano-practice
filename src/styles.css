@@ -1,0 +1,362 @@
+/*
+ * The app's stylesheet: base rules, shared classes, and the structural CSS for
+ * dialogs. Imported by src/main.tsx, which makes Bun emit it as dist/main.css
+ * (linked from index.html). Colours come from the --color-* custom properties
+ * src/theme.ts defines from its palette. The @font-face rules stay in
+ * index.html, next to the font preloads they pair with.
+ *
+ * Shared, reusable looks belong here as classes, where they can have :hover,
+ * :focus-visible and :disabled states; one-off layout stays inline.
+ */
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+/*
+ * Every button looks like one of these. Don't write ad-hoc button styles: if
+ * none fits, add a class here (see "Button styles" in AGENTS.md).
+ */
+
+/* 38×38 frosted-glass square: the main nav/transport buttons (home, open,
+   reset, play/pause, settings, fullscreen). */
+.corner-button {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink);
+  background: var(--color-panel);
+  border: 0.5px solid var(--color-border);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+
+/* 22×22 borderless icon button, inline in panels (e.g. the trash icons). */
+.mini-button {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink-soft);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* The ✕ that closes a modal or drawer, in the top-right of its header. */
+.close-button {
+  padding: 4px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-ink-soft);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+/* 32×32 outlined icon button inside a modal (e.g. the result modal's
+   previous/next chevrons): big enough to tap, outlined like .action-button. */
+.icon-button {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink);
+  background: transparent;
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+/* Text buttons at the foot of a modal: secondary (Cancel) by default, primary
+   (OK/Save) with .accent. A disabled primary dims; a disabled secondary
+   doesn't, so the way out never looks unavailable. */
+.action-button {
+  padding: 8px 16px;
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif; /* FONT_SANS */
+  font-size: 13px;
+  color: var(--color-ink);
+  background: transparent;
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.action-button.accent {
+  font-weight: 600;
+  color: #fff7e5;
+  background: var(--color-accent);
+  border: none;
+}
+
+.action-button.accent:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* A toggle inside a chip (e.g. the BPM presets, settings choices), sized by
+   its padding. The selected one is marked by aria-pressed. */
+.chip-toggle {
+  height: 22px;
+  min-width: 44px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-ink);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.chip-toggle[aria-pressed="true"] {
+  font-weight: 600;
+  color: #fff7e5;
+  background: var(--color-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+/* The Listen / Wait / Playalong selector. The selected mode has
+   aria-pressed="true"; modes that need a piano are disabled without one. */
+.mode-toggle {
+  width: 60px;
+  height: 30px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-ink);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mode-toggle[aria-pressed="true"] {
+  font-weight: 600;
+  color: #fff7e5;
+  background: var(--color-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+.mode-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+/* States shared by every button class. No focus ring for a mouse or touch
+   press, but a clear one for keyboard focus. */
+:is(
+    .corner-button,
+    .mini-button,
+    .close-button,
+    .icon-button,
+    .action-button,
+    .chip-toggle,
+    .mode-toggle
+  ) {
+  outline: none;
+}
+
+:is(
+    .corner-button,
+    .mini-button,
+    .close-button,
+    .icon-button,
+    .action-button,
+    .chip-toggle,
+    .mode-toggle
+  ):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Hover only where there is a real pointer, so a tap on a phone doesn't leave
+   a button looking hovered. */
+@media (hover: hover) {
+  .corner-button:hover {
+    background: var(--color-panel-solid);
+  }
+
+  :is(
+      .mini-button,
+      .close-button,
+      .icon-button,
+      .action-button:not(.accent)
+    ):hover:not(:disabled),
+  :is(.chip-toggle, .mode-toggle):not([aria-pressed="true"]):hover:not(
+      :disabled
+    ) {
+    background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  }
+
+  .action-button.accent:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+}
+
+/* ── Practice screen layout ───────────────────────────────────────────────── */
+
+/* The bottom-left controls: transport row above the mode selector in
+   portrait, all on one row (mode selector first) in landscape. */
+.bl-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.bl-transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (orientation: landscape) {
+  .bl-controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .bl-modes {
+    order: -1;
+  }
+}
+
+/* ── Dialogs ──────────────────────────────────────────────────────────────── */
+/*
+ * Structural CSS for the native <dialog> elements behind Modal, Drawer and
+ * ContextMenu (src/components/dialog-support.ts): ::backdrop, the drawer's
+ * [open]/[data-shown] states, and resetting the UA's <dialog> defaults
+ * (border, padding, Canvas colours, auto margins, max sizes), which would
+ * otherwise leak into the panels' own styling. Colours, spacing and sizes stay
+ * inline at each call site.
+ */
+.app-modal {
+  position: fixed;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+.app-modal::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.app-drawer {
+  position: fixed;
+  inset: 0 auto 0 auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: none;
+  color: inherit;
+  flex-direction: column;
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.36, 1);
+}
+/* display only while open, so the UA's display: none still hides it closed. */
+.app-drawer[open] {
+  display: flex;
+}
+.app-drawer[data-side="left"] {
+  left: 0;
+  transform: translateX(-100%);
+}
+.app-drawer[data-side="right"] {
+  right: 0;
+  transform: translateX(100%);
+}
+.app-drawer[data-shown] {
+  transform: none;
+}
+.app-drawer::backdrop {
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.app-drawer[data-shown]::backdrop {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-drawer,
+  .app-drawer::backdrop {
+    transition: none;
+  }
+}
+.app-modal:focus,
+.app-drawer:focus {
+  outline: none;
+}
+.app-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+.app-menu::backdrop {
+  background: transparent;
+}
+.app-menu:focus {
+  outline: none;
+}

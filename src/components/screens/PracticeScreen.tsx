@@ -33,11 +33,8 @@ import {
 import {
   color,
   withAlpha,
-  chipToggleButtonStyle,
-  cornerButtonStyle,
   FONT_SANS,
   glassPanel,
-  miniButtonStyle,
   serifTitle,
   colorValue,
   focusRangeTint,
@@ -551,7 +548,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onGoToLanding}
-            style={cornerButtonStyle()}
+            class="corner-button"
             title="Back to your pieces"
           >
             <HomeIcon />
@@ -559,7 +556,7 @@ export function PracticeScreen({
           <button
             type="button"
             onClick={onOpenFile}
-            style={cornerButtonStyle()}
+            class="corner-button"
             title="Open file"
           >
             <OpenFileIcon />
@@ -613,7 +610,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={() => setRangesDrawerOpen(true)}
-              style={cornerButtonStyle()}
+              class="corner-button"
               title="Select range"
             >
               <BookmarkIcon />
@@ -623,7 +620,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handleReset}
-              style={cornerButtonStyle()}
+              class="corner-button"
               title={
                 measureRange
                   ? "Return to start of selection. Click to reset."
@@ -637,7 +634,7 @@ export function PracticeScreen({
             <button
               type="button"
               onClick={handlePlayPause}
-              style={cornerButtonStyle()}
+              class="corner-button"
               title={showStopIcon ? "Stop" : isPlaying ? "Pause" : "Play"}
             >
               {showStopIcon ? (
@@ -704,11 +701,8 @@ export function PracticeScreen({
                     type="button"
                     onClick={() => setBpmInputModalOpen(true)}
                     title="Set a custom tempo"
-                    style={{
-                      ...miniButtonStyle(),
-                      flexShrink: 0,
-                      marginRight: 2,
-                    }}
+                    class="mini-button"
+                    style={{ flexShrink: 0, marginRight: 2 }}
                   >
                     <PencilIcon size={11} />
                   </button>
@@ -718,11 +712,8 @@ export function PracticeScreen({
                       type="button"
                       onClick={() => onBpmChange(baseBpm)}
                       title="Reset to default tempo"
-                      style={{
-                        ...miniButtonStyle(),
-                        flexShrink: 0,
-                        marginRight: 2,
-                      }}
+                      class="mini-button"
+                      style={{ flexShrink: 0, marginRight: 2 }}
                     >
                       <ResetIcon size={11} />
                     </button>
@@ -736,7 +727,7 @@ export function PracticeScreen({
                           key={presetPercentages[index]}
                           type="button"
                           onClick={() => onBpmChange(targetBpm)}
-                          style={chipToggleButtonStyle(isActive)}
+                          class="chip-toggle"
                           aria-pressed={isActive}
                         >
                           {targetBpm}
@@ -777,22 +768,7 @@ export function PracticeScreen({
                   type="button"
                   disabled={disabled}
                   onClick={() => handleModeChange(m)}
-                  style={{
-                    ...miniButtonStyle(),
-                    padding: "0 14px",
-                    minWidth: 60,
-                    height: 30,
-                    background: isActive ? color.accent : "transparent",
-                    color: isActive ? "#FFF7E5" : color.ink,
-                    fontWeight: isActive ? 600 : 400,
-                    fontSize: 12,
-                    boxShadow: isActive
-                      ? `0 2px 8px ${withAlpha(color.accent, 0.35)}`
-                      : undefined,
-                    cursor: disabled ? "not-allowed" : "pointer",
-                    opacity: disabled ? 0.35 : 1,
-                    justifyContent: "center",
-                  }}
+                  class="mode-toggle"
                   aria-pressed={isActive}
                   title={
                     disabled ? "Connect a piano to use this mode" : undefined
@@ -830,26 +806,12 @@ export function PracticeScreen({
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          style={cornerButtonStyle()}
+          class="corner-button"
           title="Settings"
         >
           <GearIcon />
         </button>
       </div>
-
-      <style>{`
-        @keyframes bar0 { 0%,100% { height: 4px } 50% { height: 12px } }
-        @keyframes bar1 { 0%,100% { height: 6px } 50% { height: 14px } }
-        @keyframes bar2 { 0%,100% { height: 5px } 50% { height: 10px } }
-        @keyframes bar3 { 0%,100% { height: 8px } 50% { height: 14px } }
-        @keyframes bar4 { 0%,100% { height: 3px } 50% { height: 9px } }
-        .bl-controls { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
-        .bl-transport { display:flex; align-items:center; gap:10px; }
-        @media (orientation:landscape) {
-          .bl-controls { flex-direction:row; align-items:center; gap:10px; }
-          .bl-modes { order:-1; }
-        }
-      `}</style>
 
       {/* Context menu (right-click / long-press on sheet music) */}
       {contextMenu && (

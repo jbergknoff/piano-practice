@@ -20,7 +20,7 @@ App-internal code (under `lib/` and `src/`):
 - `lib/musicxml/` — the **playback-derivation layer**: `musicxml-playback.ts` (`musicXmlToConversion` + the `ScoreConversion`/`PlaybackNote`/`RepeatSection` types, `pitchToMidiNumber`, `getMusicXmlTempo`), `expand-repeats.ts`, `mxl.ts` (unzips `.mxl`). Imports the parser + notation types from `@jbergknoff/sheet-music-display`.
 - `lib/midi/` — `beat-scheduler.ts` (the playback clock), `note-track.ts` + `click-track.ts` (the tracks it plays — see "Playback clock"), `ble-midi.ts` (BLE MIDI packet parse/build), `web-midi.ts` (Web MIDI message parse/build)
 - `lib/circular-buffer/` — generic O(1) ring buffer
-- `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
+- `src/` — `main.tsx` (entry, built by the Makefile), `App.tsx` (shell), `styles.css` (the stylesheet: base rules, the shared button classes, the dialog CSS and the responsive practice-screen layout — see "Button styles"), `theme.ts`, `debug-log.ts`, `pretty-title.ts`, `selection.ts` (measure-range helpers shared by the mode hooks and the range UI), `globals.d.ts`
 - `src/components/` — UI components; `src/components/screens/` holds the two top-level screens. `Modal`/`Drawer`/`ContextMenu` (+ `dialog-support.ts`, which also has the shared `useModalDialog` lifecycle hook) are the shared `<dialog>` shells every modal, drawer and menu is built on — see "Modals, drawers and menus"
 - `src/hooks/` — `use-piano.ts` (unified piano-connection controller), `use-bluetooth.ts` + `use-web-midi.ts` (the two input transports), `piano-preference.ts` (the remembered transport), `use-wake-lock.ts`, `use-fullscreen.ts`, `use-file-history.ts`, `use-file-library.ts`, `use-bookmarks.ts`
 - `src/modes/` — the three mode hooks, `mode-control.ts` (also owns the `PracticeMode` type), `note-colors.ts`, `wait-matching.ts` (wait mode's rules as pure functions)
@@ -73,7 +73,7 @@ Multi-staff piano parts (`<staves>` > 1, or any part using `<backup>`) are split
 | `src/hooks/use-piano.ts` | Unified piano-connection controller: merges the two input transports (`useBluetooth` + `useWebMidi`) into one status/error/device view and exposes `connectBluetooth`/`connectMidi` + `bluetoothSupported`/`midiSupported`, routing `sendNote`/`sendNotesBatch` to whichever transport is connected. App calls this (not `useBluetooth` directly) and passes the result down as the `piano` prop. There is deliberately no auto-select/guessing between transports (an earlier version tried to infer Web MIDI vs Bluetooth from permission state, which was fragile and unpredictable — see git history on this file for the abandoned approach) — the UI always asks the user explicitly, since only the user reliably knows how their piano is connected. `connectBluetooth`/`connectMidi` each resolve to whether the attempt ended up connected. It also owns `suggestedSource` — the transport that last connected successfully (persisted via `piano-preference.ts`), which the badge uses to skip the chooser on the first tap. This is **remembering, not guessing**: it is only ever written after a transport actually connects, and it clears itself (`shortcutSpent`) as soon as an attempt fails, so the very next tap falls back to the chooser. That escape hatch is load-bearing — without it, a user whose last session was Bluetooth could never reach USB, since every tap would re-open the Bluetooth picker. |
 | `src/hooks/use-bluetooth.ts` | BLE MIDI input transport (Web Bluetooth); calls the App-owned `dispatchNoteEvent` ref, which `PracticeScreen` populates with the active mode's `onNoteEvent` each render |
 | `src/hooks/use-web-midi.ts` | Web MIDI input transport (`navigator.requestMIDIAccess`); same surface as `useBluetooth`. Listens on **every** real input port (filtering out the ALSA "MIDI Through" loopback via `isThroughPort`) so it doesn't matter which port is the piano. Sees USB pianos and, on Linux, BLE pianos that BlueZ bridges to ALSA (which Web Bluetooth can't reach once BlueZ's MIDI plugin claims the GATT service). **Auto-reconnects silently on mount** when `navigator.permissions.query({name:"midi"})` reports `"granted"`: unlike Web Bluetooth's per-device grant, the Web MIDI permission is persistent, origin-scoped, and needs no user gesture, so a USB piano reconnects with zero taps. The permission check is the gate that keeps this silent — calling `requestMIDIAccess` unguarded could raise a prompt with no gesture behind it — and a failed auto-attempt falls back to `"idle"` rather than `"error"`, so no modal appears on load |
-| `src/theme.ts` | Design tokens (colours — see "Colours" below — + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and shared style helpers (`glassPanel`, `blurFilter`, `serifTitle`, `cornerButtonStyle`, `miniButtonStyle`, `closeButtonStyle`, `modalActionButtonStyle`, `chipToggleButtonStyle`). All font-family strings and frosted-glass recipes go through here (the modal/drawer backdrops are `::backdrop` rules in `src/components/dialog-support.ts`) — don't re-type the literals in components. None of the helpers take a theme or accent: colours come from the CSS variables |
+| `src/theme.ts` | Design tokens (colours — see "Colours" below — + `space`/`radius`/`fontSizes`/`fontWeight` scales), font-family constants (`FONT_SANS`/`FONT_SERIF`/`FONT_MONO`), and the parameterised style recipes (`glassPanel(blur?, saturate?)`, `blurFilter`, `serifTitle(size?)`). All font-family strings and frosted-glass recipes go through here (buttons are classes in `src/styles.css` instead — see "Button styles"; the modal/drawer backdrops are `::backdrop` rules there too) — don't re-type the literals in components |
 | `src/components/icons.tsx` | All SVG icons as Preact components |
 
 ### Mode system
@@ -182,7 +182,7 @@ bottleneck.)
 
 - **Top-left** — home button (back to library), open-file button, piece title (opens info modal on click)
 - **Top-right** — fullscreen/landscape toggle (`FullscreenButton`); chosen because it is the only corner with no other chrome, and the top-left row already runs out of width in portrait on a phone. `LandingScreen` places the same button in the same spot.
-- **Bottom-left** — range selector (bookmark icon), Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via CSS `.bl-controls` / `.bl-transport` / `.bl-modes` classes
+- **Bottom-left** — range selector (bookmark icon), Reset + Play/Pause + BPM buttons (row above in portrait, right of mode selector in landscape), Wait/Playalong/Listen mode selector; responsive via the `.bl-controls` / `.bl-transport` / `.bl-modes` classes in `src/styles.css`
 - **Bottom-right** — Bluetooth help badge (`?`), Bluetooth connection badge, settings gear
 
 ### Modals, drawers and menus
@@ -234,9 +234,9 @@ the z-index or stacking context of the component rendering it — the old
 cursor-over-modal bug in `modal-layering.spec.ts` can't come back), Escape,
 and an inert page behind a modal. The structural CSS these need (`::backdrop`,
 resetting the UA's `<dialog>` styles)
-lives in `src/components/dialog-support.ts` and is injected once at module
-load; colours and spacing stay inline at each call site. Backdrop clicks are
-handled there too (`useCloseOnBackdropClick`), as a listener rather than an
+lives in `src/styles.css`; colours and spacing stay inline at each call site.
+Backdrop clicks are handled in `src/components/dialog-support.ts`
+(`useCloseOnBackdropClick`), as a listener rather than an
 `onClick` on a backdrop element, so there are no
 `useKeyWithClickEvents` suppressions to make. **Attach dialog listeners in
 `useLayoutEffect`, not `useEffect`**: Preact runs `useEffect` after paint, so a
@@ -477,7 +477,7 @@ Practical consequences for an agent working in the sandbox:
 
 ## Build output
 
-`dist/` is gitignored and excluded from Biome linting/formatting. `make build` must be run before `index.html` will work — it produces `dist/main.js`, which the page loads.
+`dist/` is gitignored and excluded from Biome linting/formatting. `make build` must be run before `index.html` will work — it produces `dist/main.js` and `dist/main.css` (Bun emits the stylesheet because `main.tsx` imports `src/styles.css`), which the page loads.
 
 ## Code style
 
@@ -507,18 +507,25 @@ There is one palette (cream, amber accent). Adding another, e.g. dark mode, woul
 
 ### Button styles
 
-Always reach for the shared helpers in `src/theme.ts` before writing ad-hoc button styles:
+Buttons are styled with the shared classes in `src/styles.css`, never with inline style objects:
 
-- **`cornerButtonStyle()`** — 38×38 frosted-glass square with `radius.lg`. Used for the main nav/transport buttons (back, reset, play/pause, gear, help badge).
-- **`miniButtonStyle()`** — 22×22, transparent background, no border, `radius.sm`. Used for small icon-only buttons inside panels or inline with other content (e.g. the trash icon in the debug log tab).
-- **`modalActionButtonStyle(variant, enabled?)`** — text-label action buttons at the foot of modals. `"ghost"` for secondary (Cancel); `"accent"` for primary (OK/Save), with an enabled flag.
-- **`chipToggleButtonStyle(isActive)`** — variable-width toggle pill for use inside chip containers (e.g. BPM preset buttons). Sizes by padding rather than fixed width; carries active-state highlight styling.
+- **`corner-button`** — 38×38 frosted-glass square. The main nav/transport buttons (home, open file, range, reset, play/pause, settings, fullscreen).
+- **`mini-button`** — 22×22, borderless. Small icon-only buttons inside panels or inline with other content (e.g. the trash icons).
+- **`close-button`** — the ✕ in a modal or drawer header (`ModalHeader`).
+- **`icon-button`** — 32×32, outlined. Icon buttons inside a modal (the result modal's ‹ › chevrons).
+- **`action-button`** — text buttons at the foot of a modal: secondary (Cancel) as is, primary (OK/Save) with **`accent`** (`class="action-button accent"`).
+- **`chip-toggle`** — padding-sized toggle inside a chip (BPM presets, settings choices); the selected one has `aria-pressed="true"`.
+- **`mode-toggle`** — the Listen / Wait / Playalong selector; same `aria-pressed` convention, and `disabled` when a mode needs a piano that isn't connected.
+
+Being classes is what gives them states: a `:focus-visible` ring for keyboard focus (and none for a mouse or touch press), `:hover` on devices with a real pointer, and a dimmed `:disabled` primary — so disable a button with the `disabled` attribute, not a style. `tests/integration/button-styles.spec.ts` checks those states, which no screenshot exercises.
 
 Two rules that must hold:
 
-1. **Never write ad-hoc button styles.** If none of the helpers above fit, add a new named helper to `theme.ts` rather than writing inline `width`/`height`/`borderRadius`/`background`/`fontSize`/`padding`/`fontFamily` combinations directly on a `<button>`. Writing one-off combinations is what causes the next author to copy-paste them instead of reaching for a helper.
+1. **Never write ad-hoc button styles.** If none of the classes fits, add one to `src/styles.css` rather than writing inline `width`/`height`/`borderRadius`/`background`/`fontSize`/`padding`/`fontFamily` combinations on a `<button>`. One-off combinations are what the next author copy-pastes instead of reaching for a class.
 
-2. **Never override a helper's own structural properties at the call site.** Spreading a helper and then immediately overriding its `width`, `height`, `borderRadius`, or `background` defeats the purpose. If the dimensions need to differ, either the helper is the wrong choice (pick a different one or add a new one) or the container should accommodate the standard size.
+2. **Never override a class's own structural properties at the call site.** An inline `width`, `height`, `borderRadius` or `background` beats the class (and silently disables its hover state). If the dimensions need to differ, the class is the wrong choice (pick or add another), or the container should accommodate the standard size. Inline layout properties (margins, `flexShrink`, alignment) are fine.
+
+`glassPanel` and `serifTitle` stay functions in `src/theme.ts`: they take per-call parameters and have no states, so classes would buy nothing.
 
 ## Dependencies
 

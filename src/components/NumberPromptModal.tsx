@@ -1,11 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import {
-  color,
-  FONT_SANS,
-  glassPanel,
-  modalActionButtonStyle,
-  serifTitle,
-} from "../theme";
+import { color, FONT_SANS, glassPanel, serifTitle } from "../theme";
 import { Modal } from "./Modal";
 
 interface NumberPromptModalProps {
@@ -107,17 +101,13 @@ export function NumberPromptModal({
             gap: 8,
           }}
         >
-          <button
-            type="button"
-            onClick={onCancel}
-            style={modalActionButtonStyle("ghost")}
-          >
+          <button type="button" onClick={onCancel} class="action-button">
             Cancel
           </button>
           <button
             type="submit"
             disabled={!isValid}
-            style={modalActionButtonStyle("accent", isValid)}
+            class="action-button accent"
           >
             {confirmLabel}
           </button>

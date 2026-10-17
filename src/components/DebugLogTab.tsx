@@ -1,13 +1,6 @@
 import { useState } from "preact/hooks";
 import { DEBUG_LOG_MAX, type DebugBeatEvent } from "../debug-log";
-import {
-  color,
-  withAlpha,
-  FONT_MONO,
-  FONT_SANS,
-  miniButtonStyle,
-  modalActionButtonStyle,
-} from "../theme";
+import { color, withAlpha, FONT_MONO, FONT_SANS } from "../theme";
 import { TrashIcon } from "./icons";
 
 const NOTE_NAMES = [
@@ -229,7 +222,8 @@ export function DebugLogTab({
           type="button"
           aria-label="Clear log"
           onClick={handleClear}
-          style={{ ...miniButtonStyle(), marginLeft: "auto" }}
+          class="mini-button"
+          style={{ marginLeft: "auto" }}
         >
           <TrashIcon size={14} />
         </button>
@@ -268,7 +262,7 @@ export function DebugLogTab({
               type="button"
               onClick={handleCancelSubmit}
               disabled={submitPhase === "pending"}
-              style={modalActionButtonStyle("ghost")}
+              class="action-button"
             >
               Cancel
             </button>
@@ -276,10 +270,7 @@ export function DebugLogTab({
               type="button"
               onClick={handleSubmit}
               disabled={submitPhase === "pending"}
-              style={modalActionButtonStyle(
-                "accent",
-                submitPhase !== "pending",
-              )}
+              class="action-button accent"
             >
               {submitPhase === "pending" ? "Sending…" : "Send report"}
             </button>

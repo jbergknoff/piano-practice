@@ -1,6 +1,5 @@
 import { useFullscreen } from "../hooks/use-fullscreen";
 
-import { cornerButtonStyle } from "../theme";
 import { CollapseIcon, ExpandIcon } from "./icons";
 
 /**
@@ -19,7 +18,7 @@ export function FullscreenButton() {
     <button
       type="button"
       onClick={toggle}
-      style={cornerButtonStyle()}
+      class="corner-button"
       title={isFullscreen ? "Exit fullscreen" : "Fullscreen (landscape)"}
     >
       {isFullscreen ? <CollapseIcon /> : <ExpandIcon />}

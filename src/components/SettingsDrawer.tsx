@@ -1,5 +1,5 @@
 import type { TrackInfo } from "@jbergknoff/midi-to-musicxml";
-import { chipToggleButtonStyle, radius, color } from "../theme";
+import { radius, color } from "../theme";
 import { Drawer } from "./Drawer";
 import { ModalHeader } from "./Modal";
 import { ResetIcon } from "./icons";
@@ -176,7 +176,7 @@ function ToggleRow({
             key={String(option.value)}
             type="button"
             onClick={() => onChange(option.value)}
-            style={chipToggleButtonStyle(value === option.value)}
+            class="chip-toggle"
             aria-pressed={value === option.value}
           >
             {option.label}

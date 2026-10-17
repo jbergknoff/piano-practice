@@ -1,13 +1,7 @@
 import { useRef } from "preact/hooks";
 import type { BookmarkEditorState } from "../hooks/use-bookmarks";
 import { selectionLabelForRange } from "../selection";
-import {
-  color,
-  FONT_SANS,
-  glassPanel,
-  modalActionButtonStyle,
-  serifTitle,
-} from "../theme";
+import { color, FONT_SANS, glassPanel, serifTitle } from "../theme";
 import { Modal } from "./Modal";
 
 interface BookmarkModalProps {
@@ -187,17 +181,13 @@ export function BookmarkModal({
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={onCancel}
-              style={modalActionButtonStyle("ghost")}
-            >
+            <button type="button" onClick={onCancel} class="action-button">
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSave}
-              style={modalActionButtonStyle("accent", canSave)}
+              class="action-button accent"
             >
               Save
             </button>

@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useRef } from "preact/hooks";
-import { closeButtonStyle, serifTitle } from "../theme";
+import { serifTitle } from "../theme";
 import { useModalDialog } from "./dialog-support";
 
 interface ModalProps {
@@ -74,7 +74,7 @@ export function ModalHeader({
         type="button"
         onClick={onClose}
         aria-label={closeLabel}
-        style={closeButtonStyle()}
+        class="close-button"
       >
         ✕
       </button>
